@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Results</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script><script src="shared.js"></script><script src="events.js"></script><script src="results.js"></script>
+<style>.btn{padding:.5rem .9rem;border-radius:.5rem;font-weight:600}</style>
+</head><body class="bg-gray-50 text-gray-900"><div style="background:#111827;color:#fff;padding:8px 12px;font-size:13px;display:flex;gap:14px;flex-wrap:wrap" id="__devnav"><b style="opacity:.6">Pages:</b><a href="index.html" style="color:#93c5fd">Register</a><a href="coach.html" style="color:#93c5fd">Coach dashboard</a><a href="entries.html" style="color:#93c5fd">Meet entries</a><a href="meets-admin.html" style="color:#93c5fd">Meet admin</a><a href="results.html" style="color:#93c5fd">Results &amp; rankings</a></div>
+<div class="max-w-3xl mx-auto p-4">
+  <h1 class="text-2xl font-bold" id="club"></h1>
+  <p class="text-gray-600 mb-3">Results</p>
+  <div id="login" class="bg-white rounded-xl shadow p-4">
+    <p class="mb-2">Sign in with the email you registered with.</p>
+    <input id="email" type="email" class="w-full border rounded p-2 mb-2" placeholder="you@example.com">
+    <button id="send" class="btn bg-blue-600 text-white w-full">Email me a sign-in link</button>
+    <p id="msg" class="mt-2 text-sm"></p>
+  </div>
+  <div id="app" class="hidden">
+    <div class="flex flex-wrap gap-2 mb-3">
+      <select id="meet" class="border rounded p-2 flex-1"><option value="season">Season rankings (best mark per athlete)</option></select>
+      <select id="div" class="border rounded p-2"><option value="">All divisions</option></select>
+      <select id="gen" class="border rounded p-2"><option value="">Boys & Girls</option><option>Boy</option><option>Girl</option></select>
+      <input id="q" class="border rounded p-2" placeholder="Search name">
+    </div>
+    <div id="list"></div>
+  </div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const CFG=window.APP_CONFIG;
+$('club').textContent=CFG.CLUB_NAME;
+const sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // avoid cross-tab navigator.locks deadlock when multiple app pages are open at once
+let rows=[];
+DIVISIONS.forEach(d=>$('div').add(new Option(d.name,d.name)));
+$('send').onclick=async()=>{ const {error}=await sb.auth.signInWithOtp({email:$('email').value.trim(),options:{emailRedirectTo:location.href.split('#')[0]}}); $('msg').textContent=error?error.message:'Check your email and tap the link.'; };
+sb.auth.onAuthStateChange(async(_e,s)=>{ if(!s) return; $('login').classList.add('hidden'); $('app').classList.remove('hidden');
+  const {data:meets}=await sb.from('meets').select('id,name,meet_date').order('meet_date',{ascending:false});
+  (meets||[]).forEach(m=>$('meet').add(new Option(`${m.name} — ${fmtDate(m.meet_date)}`,m.id)));
+  const want=new URLSearchParams(location.search).get('meet'); if(want) $('meet').value=want;
+  ['meet','div','gen'].forEach(i=>$(i).onchange=load); $('q').oninput=render; load(); });
+async function load(){
+  const m=$('meet').value;
+  const q=m==='season'?sb.from('season_best').select('*'):sb.from('results').select('*, meets(name,meet_date)').eq('meet_id',m);
+  const {data}=await q; rows=(data||[]).map(r=>({...r,meet_name:r.meet_name||r.meets?.name,meet_date:r.meet_date||r.meets?.meet_date}));
+  render();
+}
+function render(){
+  const season=$('meet').value==='season', d=$('div').value, g=$('gen').value, q=$('q').value.toLowerCase();
+  let rs=rows.filter(r=>(!d||r.division===d)&&(!g||r.gender===g)&&(!q||(r.athlete_name+' '+(r.relay_runners||'')).toLowerCase().includes(q)));
+  if(!season) rs=rs.filter(r=>r.round==='F'||!rows.some(o=>o!==r&&o.athlete_name===r.athlete_name&&o.event_code===r.event_code&&o.round==='F'));
+  const groups=rankResults(rs,season);
+  $('list').innerHTML=groups.map(gp=>`<div class="bg-white rounded-xl shadow p-3 mb-3">
+    <div class="font-bold">${gp.division} ${gp.gender==='Boy'?'Boys':gp.gender==='Girl'?'Girls':gp.gender} — ${gp.event}</div>
+    <table class="w-full text-sm mt-1">${gp.rows.map((r,i)=>`<tr class="border-t">
+      <td class="py-1 w-8 text-gray-500">${r.mark_value!=null?i+1:''}</td>
+      <td class="py-1">${r.athlete_name}${r.relay_runners?`<div class="text-xs text-gray-500">${r.relay_runners}</div>`:''}</td>
+      <td class="py-1 font-mono text-right">${r.mark}${r.wind?` <span class="text-xs text-gray-400">w${r.wind}</span>`:''}</td>
+      <td class="py-1 text-right text-gray-500 text-xs">${season?`${r.meet_name||''}`:(r.place?`${r.place}${['st','nd','rd'][r.place-1]||'th'} overall`:'')}</td></tr>`).join('')}</table></div>`).join('')
+    ||'<p class="text-gray-500">No results yet.</p>';
+}
+</script></body></html>

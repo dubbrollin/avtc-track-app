@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coach Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="config.js"></script>
+<script src="shared.js"></script>
+<script src="pdf.js"></script>
+<style>
+  body{background:#f3f4f6}
+  .card{background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .btn{min-height:44px;padding:8px 14px;border-radius:8px;font-weight:600;font-size:14px}
+  .pill{font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px}
+  input,select{padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:15px;min-height:44px}
+</style>
+</head>
+<body class="text-gray-900"><div style="background:#111827;color:#fff;padding:8px 12px;font-size:13px;display:flex;gap:14px;flex-wrap:wrap" id="__devnav"><b style="opacity:.6">Pages:</b><a href="index.html" style="color:#93c5fd">Register</a><a href="coach.html" style="color:#93c5fd">Coach dashboard</a><a href="entries.html" style="color:#93c5fd">Meet entries</a><a href="meets-admin.html" style="color:#93c5fd">Meet admin</a><a href="results.html" style="color:#93c5fd">Results &amp; rankings</a></div>
+<div class="max-w-3xl mx-auto p-3">
+
+  <!-- LOGIN -->
+  <div id="login" class="card">
+    <h1 class="text-xl font-bold">Coach Dashboard</h1>
+    <p class="text-sm text-gray-600 mb-2">Enter your coach email. We'll send you a sign-in link (no password).</p>
+    <div class="flex gap-2"><input type="email" id="loginEmail" class="flex-1" placeholder="you@example.com"><button id="loginBtn" class="btn bg-blue-600 text-white">Send link</button></div>
+    <p id="loginMsg" class="text-sm mt-2"></p>
+  </div>
+
+  <!-- APP -->
+  <div id="app" class="hidden">
+    <div class="card flex flex-wrap items-center gap-2">
+      <h1 class="text-lg font-bold flex-1">Registrations <span id="count" class="text-gray-500 font-normal text-sm"></span></h1>
+      <select id="filter"><option value="">All</option><option value="submitted">Needs review</option><option value="verified">Verified</option><option value="rejected">Rejected</option></select>
+      <button id="runChecks" class="btn bg-gray-800 text-white">Run ID checks</button>
+      <button id="exportCsv" class="btn bg-gray-200">Export CSV</button>
+      <button id="exportHytek" class="btn bg-gray-200">Hy-Tek roster</button>
+      <button id="logout" class="btn bg-gray-200">Sign out</button>
+    </div>
+    <p id="msg" class="text-sm text-gray-600 px-1 mb-2"></p>
+    <div id="list"></div>
+  </div>
+</div>
+
+<script>
+const CFG=window.APP_CONFIG, $=id=>document.getElementById(id);
+const sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // avoid cross-tab navigator.locks deadlock when multiple app pages are open at once
+let rows=[], user=null;
+
+// ---- auth ----
+$('loginBtn').onclick=async()=>{
+  const email=$('loginEmail').value.trim(); if(!email) return;
+  const {error}=await sb.auth.signInWithOtp({email, options:{emailRedirectTo:location.href.split('#')[0]}});
+  $('loginMsg').textContent=error?('Error: '+error.message):'Check your email and tap the sign-in link.';
+};
+$('logout').onclick=async()=>{await sb.auth.signOut(); location.reload();};
+sb.auth.onAuthStateChange(async(_e,session)=>{
+  user=session?.user||null;
+  if(!user) return;
+  $('login').classList.add('hidden'); $('app').classList.remove('hidden');
+  await load();
+});
+
+// ---- data ----
+async function load(){
+  const {data,error}=await sb.from('registrations').select('*').order('created_at',{ascending:false});
+  if(error){ $('msg').textContent='Could not load: '+error.message+' (is your email in the coaches list?)'; return; }
+  rows=data||[]; render();
+  const pending=rows.filter(r=>r.dob_check_status==='pending');
+  if(pending.length) runChecks(pending);
+}
+function pill(r){
+  const s=r.dob_check_status;
+  const c={match:'bg-green-100 text-green-800',mismatch:'bg-red-100 text-red-800',pending:'bg-yellow-100 text-yellow-800',unreadable:'bg-orange-100 text-orange-800',error:'bg-red-100 text-red-800'}[s];
+  return `<span class="pill ${c}">ID: ${s}</span>`;
+}
+function render(){
+  const f=$('filter').value; const shown=rows.filter(r=>!f||r.status===f);
+  $('count').textContent=`(${shown.length})`;
+  if(!shown.length){ $('list').innerHTML='<div class="card text-gray-500 text-sm">No registrations yet. Share the registration link with parents.</div>'; return; }
+  $('list').innerHTML=shown.map(r=>`
+  <div class="card" data-id="${r.id}">
+    <div class="flex flex-wrap items-center gap-2">
+      <div class="flex-1 min-w-0">
+        <div class="font-bold text-base">${esc(r.last_name)}, ${esc(r.first_name)} <span class="text-gray-500 font-normal text-sm">${r.gender} · ${r.division} (${r.age_on_dec31}) · ${esc(r.sport)}</span></div>
+        <div class="text-xs text-gray-500">DOB ${fmtDate(r.dob)} · submitted ${fmtDate(r.created_at)} · ${r.is_returning?('Returning'+(r.ran_for_other_team?' from '+esc(r.prior_team):'')):'New athlete'}${r.medical_option==='conditions'?' · <b class="text-red-700">Medical conditions noted</b>':''}</div>
+      </div>
+      ${pill(r)} <span class="pill ${r.status==='verified'?'bg-green-600 text-white':r.status==='rejected'?'bg-red-600 text-white':'bg-gray-200'}">${r.status}</span>
+    </div>
+    ${r.dob_check_note?`<div class="text-xs mt-1 ${r.dob_check_status==='match'?'text-green-700':'text-red-700'}">${esc(r.dob_check_note)}</div>`:''}
+    <div class="flex flex-wrap gap-2 mt-3">
+      <button class="btn bg-gray-200" onclick="viewProof('${r.id}')">View proof of birth</button>
+      <button class="btn bg-gray-200" onclick="details('${r.id}')">Details</button>
+      <button class="btn bg-gray-200" onclick="makePdf('${r.id}')">Download forms PDF</button>
+      ${r.status!=='verified'?`<button class="btn bg-green-600 text-white" onclick="setStatus('${r.id}','verified')">✓ Verified</button>`:''}
+      ${r.status!=='rejected'?`<button class="btn bg-red-100 text-red-800" onclick="setStatus('${r.id}','rejected')">Reject</button>`:''}
+      ${r.dob_check_status!=='pending'?`<button class="btn bg-gray-100 text-sm" onclick="runChecks([rows.find(x=>x.id==='${r.id}')],true)">Re-run ID check</button>`:''}
+    </div>
+    <div id="proof-${r.id}" class="mt-2"></div>
+    <div id="det-${r.id}" class="mt-2 text-sm hidden"></div>
+  </div>`).join('');
+}
+$('filter').onchange=render;
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function viewProof(id){
+  const r=rows.find(x=>x.id===id); const box=$('proof-'+id);
+  if(box.innerHTML){ box.innerHTML=''; return; }
+  const {data,error}=await sb.storage.from('proof-of-birth').createSignedUrl(r.proof_path,300);
+  if(error){ box.textContent='Could not open file: '+error.message; return; }
+  box.innerHTML=r.proof_path.toLowerCase().endsWith('.pdf')?`<a class="text-blue-600 underline" target="_blank" href="${data.signedUrl}">Open PDF (link valid 5 min)</a>`:`<img src="${data.signedUrl}" class="max-h-96 rounded border" alt="proof of birth">`;
+}
+function details(id){
+  const r=rows.find(x=>x.id===id); const d=$('det-'+id);
+  if(!d.classList.contains('hidden')){ d.classList.add('hidden'); return; }
+  d.classList.remove('hidden');
+  d.innerHTML=`<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 bg-gray-50 p-3 rounded">
+    <div><b>Address:</b> ${esc(r.address)}, ${esc(r.city)} ${esc(r.zip)}</div><div><b>Phone:</b> ${esc(r.phone)}</div>
+    <div><b>Email:</b> ${esc(r.email)}</div><div><b>Emergency:</b> ${esc(r.emergency_name)} ${esc(r.emergency_phone)}</div>
+    <div><b>Parent:</b> ${esc(r.parent_name)}</div><div><b>Insurance:</b> ${esc(r.insurance_carrier)}</div>
+    <div class="sm:col-span-2"><b>Medical:</b> ${r.medical_option==='clear'?'No known conditions':`${esc(r.medical_conditions)} — cleared by Dr. ${esc(r.doctor_name)} on ${fmtDate(r.doctor_date)}`}</div>
+    <div><b>Athlete signature (${r.athlete_signature_method}):</b><br><img src="${r.athlete_signature}" class="h-12 border rounded bg-white"></div>
+    <div><b>Parent signature (${r.parent_signature_method}):</b><br><img src="${r.parent_signature}" class="h-12 border rounded bg-white"></div>
+    ${r.name_extracted?`<div class="sm:col-span-2"><b>Name read from document:</b> ${esc(r.name_extracted)}${r.dob_extracted?` · DOB read: ${fmtDate(r.dob_extracted)}`:''}</div>`:''}
+    ${r.verified_by?`<div class="sm:col-span-2"><b>Verified by:</b> ${esc(r.verified_by)} on ${fmtDate(r.verified_at)}</div>`:''}
+  </div>`;
+}
+async function setStatus(id,status){
+  const r=rows.find(x=>x.id===id);
+  if(status==='verified' && r.dob_check_status!=='match' && !confirm(`The automatic ID check did not come back as a match (${r.dob_check_status}). Have you compared the document by eye? Mark as verified anyway?`)) return;
+  if(status==='rejected' && !confirm('Mark this registration as rejected?')) return;
+  const upd={status, verified_by:status==='verified'?user.email:null, verified_at:status==='verified'?new Date().toISOString():null};
+  const {error}=await sb.from('registrations').update(upd).eq('id',id);
+  if(error){ alert('Could not save: '+error.message); return; }
+  Object.assign(r,upd); render();
+}
+async function runChecks(list,force){
+  if(!list.length){ $('msg').textContent='Nothing to check.'; return; }
+  $('msg').textContent=`Running ID check on ${list.length} registration(s)…`;
+  for(const r of list){
+    try{
+      const {data,error}=await sb.functions.invoke('check-dob',{body:{registration_id:r.id}});
+      if(error) throw error;
+      Object.assign(r,{dob_check_status:data.status, dob_check_note:data.note, dob_extracted:data.extracted?.dob||null, name_extracted:data.extracted?.name||null});
+    }catch(e){ r.dob_check_status='error'; r.dob_check_note='Check failed: '+(e.message||e); }
+  }
+  $('msg').textContent='ID checks finished.'; render();
+}
+$('runChecks').onclick=()=>runChecks(rows.filter(r=>r.dob_check_status==='pending'||r.dob_check_status==='error'));
+
+async function makePdf(id){
+  const r=rows.find(x=>x.id===id);
+  const bytes=await buildRegistrationPdf(r, CFG.CLUB_NAME);
+  const blob=new Blob([bytes],{type:'application/pdf'}); const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=`VYC_${r.last_name}_${r.first_name}_${r.season_year}.pdf`; a.click();
+}
+$('exportHytek').onclick=()=>{
+  const f=$('filter').value; const shown=rows.filter(r=>!f||r.status===f);
+  if(!shown.length){ alert('Nothing to export.'); return; }
+  if(f!=='verified' && !confirm(`This will include ${shown.length} athlete(s), some not yet verified. Tip: set the filter to "Verified" to export only verified athletes. Continue?`)) return;
+  const txt=hytekRoster(shown, CFG);
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'})); a.download=`${CFG.TEAM_CODE||'roster'}_hytek_roster_${CFG.SEASON_YEAR}.txt`; a.click();
+};
+$('exportCsv').onclick=()=>{
+  const cols=['last_name','first_name','dob','age_on_dec31','division','gender','sport','is_returning','prior_team','address','city','zip','phone','email','emergency_name','emergency_phone','parent_name','insurance_carrier','medical_option','medical_conditions','doctor_name','doctor_date','dob_check_status','status','verified_by','created_at'];
+  const csv=[cols.join(',')].concat(rows.map(r=>cols.map(c=>`"${String(r[c]??'').replace(/"/g,'""')}"`).join(','))).join('\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download=`registrations_${CFG.SEASON_YEAR}.csv`; a.click();
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Meets — Admin</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script><script src="shared.js"></script><script src="events.js"></script><script src="results.js"></script>
+<style>.btn{padding:.5rem .9rem;border-radius:.5rem;font-weight:600}</style>
+</head><body class="bg-gray-50 text-gray-900"><div style="background:#111827;color:#fff;padding:8px 12px;font-size:13px;display:flex;gap:14px;flex-wrap:wrap" id="__devnav"><b style="opacity:.6">Pages:</b><a href="index.html" style="color:#93c5fd">Register</a><a href="coach.html" style="color:#93c5fd">Coach dashboard</a><a href="entries.html" style="color:#93c5fd">Meet entries</a><a href="meets-admin.html" style="color:#93c5fd">Meet admin</a><a href="results.html" style="color:#93c5fd">Results &amp; rankings</a></div>
+<div class="max-w-3xl mx-auto p-4">
+  <h1 class="text-2xl font-bold">Meets — Admin</h1>
+  <div id="login" class="bg-white rounded-xl shadow p-4 mt-3">
+    <input id="email" type="email" class="w-full border rounded p-2 mb-2" placeholder="coach email">
+    <button id="send" class="btn bg-blue-600 text-white w-full">Email me a sign-in link</button>
+    <p id="msg" class="mt-2 text-sm"></p>
+  </div>
+
+  <div id="app" class="hidden">
+    <div class="bg-white rounded-xl shadow p-4 mt-3">
+      <h2 class="font-bold mb-2">New meet</h2>
+      <div class="grid grid-cols-2 gap-2">
+        <input id="mName" class="border rounded p-2 col-span-2" placeholder="Meet name">
+        <input id="mDate" type="date" class="border rounded p-2">
+        <input id="mClose" type="datetime-local" class="border rounded p-2" title="Entries close">
+        <input id="mLoc" class="border rounded p-2 col-span-2" placeholder="Location">
+      </div>
+      <p class="text-xs text-gray-500 mt-1">Second box = when entries close. The meet gets the full standard event list; untick any you don't want below after creating.</p>
+      <button id="create" class="btn bg-blue-600 text-white mt-2">Create meet</button>
+    </div>
+
+    <div id="meets" class="mt-4"></div>
+  </div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const CFG=window.APP_CONFIG;
+const sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // avoid cross-tab navigator.locks deadlock when multiple app pages are open at once
+let meets=[];
+$('send').onclick=async()=>{
+  const {error}=await sb.auth.signInWithOtp({email:$('email').value.trim(), options:{emailRedirectTo:location.href.split('#')[0]}});
+  $('msg').textContent=error?error.message:'Check your email and tap the link.';
+};
+sb.auth.onAuthStateChange(async(_e,s)=>{ if(!s) return; $('login').classList.add('hidden'); $('app').classList.remove('hidden'); load(); });
+
+$('create').onclick=async()=>{
+  const name=$('mName').value.trim(), date=$('mDate').value, close=$('mClose').value;
+  if(!name||!date||!close) return alert('Name, date and entries-close are required.');
+  const {data:m,error}=await sb.from('meets').insert({name,meet_date:date,location:$('mLoc').value.trim(),entries_close:new Date(close).toISOString()}).select().single();
+  if(error) return alert(error.message);
+  const rows=[];
+  for(const d of DIVISIONS) for(const g of ['Boy','Girl'])
+    for(const e of eventsFor(d.name,g)) rows.push({meet_id:m.id,code:e.code,name:e.name,division:d.name,gender:g,is_relay:!!e.relay,is_field:!!e.field});
+  const {error:e2}=await sb.from('meet_events').insert(rows);
+  if(e2) return alert(e2.message);
+  $('mName').value=$('mLoc').value=''; load();
+};
+
+async function load(){
+  const {data}=await sb.from('meets').select('*').order('meet_date',{ascending:false}); meets=data||[];
+  $('meets').innerHTML=meets.map(m=>`<div class="bg-white rounded-xl shadow p-4 mb-3">
+    <div class="flex flex-wrap items-center gap-2">
+      <div class="font-bold flex-1">${m.name} <span class="font-normal text-gray-500">${fmtDate(m.meet_date)} · ${m.status}</span></div>
+      <button class="btn bg-gray-200 text-sm" data-act="toggle" data-id="${m.id}">${m.status==='open'?'Close entries':'Reopen'}</button>
+      <button class="btn bg-gray-200 text-sm" data-act="events" data-id="${m.id}">Events offered</button>
+      <button class="btn bg-green-600 text-white text-sm" data-act="export" data-id="${m.id}">Hy-Tek entries</button>
+      <button class="btn bg-gray-200 text-sm" data-act="summary" data-id="${m.id}">Entry list</button>
+      <button class="btn bg-purple-600 text-white text-sm" data-act="results" data-id="${m.id}">Results</button>
+      <button class="btn bg-red-100 text-red-700 text-sm" data-act="archive" data-id="${m.id}">Archive</button>
+    </div>
+    <div id="panel-${m.id}" class="mt-3"></div></div>`).join('')||'<p class="text-gray-500">No meets yet.</p>';
+  document.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>act(b.dataset.act,b.dataset.id));
+}
+
+async function act(a,id){
+  const m=meets.find(x=>x.id===id);
+  if(a==='toggle'){ await sb.from('meets').update({status:m.status==='open'?'closed':'open'}).eq('id',id); return load(); }
+  if(a==='archive'){ if(!confirm(`Archive "${m.name}"? Entries are kept but parents won't see it.`)) return; await sb.from('meets').update({status:'archived'}).eq('id',id); return load(); }
+  if(a==='events'){
+    const {data:evs}=await sb.from('meet_events').select('*').eq('meet_id',id).order('division').order('gender').order('name');
+    const byDiv={}; evs.forEach(e=>(byDiv[e.division+' '+e.gender]??=[]).push(e));
+    $('panel-'+id).innerHTML=`<p class="text-xs text-gray-500 mb-1">Untick an event to remove it from this meet (also removes any entries in it).</p>`+
+      Object.entries(byDiv).map(([k,list])=>`<div class="mb-2"><div class="font-semibold text-sm">${k}</div><div class="flex flex-wrap gap-x-4">`+
+      list.map(e=>`<label class="text-sm"><input type="checkbox" checked data-ev="${e.id}"> ${e.name}</label>`).join('')+`</div></div>`).join('');
+    $('panel-'+id).querySelectorAll('[data-ev]').forEach(cb=>cb.onchange=async()=>{
+      if(!confirm('Remove this event from the meet?')) { cb.checked=true; return; }
+      await sb.from('meet_events').delete().eq('id',cb.dataset.ev);
+    });
+  }
+  if(a==='results') return resultsPanel(m);
+  if(a==='summary'||a==='export'){
+    const [{data:evs},{data:ens},{data:regs}]=await Promise.all([
+      sb.from('meet_events').select('*').eq('meet_id',id),
+      sb.from('entries').select('*').eq('meet_id',id),
+      sb.from('registrations').select('id,first_name,last_name,gender,dob,division,age_on_dec31').eq('status','verified')
+    ]);
+    const R=Object.fromEntries(regs.map(r=>[r.id,r])), E=Object.fromEntries(evs.map(e=>[e.id,e]));
+    const rows=ens.map(n=>({r:R[n.registration_id],e:E[n.meet_event_id],mark:n.seed_mark})).filter(x=>x.r&&x.e);
+    if(a==='summary'){
+      const byEv={}; rows.forEach(x=>(byEv[`${x.e.division} ${x.e.gender} — ${x.e.name}`]??=[]).push(`${x.r.first_name} ${x.r.last_name}${x.mark?' ('+x.mark+')':''}`));
+      $('panel-'+id).innerHTML=`<p class="text-sm font-semibold">${rows.length} entries, ${new Set(rows.map(x=>x.r.id)).size} athletes</p>`+
+        Object.entries(byEv).sort().map(([k,v])=>`<div class="text-sm"><b>${k}</b>: ${v.join(', ')}</div>`).join('');
+    } else {
+      if(!rows.length) return alert('No entries yet.');
+      const txt=hytekEntries(rows,CFG);
+      const a2=document.createElement('a'); a2.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));
+      a2.download=`${CFG.TEAM_CODE}_${m.name.replace(/[^\w]+/g,'_')}_entries.txt`; a2.click();
+    }
+  }
+}
+
+async function resultsPanel(m){
+  const p=$('panel-'+m.id);
+  const {count}=await sb.from('results').select('*',{count:'exact',head:true}).eq('meet_id',m.id);
+  p.innerHTML=`<div class="border rounded p-3 bg-purple-50">
+    <p class="text-sm mb-2"><b>${count||0}</b> results stored for this meet. <a class="underline" href="results.html?meet=${m.id}" target="_blank">View</a></p>
+    <p class="text-sm font-semibold">Upload the Hy-Tek results file</p>
+    <p class="text-xs text-gray-600 mb-1">In Meet Manager: File → Import → Semi-Colon Delimited Rosters/Entries → Export Results. Only ${CFG.TEAM_CODE} athletes are kept.</p>
+    <input type="file" id="rf-${m.id}" accept=".txt,.csv,.sd3,text/plain" class="text-sm">
+    <label class="text-xs ml-2"><input type="checkbox" id="rall-${m.id}"> include other teams</label>
+    <div id="rprev-${m.id}" class="text-sm mt-2"></div>
+    <hr class="my-3">
+    <p class="text-sm font-semibold">Add one result by hand</p>
+    <div class="grid grid-cols-2 gap-1 mt-1 text-sm">
+      <select id="ra-${m.id}" class="border rounded p-1 col-span-2"><option value="">Athlete…</option></select>
+      <select id="re-${m.id}" class="border rounded p-1"><option value="">Event…</option></select>
+      <input id="rm-${m.id}" class="border rounded p-1" placeholder="Mark (14.52 / 1:05.3 / 3.45)">
+      <input id="rp-${m.id}" type="number" class="border rounded p-1" placeholder="Place (optional)">
+      <button id="rsave-${m.id}" class="btn bg-purple-600 text-white text-sm">Save result</button>
+    </div>
+    <hr class="my-3">
+    <button id="rdel-${m.id}" class="btn bg-red-100 text-red-700 text-sm">Delete all results for this meet</button>
+  </div>`;
+  const {data:regs}=await sb.from('registrations').select('id,first_name,last_name,gender,division').eq('status','verified').order('last_name');
+  const sa=$('ra-'+m.id); regs.forEach(r=>sa.add(new Option(`${r.last_name}, ${r.first_name} (${r.division} ${r.gender})`,r.id)));
+  sa.onchange=()=>{ const r=regs.find(x=>x.id===sa.value); const se=$('re-'+m.id); se.innerHTML='<option value="">Event…</option>';
+    if(r) eventsFor(r.division,r.gender).filter(e=>!e.relay).forEach(e=>se.add(new Option(e.name,e.code))); };
+  $('rsave-'+m.id).onclick=async()=>{
+    const r=regs.find(x=>x.id===sa.value), code=$('re-'+m.id).value, mark=$('rm-'+m.id).value.trim();
+    if(!r||!code||!mark) return alert('Athlete, event and mark are required.');
+    const ev=STANDARD_EVENTS.find(e=>e.code===code&&!e.relay), isTime=!ev.field;
+    const {error}=await sb.from('results').insert({meet_id:m.id,registration_id:r.id,athlete_name:`${r.first_name} ${r.last_name}`,gender:r.gender,division:r.division,
+      event_code:code,event_name:ev.name,is_relay:false,round:'F',mark,mark_value:markToValue(mark,isTime,'M'),is_time:isTime,place:parseInt($('rp-'+m.id).value)||null,source:'manual'});
+    if(error) return alert(error.message); $('rm-'+m.id).value=$('rp-'+m.id).value=''; resultsPanel(m);
+  };
+  $('rdel-'+m.id).onclick=async()=>{ if(!confirm(`Delete ALL results for "${m.name}"? This can't be undone.`)) return;
+    await sb.from('results').delete().eq('meet_id',m.id); resultsPanel(m); };
+  $('rf-'+m.id).onchange=async ev=>{
+    const text=await ev.target.files[0].text();
+    const parsed=parseHytekResults(text,CFG,regs,[],$('rall-'+m.id).checked);
+    const pv=$('rprev-'+m.id);
+    if(!parsed.rows.length) return pv.innerHTML='<span class="text-red-600">No results found in that file for '+CFG.TEAM_CODE+'.</span>';
+    pv.innerHTML=`Found <b>${parsed.rows.length}</b> results${parsed.header?` from "${parsed.header.meet}"`:''} (${parsed.skippedOtherTeams} other-team rows skipped).`
+      +(parsed.unmatched.length?`<br><span class="text-orange-700">Not matched to a registered athlete (still saved, but won't link to their record): ${parsed.unmatched.join(', ')}</span>`:'')
+      +`<br><button id="rgo-${m.id}" class="btn bg-purple-600 text-white text-sm mt-2">Save these results</button>`;
+    $('rgo-'+m.id).onclick=async()=>{
+      const rows=parsed.rows.map(r=>({...r,meet_id:m.id}));
+      const {error}=await sb.from('results').insert(rows);
+      pv.innerHTML=error?`<span class="text-red-600">${error.message}</span>`:`Saved ${rows.length} results.`; if(!error) setTimeout(()=>resultsPanel(m),1200);
+    };
+  };
+}
+
+// Hy-Tek Meet Manager: D records (individual entries) + Q records (relays, up to 8 names per team letter)
+function hytekEntries(rows,cfg){
+  const c=(s,n)=>String(s??'').replace(/[;\r\n]/g,' ').trim().slice(0,n);
+  const code=c(cfg.TEAM_CODE||'UNA',4).toUpperCase(), team=c(cfg.CLUB_NAME||'Unattached',30);
+  const ath=r=>[c(r.last_name,20),c(r.first_name,20),'',r.gender==='Girl'?'F':'M',fmtDate(r.dob),code,team,String(r.age_on_dec31??''),''];
+  const out=[];
+  rows.filter(x=>!x.e.is_relay).forEach(x=>out.push(['D',...ath(x.r),x.e.code,c(x.mark,11),'M','','','','','','',''].join(';')));
+  const relays={}; rows.filter(x=>x.e.is_relay).forEach(x=>(relays[`${x.e.code}|${x.e.division}|${x.e.gender}`]??=[]).push(x.r));
+  for(const [k,list] of Object.entries(relays)){
+    const [evCode,div,g]=k.split('|'); const age=DIVISIONS.find(d=>d.name===div)?.max??'';
+    for(let i=0,L=0;i<list.length;i+=8,L++){
+      const runners=list.slice(i,i+8).flatMap(r=>[c(r.last_name,20),c(r.first_name,20),'',r.gender==='Girl'?'F':'M',fmtDate(r.dob),String(r.age_on_dec31??''),'','']);
+      out.push(['Q',code,team,String.fromCharCode(65+L),g==='Girl'?'F':'M',String(age),evCode,'','M','','','','','','',...runners].join(';'));
+    }
+  }
+  return out.join('\r\n')+'\r\n';
+}
+</script></body></html>

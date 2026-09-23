@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Athlete Registration</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="shared.js"></script>
+<style>
+  body{background:#f3f4f6}
+  .card{background:#fff;border-radius:12px;padding:16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  label{display:block;font-size:14px;font-weight:600;color:#374151;margin:10px 0 4px}
+  input[type=text],input[type=date],input[type=email],input[type=tel],input[type=number],select,textarea{width:100%;padding:12px;border:1px solid #d1d5db;border-radius:8px;font-size:16px;min-height:44px}
+  .legal{font-size:12px;line-height:1.45;color:#374151;max-height:180px;overflow-y:auto;border:1px solid #e5e7eb;padding:10px;border-radius:8px;background:#fafafa}
+  .rule{font-size:13px;color:#374151;margin:2px 0}
+  canvas.sig{border:1px dashed #9ca3af;border-radius:8px;background:#fff;touch-action:none;width:100%;height:140px}
+  .btn{min-height:44px;padding:10px 16px;border-radius:8px;font-weight:600}
+  .chk{display:flex;align-items:flex-start;gap:10px;font-size:14px;margin:8px 0}
+  .chk input{width:22px;height:22px;margin-top:1px;flex:none}
+</style>
+</head>
+<body class="text-gray-900"><div style="background:#111827;color:#fff;padding:8px 12px;font-size:13px;display:flex;gap:14px;flex-wrap:wrap" id="__devnav"><b style="opacity:.6">Pages:</b><a href="index.html" style="color:#93c5fd">Register</a><a href="coach.html" style="color:#93c5fd">Coach dashboard</a><a href="entries.html" style="color:#93c5fd">Meet entries</a><a href="meets-admin.html" style="color:#93c5fd">Meet admin</a><a href="results.html" style="color:#93c5fd">Results &amp; rankings</a></div>
+<div class="max-w-xl mx-auto p-3">
+  <div class="card">
+    <h1 class="text-xl font-bold">VYC Registration</h1>
+    <p class="text-sm text-gray-600">Valley Youth Conference — Track &amp; Field / Cross Country. Season <span id="seasonLbl"></span>. Fill this out once; it completes both league forms.</p>
+    <label class="mt-2">Team</label>
+    <select id="team" required><option value="">Choose your team…</option></select>
+  </div>
+
+  <form id="regForm" onsubmit="return false;">
+
+  <!-- SPORT / DIVISION -->
+  <div class="card">
+    <h2 class="font-bold text-lg">1. Sport &amp; Division</h2>
+    <label>Sport</label>
+    <select id="sport" required><option value="">Choose…</option><option>Track & Field</option><option>Cross Country</option></select>
+    <label>Athlete's date of birth</label>
+    <input type="date" id="dob" required>
+    <div class="grid grid-cols-2 gap-3">
+      <div><label>Age as of Dec 31, <span class="seasonYr"></span></label><select id="age" required><option value="">—</option></select></div>
+      <div><label>Division</label><select id="division" required><option value="">—</option></select></div>
+    </div>
+    <p id="ageNote" class="text-xs text-gray-500 mt-1">Age and division fill in automatically from the date of birth.</p>
+    <label>Boy / Girl</label>
+    <select id="gender" required><option value="">Choose…</option><option>Boy</option><option>Girl</option></select>
+
+    <div class="chk mt-3"><input type="checkbox" id="returning"><span>This is a returning athlete (ran in the Valley Youth Conference before)</span></div>
+    <div id="returningBox" class="hidden pl-2 border-l-4 border-blue-200">
+      <div class="chk"><input type="checkbox" id="otherTeam"><span>They ran for a <b>different team</b> in the league</span></div>
+      <div id="otherTeamBox" class="hidden">
+        <label>Which team?</label>
+        <select id="priorTeam"><option value="">Choose…</option></select>
+      </div>
+    </div>
+  </div>
+
+  <!-- ATHLETE -->
+  <div class="card">
+    <h2 class="font-bold text-lg">2. Athlete Information</h2>
+    <div class="grid grid-cols-2 gap-3">
+      <div><label>First name</label><input type="text" id="firstName" required></div>
+      <div><label>Last name</label><input type="text" id="lastName" required></div>
+    </div>
+    <label>Street address</label><input type="text" id="address" required>
+    <div class="grid grid-cols-3 gap-3">
+      <div class="col-span-2"><label>City</label><input type="text" id="city" required></div>
+      <div><label>Zip</label><input type="text" id="zip" inputmode="numeric" required></div>
+    </div>
+    <label>Phone</label><input type="tel" id="phone" required>
+    <label>Email</label><input type="email" id="email" required>
+    <div class="grid grid-cols-2 gap-3">
+      <div><label>Emergency contact name</label><input type="text" id="emergencyName" required></div>
+      <div><label>Emergency phone</label><input type="tel" id="emergencyPhone" required></div>
+    </div>
+  </div>
+
+  <!-- PROOF OF BIRTH -->
+  <div class="card">
+    <h2 class="font-bold text-lg">3. Proof of Birth</h2>
+    <p class="text-sm text-gray-600">Take a photo or upload the birth certificate, passport, or ID. It's stored privately and only the coaching staff can see it.</p>
+    <input type="file" id="proof" accept="image/*,.pdf" capture="environment" class="mt-2 text-sm" required>
+    <img id="proofPreview" class="mt-2 max-h-48 rounded hidden" alt="">
+  </div>
+
+  <!-- INSURANCE / MEDICAL -->
+  <div class="card">
+    <h2 class="font-bold text-lg">4. Insurance &amp; Medical</h2>
+    <p class="text-sm text-gray-600">Family insurance (write "none" if you have none).</p>
+    <label>Insurance carrier</label><input type="text" id="insCarrier" required>
+    <label class="mt-4">Medical clearance — pick one</label>
+    <div class="chk"><input type="radio" name="med" value="clear" id="medClear" required><span>I am not aware of any medical or physical condition that would limit my child's participation in Track &amp; Field and Cross Country.</span></div>
+    <div class="chk"><input type="radio" name="med" value="conditions" id="medCond"><span>My child has medical or physical condition(s) that concern me, and a doctor has cleared them to participate.</span></div>
+    <div id="medCondBox" class="hidden pl-2 border-l-4 border-blue-200">
+      <label>Condition(s)</label><textarea id="medConditions" rows="2"></textarea>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label>Doctor's name</label><input type="text" id="doctorName"></div>
+        <div><label>Date cleared</label><input type="date" id="doctorDate"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ATHLETE AGREEMENT -->
+  <div class="card">
+    <h2 class="font-bold text-lg">5. Athlete's Agreement</h2>
+    <p class="text-sm text-gray-600 mb-2">Athlete: read and agree to these rules.</p>
+    <p class="rule">1. I will maintain at least a "C" average throughout the school year.</p>
+    <p class="rule">2. I will play any position assigned and do my best for the team.</p>
+    <p class="rule">3. When my team is not playing I will stay off the playing field completely and will not interfere with those playing.</p>
+    <p class="rule">4. I solemnly pledge that I will not in any way damage, or deface any property, building or equipment.</p>
+    <p class="rule">5. I agree to abide by all decisions of game officials and will not create any unsportmanlike gestures at any time.</p>
+    <p class="rule">6. I promise that I will be a lady/gentleman at all times and I will refrain from using any foul language.</p>
+    <p class="rule">7. I agree that I will remain a member of the team and the organization until properly released.</p>
+    <p class="rule">8. I agree to return the uniform and other equipment issued to me in as good a condition as when received, except for normal wear and tear.</p>
+    <div class="chk mt-2"><input type="checkbox" id="athleteAgree" required><span>I, the athlete, will faithfully keep and abide by these rules and the Code of Conduct / No Fighting Contract below.</span></div>
+    <div id="athleteSig"></div>
+  </div>
+
+  <!-- CODE OF CONDUCT -->
+  <div class="card">
+    <h2 class="font-bold text-lg">6. Code of Conduct — No Fighting Contract</h2>
+    <div class="legal">
+      <p>Our goals are to provide a recreational environment that is fun, healthy and competitive for all who wish to play. We believe this is the right of every player enrolled in our program. In addition we wish to protect these players from those who wish to violate their rights via mean spirited play, unsporting behavior and/or undue or malicious outside interference. It is the intent of the Valley Youth Conference, Inc. (VYC) and all Clubs to stop ANY and ALL violent conduct. All players, parents, coaches and helpers who are connected with each VYC Club must read and sign this document.</p>
+      <p class="mt-2">Any athlete receiving discipline by a coach or an official of the Valley Youth Conference for throwing a punch, participating in a fight or any type of violent conduct, or other type of inappropriate behavior, may be further suspended from play for the season. Any coach, parent or spectator receiving discipline, including, but not limited to being asked to leave, for violent conduct or other inappropriate behavior may be barred from attending any further meets and/or Valley Youth Conference event, including practices.</p>
+      <p class="mt-2">Should there be an incident of a fight or punches thrown involving athletes, coaches, participants or spectators at any Valley Youth Conference Sport activity, then a report of this incident must be made to the Commissioner of that Sport by the highest officials of the Club(s) in question within 24 hrs. of the incident. If the Commissioner of the Sport is unavailable to receive the report, then the General Manager is to be contacted next.</p>
+      <p class="mt-2">The use of alcohol and illegal drugs will not be tolerated. If a player, coach or spectator is found to be using, or under the influence of, such substances, that person will be barred from attending the game/event/meet in question and/or reported to the proper authorities. The use of tobacco will not be tolerated at any venue where games/events/meets are in progress. A person using tobacco at any game/event/meet of the Valley Conference will be barred from attending the game/event/meet in question and may receive further sanctions.</p>
+      <p class="mt-2">The Commissioner, and/or a committee formed by the Commissioner (which shall report to the Commissioner), will review reports of violent conduct, inappropriate behavior, alcohol, illegal drug, or tobacco use and similar incidents. In doing so, said person(s) may receive such input as such person(s) deem necessary. The Commissioner shall issue a ruling and final penalty/sanction, which may be lesser or more than those stated above. Once a ruling on the incident is issued, the Commissioner shall inform the Club representative of the actions against the parties involved and/or penalty or club sanctions. In the event that a person who has been suspended or barred from participation is found to have participated during such person's term of suspension or exclusion, then the Commissioner may issue further sanctions, including, but not limited to, Club suspension.</p>
+      <p class="mt-2"><b>ANY ATHLETE, COACH or PARENT refusing to sign this document will not be able to participate in play.</b></p>
+      <p class="mt-2"><b>Performance Enhancing Substances</b> — The Valley Youth Conference, its member organizations and representatives of these organizations shall NOT recommend, promote or suggest any type of substance whether chemical, vitamin, mineral, or herbal to be used by its athletes.</p>
+    </div>
+  </div>
+
+  <!-- PARENT CONSENT -->
+  <div class="card">
+    <h2 class="font-bold text-lg">7. Parent / Guardian Consent</h2>
+    <div class="legal">
+      <p><b>RELEASE:</b> I/WE the parents/guardians of the above named applicant, hereby give my/our approval to his/her participation in all conference and member organizations activities during the specified season. I/WE assume all risks and hazards incidental to such participation including transportation to and from the activities and I/WE do hereby waive, release, absolve, indemnify and agree to hold harmless the conference, member organization, organizers, sponsors, supervisors, participants, and persons transporting the applicant to and from activities, from any claim arising out of an injury to the applicant.</p>
+      <p class="mt-2"><b>ATTEST:</b> I/WE hereby acknowledge that the information provided in this application is factual and accurate, that I/WE understand that if applicant is accepted to member organization and is certified by the Conference the applicant must remain with the member organization until released, such release is subject to approval of the conference. I/WE have read the foregoing statement and understand them, and sign them voluntarily.</p>
+      <p class="mt-2"><b>MEDIA RELEASED:</b> I/WE hereby give permission to the Valley Youth Conference to reproduce, adapt, and display in any and all media my child's name, and/or photographs, silhouettes, or other reproductions of my child's physical image. I further give permission to the Valley Youth Conference to reproduce, adapt, and display record of the sporting performance of my child that it may obtain as it pertains to the Valley Youth Conference Sport that he or she is participating in, on or about the above dates. I hereby release the Valley Youth Conference from any and all claims and liabilities that I or my child by reason of the publication in any media whatsoever (including publication in or by any news media), use, adaptation display or such use of my child's name and/or likeness.</p>
+      <p class="mt-2"><b>INSURANCE:</b> I/WE hereby acknowledge and represent that I understand that the Conference, or member organizations upon approval of the Conference, maintains Group Accident Coverage for medical/hospital expenses, and that I have been advised and understand the limits and provisions of such coverage, including that such coverage may be considered as "secondary" coverage when there is any other valid and collectible coverage provided by applicant's parents/guardians separate insurance specified above if known. I/WE understand that any claim for medical service which arises out of an injury from a Conference or member organization activity must be reported to the member organization Coach/Manager of applicant's assigned team within ten days of the date of injury.</p>
+      <p class="mt-2"><b>MEDICAL TREATMENT AUTHORIZATION:</b> In the event of injury or illness to the above named applicant, I/WE hereby grant authority to a qualified physician to render such medical treatment to the applicant as said physician deems necessary under the circumstances upon presentation of this consent form.</p>
+    </div>
+    <label>Parent / guardian full name</label><input type="text" id="parentName" required>
+    <div class="chk"><input type="checkbox" id="parentAgree" required><span>I declare under penalty of perjury that I am the parent or legal guardian of this athlete, and I agree to the Release, Attest, Media Release, Insurance, Medical Treatment Authorization, and the Code of Conduct / No Fighting Contract above.</span></div>
+    <div id="parentSig"></div>
+  </div>
+
+  <div class="card">
+    <button id="submitBtn" class="btn bg-blue-600 text-white w-full text-lg">Submit Registration</button>
+    <p id="status" class="text-sm mt-3"></p>
+  </div>
+  </form>
+  <div id="done" class="card hidden text-center">
+    <h2 class="text-xl font-bold text-green-700">Registration received ✓</h2>
+    <p class="mt-2 text-sm">Thanks! The coaching staff will review the proof of birth and confirm. You can close this page.</p>
+  </div>
+</div>
+
+<script>
+const CFG = window.APP_CONFIG;
+const sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // avoid cross-tab navigator.locks deadlock when multiple app pages are open at once
+document.getElementById('seasonLbl').textContent = CFG.SEASON_YEAR;
+document.querySelectorAll('.seasonYr').forEach(e=>e.textContent=CFG.SEASON_YEAR);
+const $ = id=>document.getElementById(id);
+
+// dropdown fill
+for(let a=5;a<=18;a++){ $('age').insertAdjacentHTML('beforeend',`<option>${a}</option>`); }
+DIVISIONS.forEach(d=>$('division').insertAdjacentHTML('beforeend',`<option value="${d.name}">${d.name} (${d.min}–${d.max})</option>`));
+VYC_TEAMS.forEach(t=>$('priorTeam').insertAdjacentHTML('beforeend',`<option>${t.name}</option>`));
+VYC_TEAMS.forEach(t=>$('team').insertAdjacentHTML('beforeend',`<option value="${t.code}">${t.name}</option>`));
+
+function syncAge(){
+  const age = ageOnDec31($('dob').value, CFG.SEASON_YEAR);
+  if(age===null) return;
+  const div = divisionFor(age);
+  if(!div){ $('ageNote').textContent = `Age ${age} as of Dec 31 is outside the 5–18 range for this league.`; $('ageNote').className='text-xs text-red-600 mt-1'; $('age').value=''; $('division').value=''; return; }
+  $('ageNote').textContent = 'Age and division fill in automatically from the date of birth.'; $('ageNote').className='text-xs text-gray-500 mt-1';
+  $('age').value = age; $('division').value = div;
+}
+$('dob').addEventListener('change', syncAge);
+$('age').addEventListener('change', ()=>{ const d=divisionFor(parseInt($('age').value,10)); if(d) $('division').value=d; });
+$('returning').addEventListener('change', e=>$('returningBox').classList.toggle('hidden', !e.target.checked));
+$('otherTeam').addEventListener('change', e=>$('otherTeamBox').classList.toggle('hidden', !e.target.checked));
+document.querySelectorAll('input[name=med]').forEach(r=>r.addEventListener('change', ()=>$('medCondBox').classList.toggle('hidden', $('medCond').checked!==true)));
+$('proof').addEventListener('change', e=>{
+  const f=e.target.files[0]; const img=$('proofPreview');
+  if(f && f.type.startsWith('image/')){ img.src=URL.createObjectURL(f); img.classList.remove('hidden'); } else img.classList.add('hidden');
+});
+
+// ---- Signature widget: draw OR type ----
+function makeSig(containerId, who, nameInputId){
+  const c = $(containerId);
+  c.innerHTML = `
+    <label>${who} signature</label>
+    <div class="flex gap-2 mb-2">
+      <button type="button" class="btn bg-gray-200 text-sm modeDraw">Draw</button>
+      <button type="button" class="btn bg-gray-200 text-sm modeType">Type my name</button>
+    </div>
+    <div class="drawBox"><canvas class="sig"></canvas><button type="button" class="text-sm text-blue-600 mt-1 clearBtn">Clear</button></div>
+    <div class="typeBox hidden">
+      <input type="text" class="typedName" placeholder="Type full name">
+      <div class="typedPreview" style="font-family:'Dancing Script',cursive;font-size:34px;padding:8px;min-height:60px;border:1px dashed #9ca3af;border-radius:8px;margin-top:6px"></div>
+      <p class="text-xs text-gray-500">By typing your name you agree it counts as your signature.</p>
+    </div>`;
+  const canvas = c.querySelector('canvas'), ctx = canvas.getContext('2d');
+  let mode='draw', drawing=false, hasInk=false;
+  function resize(){ const r=canvas.getBoundingClientRect(); canvas.width=r.width*2; canvas.height=r.height*2; ctx.scale(2,2); ctx.lineWidth=2; ctx.lineCap='round'; ctx.strokeStyle='#111'; }
+  setTimeout(resize,50); window.addEventListener('resize', ()=>{resize(); hasInk=false;});
+  const pos=e=>{const r=canvas.getBoundingClientRect(); const p=e.touches?e.touches[0]:e; return [p.clientX-r.left,p.clientY-r.top];};
+  const start=e=>{drawing=true; hasInk=true; const [x,y]=pos(e); ctx.beginPath(); ctx.moveTo(x,y); e.preventDefault();};
+  const move=e=>{ if(!drawing) return; const [x,y]=pos(e); ctx.lineTo(x,y); ctx.stroke(); e.preventDefault(); };
+  const end=()=>drawing=false;
+  canvas.addEventListener('mousedown',start); canvas.addEventListener('mousemove',move); window.addEventListener('mouseup',end);
+  canvas.addEventListener('touchstart',start,{passive:false}); canvas.addEventListener('touchmove',move,{passive:false}); canvas.addEventListener('touchend',end);
+  c.querySelector('.clearBtn').onclick=()=>{ ctx.clearRect(0,0,canvas.width,canvas.height); hasInk=false; };
+  const typed=c.querySelector('.typedName'), prev=c.querySelector('.typedPreview');
+  typed.addEventListener('input',()=>prev.textContent=typed.value);
+  c.querySelector('.modeDraw').onclick=()=>{mode='draw'; c.querySelector('.drawBox').classList.remove('hidden'); c.querySelector('.typeBox').classList.add('hidden');};
+  c.querySelector('.modeType').onclick=()=>{mode='type'; c.querySelector('.drawBox').classList.add('hidden'); c.querySelector('.typeBox').classList.remove('hidden'); if(!typed.value && nameInputId){ typed.value=$(nameInputId).value; prev.textContent=typed.value; } };
+  return {
+    get(){ // returns {png, method} or null
+      if(mode==='draw'){ if(!hasInk) return null; return {png:canvas.toDataURL('image/png'), method:'drawn'}; }
+      const name=typed.value.trim(); if(!name) return null;
+      const t=document.createElement('canvas'); t.width=800; t.height=200; const tc=t.getContext('2d');
+      tc.fillStyle='#111'; tc.font="600 72px 'Dancing Script', cursive"; tc.textBaseline='middle'; tc.fillText(name,20,100);
+      return {png:t.toDataURL('image/png'), method:'typed', typedName:name};
+    }
+  };
+}
+const athleteSig = makeSig('athleteSig','Athlete', null);
+const parentSig = makeSig('parentSig','Parent / guardian','parentName');
+// prefill typed athlete name when they switch to type mode
+document.querySelector('#athleteSig .modeType').addEventListener('click',()=>{ const t=document.querySelector('#athleteSig .typedName'); if(!t.value){ t.value=($('firstName').value+' '+$('lastName').value).trim(); t.dispatchEvent(new Event('input')); }});
+
+// ---- Submit ----
+$('submitBtn').onclick = async ()=>{
+  const st=$('status'); st.className='text-sm mt-3 text-red-600';
+  const form=$('regForm'); if(!form.checkValidity()){ form.reportValidity(); return; }
+  const aSig=athleteSig.get(), pSig=parentSig.get();
+  if(!aSig){ st.textContent='Athlete signature is missing.'; return; }
+  if(!pSig){ st.textContent='Parent/guardian signature is missing.'; return; }
+  if($('medCond').checked && (!$('doctorName').value || !$('doctorDate').value)){ st.textContent='Please enter the doctor name and date of clearance.'; return; }
+  if(!$('team').value){ st.textContent='Please choose your team.'; return; }
+  if(!$('division').value){ st.textContent='Athlete age is outside the league range.'; return; }
+  const file=$('proof').files[0];
+  if(file.size>15*1024*1024){ st.textContent='Proof of birth file is too large (max 15 MB).'; return; }
+  st.className='text-sm mt-3 text-gray-700'; st.textContent='Uploading…'; $('submitBtn').disabled=true;
+  try{
+    const id = crypto.randomUUID();
+    const ext = (file.name.split('.').pop()||'jpg').toLowerCase();
+    const path = `${id}/proof.${ext}`;
+    const up = await sb.storage.from('proof-of-birth').upload(path, file, {contentType:file.type||'application/octet-stream', upsert:false});
+    if(up.error) throw up.error;
+    const row = {
+      id, team_code: $('team').value, season_year: CFG.SEASON_YEAR, sport: $('sport').value, gender: $('gender').value,
+      dob: $('dob').value, age_on_dec31: parseInt($('age').value,10), division: $('division').value,
+      first_name: $('firstName').value.trim(), last_name: $('lastName').value.trim(),
+      address: $('address').value.trim(), city: $('city').value.trim(), zip: $('zip').value.trim(),
+      phone: $('phone').value.trim(), email: $('email').value.trim(),
+      emergency_name: $('emergencyName').value.trim(), emergency_phone: $('emergencyPhone').value.trim(),
+      is_returning: $('returning').checked,
+      ran_for_other_team: $('returning').checked && $('otherTeam').checked,
+      prior_team: ($('returning').checked && $('otherTeam').checked) ? $('priorTeam').value : null,
+      insurance_carrier: $('insCarrier').value.trim(),
+      medical_option: $('medCond').checked ? 'conditions' : 'clear',
+      medical_conditions: $('medCond').checked ? $('medConditions').value.trim() : null,
+      doctor_name: $('medCond').checked ? $('doctorName').value.trim() : null,
+      doctor_date: $('medCond').checked ? $('doctorDate').value : null,
+      parent_name: $('parentName').value.trim(),
+      athlete_signature: aSig.png, athlete_signature_method: aSig.method,
+      parent_signature: pSig.png, parent_signature_method: pSig.method,
+      proof_path: path, dob_check_status: 'pending', status: 'submitted'
+    };
+    const ins = await sb.from('registrations').insert(row);
+    if(ins.error) throw ins.error;
+    form.classList.add('hidden'); $('done').classList.remove('hidden'); window.scrollTo(0,0);
+  }catch(err){
+    console.error(err); st.className='text-sm mt-3 text-red-600';
+    st.textContent='Something went wrong: '+(err.message||err)+'. Please try again or contact the coach.';
+    $('submitBtn').disabled=false;
+  }
+};
+</script>
+</body>
+</html>
