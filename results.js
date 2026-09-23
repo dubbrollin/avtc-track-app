@@ -50,9 +50,13 @@ window.parseHytekResults = function(text, cfg, regs, meetEvents, all){
 };
 
 // Group results into ranked lists: key = event/division/gender, sorted best first. bestPerAthlete=true keeps one row per athlete.
-window.rankResults = function(rows, bestPerAthlete){
+// conference: null = all teams combined; 'East' or 'West' = only that conference's athletes (row must carry .conference, set via attachConference()).
+// Season/overall rankings are capped at the top 50 per event/division/gender group per club policy — anything ranked 51+ is dropped, not just hidden.
+window.rankResults = function(rows, bestPerAthlete, conference, capAt){
+  const cap = capAt===undefined ? 50 : capAt; // pass null/0 to disable the cap (e.g. single-meet results)
+  const filtered = conference ? rows.filter(r=>r.conference===conference) : rows;
   const groups={};
-  for(const r of rows){
+  for(const r of filtered){
     const k=`${r.division||'?'}|${r.gender}|${r.event_name}`;
     (groups[k]??={ division:r.division||'?', gender:r.gender, event:r.event_name, is_time:r.is_time, rows:[] }).rows.push(r);
   }
@@ -60,6 +64,17 @@ window.rankResults = function(rows, bestPerAthlete){
   return Object.values(groups).map(g=>{
     let rs=g.rows.filter(r=>r.mark_value!=null).sort((a,b)=>g.is_time?a.mark_value-b.mark_value:b.mark_value-a.mark_value);
     if(bestPerAthlete){ const seen=new Set(); rs=rs.filter(r=>{ const id=r.registration_id||r.athlete_name; if(seen.has(id)) return false; seen.add(id); return true; }); }
+    if(cap) rs=rs.slice(0,cap);
     g.rows=rs.concat(g.rows.filter(r=>r.mark_value==null)); return g;
   }).sort((a,b)=>(divOrder.indexOf(a.division)-divOrder.indexOf(b.division))||a.gender.localeCompare(b.gender)||a.event.localeCompare(b.event));
+};
+
+// Tags each result row with .conference (East/West/null) by looking up its registration's team.
+// regsById: {registration_id: registrationRow} — registrationRow.team_code must be set (added in the 2026 rebuild).
+window.attachConference = function(rows, regsById){
+  return rows.map(r=>{
+    const reg = r.registration_id ? regsById[r.registration_id] : null;
+    const teamCode = reg?.team_code || r.team_code || null;
+    return {...r, team_code:teamCode, conference: teamCode ? window.conferenceForTeamCode(teamCode) : null};
+  });
 };

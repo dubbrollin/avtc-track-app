@@ -6,7 +6,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script><script src="shared.js"></script><script src="events.js"></script>
 <style>.btn{padding:.6rem 1rem;border-radius:.5rem;font-weight:600}</style>
-</head><body class="bg-gray-50 text-gray-900"><div style="background:#111827;color:#fff;padding:8px 12px;font-size:13px;display:flex;gap:14px;flex-wrap:wrap" id="__devnav"><b style="opacity:.6">Pages:</b><a href="index.html" style="color:#93c5fd">Register</a><a href="coach.html" style="color:#93c5fd">Coach dashboard</a><a href="entries.html" style="color:#93c5fd">Meet entries</a><a href="meets-admin.html" style="color:#93c5fd">Meet admin</a><a href="results.html" style="color:#93c5fd">Results &amp; rankings</a></div>
+</head><body class="bg-gray-50 text-gray-900"><div style="background:#111827;color:#fff;padding:8px 12px;font-size:13px;display:flex;gap:14px;flex-wrap:wrap" id="__devnav"><b style="opacity:.6">Pages:</b><a href="home.html" style="color:#93c5fd">Home</a><a href="index.html" style="color:#93c5fd">Register</a><a href="coach.html" style="color:#93c5fd">Coach dashboard</a><a href="entries.html" style="color:#93c5fd">Meet entries</a><a href="meets-admin.html" style="color:#93c5fd">Meet admin</a><a href="results.html" style="color:#93c5fd">Results &amp; rankings</a></div>
 <div class="max-w-2xl mx-auto p-4">
   <h1 class="text-2xl font-bold" id="club"></h1>
   <p class="text-gray-600 mb-4">Meet event sign-up</p>
@@ -33,7 +33,7 @@ const $=id=>document.getElementById(id);
 const CFG=window.APP_CONFIG;
 $('club').textContent=CFG.CLUB_NAME;
 const sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // avoid cross-tab navigator.locks deadlock when multiple app pages are open at once
-let me=null, isCoach=false, meets=[], athletes=[], events=[], entries=[];
+let me=null, isCoach=false, myCoachRow=null, meets=[], athletes=[], events=[], entries=[];
 
 $('send').onclick=async()=>{
   const email=$('email').value.trim(); if(!email) return;
@@ -44,7 +44,8 @@ $('logout').onclick=()=>sb.auth.signOut().then(()=>location.reload());
 sb.auth.onAuthStateChange(async(_e,session)=>{
   if(!session) return; me=session.user.email;
   $('login').classList.add('hidden'); $('app').classList.remove('hidden');
-  const {data:c}=await sb.from('coaches').select('email').limit(1); isCoach=!!(c&&c.length);
+  const {data:c}=await sb.from('coaches').select('*').eq('email',me).eq('approved',true).maybeSingle();
+  myCoachRow=c||null; isCoach=!!c;
   await loadMeets();
 });
 
@@ -60,12 +61,15 @@ function isOpen(m){ return m.status==='open' && new Date()<=new Date(m.entries_c
 async function loadMeet(){
   const m=cur(); if(!m) return;
   $('meetInfo').textContent=`${m.location||''} · Entries ${isOpen(m)?'close':'closed'} ${new Date(m.entries_close).toLocaleString()}`;
+  let athleteQuery=sb.from('registrations').select('id,first_name,last_name,division,gender,status,team_code,email').eq('status','verified').order('last_name');
+  athleteQuery = isCoach ? athleteQuery.eq('team_code', myCoachRow.team_code) : athleteQuery.eq('email', me);
   const [a,e,n]=await Promise.all([
-    sb.from('registrations').select('id,first_name,last_name,division,gender,status').eq('status','verified').order('last_name'),
+    athleteQuery,
     sb.from('meet_events').select('*').eq('meet_id',m.id),
     sb.from('entries').select('*').eq('meet_id',m.id)
   ]);
   athletes=a.data||[]; events=e.data||[]; entries=n.data||[];
+  $('none').textContent = isCoach ? 'No verified athletes found for your team yet.' : 'No verified athletes found for this email. If you registered recently, a coach has to verify the athlete first, and you must have checked "use this email to sign in" on the registration.';
   $('none').classList.toggle('hidden',athletes.length>0);
   render();
 }

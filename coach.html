@@ -18,36 +18,57 @@
   input,select{padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:15px;min-height:44px}
 </style>
 </head>
-<body class="text-gray-900"><div style="background:#111827;color:#fff;padding:8px 12px;font-size:13px;display:flex;gap:14px;flex-wrap:wrap" id="__devnav"><b style="opacity:.6">Pages:</b><a href="index.html" style="color:#93c5fd">Register</a><a href="coach.html" style="color:#93c5fd">Coach dashboard</a><a href="entries.html" style="color:#93c5fd">Meet entries</a><a href="meets-admin.html" style="color:#93c5fd">Meet admin</a><a href="results.html" style="color:#93c5fd">Results &amp; rankings</a></div>
+<body class="text-gray-900"><div style="background:#111827;color:#fff;padding:8px 12px;font-size:13px;display:flex;gap:14px;flex-wrap:wrap" id="__devnav"><b style="opacity:.6">Pages:</b><a href="home.html" style="color:#93c5fd">Home</a><a href="index.html" style="color:#93c5fd">Register</a><a href="coach.html" style="color:#93c5fd">Coach dashboard</a><a href="entries.html" style="color:#93c5fd">Meet entries</a><a href="meets-admin.html" style="color:#93c5fd">Meet admin</a><a href="results.html" style="color:#93c5fd">Results &amp; rankings</a></div>
 <div class="max-w-3xl mx-auto p-3">
 
   <!-- LOGIN -->
   <div id="login" class="card">
     <h1 class="text-xl font-bold">Coach Dashboard</h1>
-    <p class="text-sm text-gray-600 mb-2">Enter your coach email. We'll send you a sign-in link (no password).</p>
+    <p class="text-sm text-gray-600 mb-2">Enter your coach email. We'll send you a sign-in link (no password). You must have an <b>approved</b> coach registration to see anything here — register first on the Register page if you haven't.</p>
     <div class="flex gap-2"><input type="email" id="loginEmail" class="flex-1" placeholder="you@example.com"><button id="loginBtn" class="btn bg-blue-600 text-white">Send link</button></div>
     <p id="loginMsg" class="text-sm mt-2"></p>
   </div>
 
   <!-- APP -->
   <div id="app" class="hidden">
-    <div class="card flex flex-wrap items-center gap-2">
-      <h1 class="text-lg font-bold flex-1">Registrations <span id="count" class="text-gray-500 font-normal text-sm"></span></h1>
-      <select id="filter"><option value="">All</option><option value="submitted">Needs review</option><option value="verified">Verified</option><option value="rejected">Rejected</option></select>
-      <button id="runChecks" class="btn bg-gray-800 text-white">Run ID checks</button>
-      <button id="exportCsv" class="btn bg-gray-200">Export CSV</button>
-      <button id="exportHytek" class="btn bg-gray-200">Hy-Tek roster</button>
-      <button id="logout" class="btn bg-gray-200">Sign out</button>
+    <div class="card" id="notCoachBox" style="display:none">
+      <p class="text-sm text-red-700">We couldn't find an approved coach registration for this email. If you just registered, your club still needs to approve you. <a class="text-blue-600 underline" href="index.html">Register as a coach</a></p>
     </div>
-    <p id="msg" class="text-sm text-gray-600 px-1 mb-2"></p>
-    <div id="list"></div>
+    <div id="coachApp" style="display:none">
+      <div class="card flex flex-wrap items-center gap-2">
+        <div class="flex-1 min-w-0">
+          <h1 class="text-lg font-bold">Coach Dashboard <span id="teamLabel" class="text-gray-500 font-normal text-sm"></span></h1>
+          <p id="bgStatusLine" class="text-xs mt-1"></p>
+        </div>
+        <a href="entries.html" class="btn bg-purple-700 text-white">Meet entries →</a>
+        <a href="results.html" class="btn bg-gray-800 text-white">Results &amp; rankings</a>
+        <button id="logout" class="btn bg-gray-200">Sign out</button>
+      </div>
+
+      <div class="card flex flex-wrap items-center gap-2">
+        <h2 class="font-bold flex-1">Athlete registrations — my team <span id="count" class="text-gray-500 font-normal text-sm"></span></h2>
+        <select id="filter"><option value="">All</option><option value="submitted">Needs review</option><option value="verified">Verified</option><option value="rejected">Rejected</option></select>
+        <button id="runChecks" class="btn bg-gray-800 text-white">Run ID checks</button>
+        <button id="exportCsv" class="btn bg-gray-200">Export CSV</button>
+        <button id="exportHytek" class="btn bg-gray-200">Hy-Tek roster</button>
+      </div>
+      <p id="msg" class="text-sm text-gray-600 px-1 mb-2"></p>
+      <div id="list"></div>
+
+      <div class="card">
+        <h2 class="font-bold mb-2">Coaches on my team <span id="coachCount" class="text-gray-500 font-normal text-sm"></span></h2>
+        <p class="text-xs text-gray-500 mb-2">Approve a new coach registration, or review background-check status. Only head coaches should approve others.</p>
+        <div id="coachList"></div>
+      </div>
+    </div>
   </div>
 </div>
 
 <script>
 const CFG=window.APP_CONFIG, $=id=>document.getElementById(id);
-const sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // avoid cross-tab navigator.locks deadlock when multiple app pages are open at once
-let rows=[], user=null;
+const sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } });
+let rows=[], coachRows=[], user=null, myCoach=null;
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 // ---- auth ----
 $('loginBtn').onclick=async()=>{
@@ -60,16 +81,43 @@ sb.auth.onAuthStateChange(async(_e,session)=>{
   user=session?.user||null;
   if(!user) return;
   $('login').classList.add('hidden'); $('app').classList.remove('hidden');
-  await load();
+  await loadMe();
 });
+
+// background-check status, given season year rules: 2yr window normally, 3yr if USATF certified
+function bgStatus(c){
+  if(c.usatf_certified){
+    if(!c.usatf_cert_date) return {label:'USATF — no date on file', cls:'bg-yellow-100 text-yellow-800'};
+    const years=CFG.SEASON_YEAR - new Date(c.usatf_cert_date).getFullYear();
+    return years>3 ? {label:'USATF cert expired (3yr) — flagged', cls:'bg-red-100 text-red-800'} : {label:'USATF cert current', cls:'bg-green-100 text-green-800'};
+  }
+  if(!c.background_check_date) return {label:'No date — 90-day grace period', cls:'bg-yellow-100 text-yellow-800'};
+  const years=CFG.SEASON_YEAR - new Date(c.background_check_date).getFullYear();
+  return years>2 ? {label:'Background check expired (2yr)', cls:'bg-red-100 text-red-800'} : {label:'Background check current', cls:'bg-green-100 text-green-800'};
+}
+
+async function loadMe(){
+  const {data,error}=await sb.from('coaches').select('*').eq('email',user.email).eq('approved',true).maybeSingle();
+  if(error || !data){ $('notCoachBox').style.display='block'; $('coachApp').style.display='none'; return; }
+  myCoach=data;
+  $('notCoachBox').style.display='none'; $('coachApp').style.display='block';
+  const team=window.VYC_TEAMS.find(t=>t.code===myCoach.team_code);
+  $('teamLabel').textContent = team ? `— ${team.name} (${team.conference})` : '';
+  const st=bgStatus(myCoach);
+  $('bgStatusLine').innerHTML = `Your background-check status: <span class="pill ${st.cls}">${st.label}</span>`;
+  await load();
+}
 
 // ---- data ----
 async function load(){
-  const {data,error}=await sb.from('registrations').select('*').order('created_at',{ascending:false});
-  if(error){ $('msg').textContent='Could not load: '+error.message+' (is your email in the coaches list?)'; return; }
+  const {data,error}=await sb.from('registrations').select('*').eq('team_code',myCoach.team_code).order('created_at',{ascending:false});
+  if(error){ $('msg').textContent='Could not load: '+error.message; return; }
   rows=data||[]; render();
   const pending=rows.filter(r=>r.dob_check_status==='pending');
   if(pending.length) runChecks(pending);
+
+  const {data:cdata,error:cerr}=await sb.from('coaches').select('*').eq('team_code',myCoach.team_code).order('created_at',{ascending:false});
+  if(!cerr){ coachRows=cdata||[]; renderCoaches(); }
 }
 function pill(r){
   const s=r.dob_check_status;
@@ -79,7 +127,7 @@ function pill(r){
 function render(){
   const f=$('filter').value; const shown=rows.filter(r=>!f||r.status===f);
   $('count').textContent=`(${shown.length})`;
-  if(!shown.length){ $('list').innerHTML='<div class="card text-gray-500 text-sm">No registrations yet. Share the registration link with parents.</div>'; return; }
+  if(!shown.length){ $('list').innerHTML='<div class="card text-gray-500 text-sm">No registrations yet for your team. Share the registration link with parents.</div>'; return; }
   $('list').innerHTML=shown.map(r=>`
   <div class="card" data-id="${r.id}">
     <div class="flex flex-wrap items-center gap-2">
@@ -102,8 +150,32 @@ function render(){
     <div id="det-${r.id}" class="mt-2 text-sm hidden"></div>
   </div>`).join('');
 }
+function renderCoaches(){
+  $('coachCount').textContent=`(${coachRows.length})`;
+  if(!coachRows.length){ $('coachList').innerHTML='<p class="text-sm text-gray-500">No coaches registered for this team yet.</p>'; return; }
+  $('coachList').innerHTML=coachRows.map(c=>{
+    const st=bgStatus(c);
+    return `<div class="card" style="margin-bottom:8px">
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="flex-1 min-w-0">
+          <div class="font-bold">${esc(c.first_name)} ${esc(c.last_name)} <span class="text-gray-500 font-normal text-sm">${esc(c.email)} · ${c.role_type==='head_age_group'?esc(c.age_group_or_division||'Head/age-group coach'):esc(c.event_specialty||'Event specialist')}</span></div>
+          <div class="text-xs text-gray-500">${c.usatf_certified?'USATF certified':'Background check: '+(c.background_check_date?fmtDate(c.background_check_date):'no date on file')}</div>
+        </div>
+        <span class="pill ${st.cls}">${st.label}</span>
+        <span class="pill ${c.approved?'bg-green-600 text-white':'bg-gray-200'}">${c.approved?'Approved':'Pending approval'}</span>
+      </div>
+      <div class="flex gap-2 mt-2">
+        ${!c.approved?`<button class="btn bg-green-600 text-white" onclick="setCoachApproval('${c.id}',true)">Approve</button>`:`<button class="btn bg-gray-200" onclick="setCoachApproval('${c.id}',false)">Revoke access</button>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+async function setCoachApproval(id,approved){
+  const {error}=await sb.from('coaches').update({approved}).eq('id',id);
+  if(error){ alert('Could not save: '+error.message); return; }
+  const c=coachRows.find(x=>x.id===id); if(c) c.approved=approved; renderCoaches();
+}
 $('filter').onchange=render;
-const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 async function viewProof(id){
   const r=rows.find(x=>x.id===id); const box=$('proof-'+id);
@@ -119,8 +191,9 @@ function details(id){
   d.innerHTML=`<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 bg-gray-50 p-3 rounded">
     <div><b>Address:</b> ${esc(r.address)}, ${esc(r.city)} ${esc(r.zip)}</div><div><b>Phone:</b> ${esc(r.phone)}</div>
     <div><b>Email:</b> ${esc(r.email)}</div><div><b>Emergency:</b> ${esc(r.emergency_name)} ${esc(r.emergency_phone)}</div>
-    <div><b>Parent:</b> ${esc(r.parent_name)}</div><div><b>Insurance:</b> ${esc(r.insurance_carrier)}</div>
-    <div class="sm:col-span-2"><b>Medical:</b> ${r.medical_option==='clear'?'No known conditions':`${esc(r.medical_conditions)} — cleared by Dr. ${esc(r.doctor_name)} on ${fmtDate(r.doctor_date)}`}</div>
+    <div><b>Parent 1:</b> ${esc(r.parent1_name)} (${esc(r.parent1_relationship)})</div><div><b>Parent 2:</b> ${r.parent2_name?esc(r.parent2_name)+' ('+esc(r.parent2_relationship)+')':'—'}</div>
+    <div><b>Insurance:</b> ${esc(r.insurance_carrier)}</div><div><b>Uses email login:</b> ${r.registered_via_email?'Yes':'No'}</div>
+    <div class="sm:col-span-2"><b>Medical:</b> ${r.medical_option==='clear'?'No known conditions':esc(r.medical_conditions)} — physical by Dr. ${esc(r.doctor_name)} on ${fmtDate(r.doctor_date)}</div>
     <div><b>Athlete signature (${r.athlete_signature_method}):</b><br><img src="${r.athlete_signature}" class="h-12 border rounded bg-white"></div>
     <div><b>Parent signature (${r.parent_signature_method}):</b><br><img src="${r.parent_signature}" class="h-12 border rounded bg-white"></div>
     ${r.name_extracted?`<div class="sm:col-span-2"><b>Name read from document:</b> ${esc(r.name_extracted)}${r.dob_extracted?` · DOB read: ${fmtDate(r.dob_extracted)}`:''}</div>`:''}
@@ -161,12 +234,12 @@ $('exportHytek').onclick=()=>{
   if(!shown.length){ alert('Nothing to export.'); return; }
   if(f!=='verified' && !confirm(`This will include ${shown.length} athlete(s), some not yet verified. Tip: set the filter to "Verified" to export only verified athletes. Continue?`)) return;
   const txt=hytekRoster(shown, CFG);
-  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'})); a.download=`${CFG.TEAM_CODE||'roster'}_hytek_roster_${CFG.SEASON_YEAR}.txt`; a.click();
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'})); a.download=`${myCoach.team_code||'roster'}_hytek_roster_${CFG.SEASON_YEAR}.txt`; a.click();
 };
 $('exportCsv').onclick=()=>{
-  const cols=['last_name','first_name','dob','age_on_dec31','division','gender','sport','is_returning','prior_team','address','city','zip','phone','email','emergency_name','emergency_phone','parent_name','insurance_carrier','medical_option','medical_conditions','doctor_name','doctor_date','dob_check_status','status','verified_by','created_at'];
+  const cols=['last_name','first_name','dob','age_on_dec31','division','gender','sport','is_returning','prior_team','address','city','zip','phone','email','emergency_name','emergency_phone','parent1_name','parent1_relationship','parent2_name','parent2_relationship','insurance_carrier','medical_option','medical_conditions','doctor_name','doctor_date','dob_check_status','status','verified_by','created_at'];
   const csv=[cols.join(',')].concat(rows.map(r=>cols.map(c=>`"${String(r[c]??'').replace(/"/g,'""')}"`).join(','))).join('\n');
-  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download=`registrations_${CFG.SEASON_YEAR}.csv`; a.click();
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download=`registrations_${myCoach.team_code}_${CFG.SEASON_YEAR}.csv`; a.click();
 };
 </script>
 </body>

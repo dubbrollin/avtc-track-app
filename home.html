@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Valley Youth Conference</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="config.js"></script>
+<style>
+  body{background:#f3f4f6}
+  .card{background:#fff;border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .tile{display:block;background:#fff;border-radius:14px;padding:18px;box-shadow:0 1px 3px rgba(0,0,0,.08);text-decoration:none;color:inherit;border:2px solid transparent;transition:border-color .15s}
+  .tile:hover{border-color:#2563eb}
+  #logoImg{display:none}
+</style>
+</head>
+<body class="text-gray-900">
+<div style="background:#111827;color:#fff;padding:8px 12px;font-size:13px;display:flex;gap:14px;flex-wrap:wrap" id="__devnav"><b style="opacity:.6">Pages:</b><a href="home.html" style="color:#93c5fd">Home</a><a href="index.html" style="color:#93c5fd">Register</a><a href="coach.html" style="color:#93c5fd">Coach dashboard</a><a href="entries.html" style="color:#93c5fd">Meet entries</a><a href="meets-admin.html" style="color:#93c5fd">Meet admin</a><a href="results.html" style="color:#93c5fd">Results &amp; rankings</a></div>
+
+<div class="max-w-3xl mx-auto p-3">
+  <div class="card text-center">
+    <img id="logoImg" src="logo.png" alt="Valley Youth Conference logo" style="max-height:120px;margin:0 auto 10px" onload="this.style.display='block'" onerror="this.style.display='none'">
+    <h1 class="text-2xl font-bold">Valley Youth Conference</h1>
+    <p class="text-gray-600 mt-1">Youth track &amp; field for the Antelope Valley and San Fernando Valley — regular season and the Valley United Striders postseason team.</p>
+    <p class="text-sm mt-2"><a class="text-blue-600 underline" href="https://valleyconference.org/" target="_blank">Conference rules, policies &amp; more at valleyconference.org →</a></p>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <a class="tile" href="index.html">
+      <div class="text-lg font-bold">📝 Register</div>
+      <p class="text-sm text-gray-600 mt-1">New here? Register your athlete, register as a coach, or sign up for the Valley United Striders postseason team.</p>
+    </a>
+    <a class="tile" href="coach.html">
+      <div class="text-lg font-bold">🏅 Coach Dashboard</div>
+      <p class="text-sm text-gray-600 mt-1">Approved coaches: review your team's registrations, manage coach approvals, and jump to meet entries.</p>
+    </a>
+    <a class="tile" href="entries.html">
+      <div class="text-lg font-bold">📅 Meet Entries</div>
+      <p class="text-sm text-gray-600 mt-1">Parents who registered with their email: enter your athlete into an upcoming meet.</p>
+    </a>
+    <a class="tile" href="results.html">
+      <div class="text-lg font-bold">🏆 Results &amp; Rankings</div>
+      <p class="text-sm text-gray-600 mt-1">See season rankings by division, top 50 per event, and Eastern/Western Conference standings.</p>
+    </a>
+  </div>
+
+  <div class="card mt-4 text-sm text-gray-600">
+    <p><b>Eastern Conference:</b> Antelope Valley Track Club, Burbank Vikings, Flying Phoenix, Northridge Pacers, Palmdale Bullets, Thimsha, Village Christian Schools, Warriors.</p>
+    <p class="mt-1"><b>Western Conference:</b> Calabasas, Eagles (WVE), Lancaster Runnin Rebels, Lane 5, Los Angeles Falcons, North Valley Golden Bears, Rush, Storm, Valley Raiders.</p>
+    <p class="mt-2 text-xs text-gray-400">Conference alignment current as of the 2027 season per club records — not yet reflected on valleyconference.org.</p>
+  </div>
+</div>
+</body>
+</html>
