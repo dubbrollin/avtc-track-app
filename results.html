@@ -36,11 +36,14 @@ const sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth
 let rows=[];
 DIVISIONS.forEach(d=>$('div').add(new Option(d.name,d.name)));
 $('send').onclick=async()=>{ const {error}=await sb.auth.signInWithOtp({email:$('email').value.trim(),options:{emailRedirectTo:location.href.split('#')[0]}}); $('msg').textContent=error?error.message:'Check your email and tap the link.'; };
-sb.auth.onAuthStateChange(async(_e,s)=>{ if(!s) return; $('login').classList.add('hidden'); $('app').classList.remove('hidden');
-  const {data:meets}=await sb.from('meets').select('id,name,meet_date').order('meet_date',{ascending:false});
-  (meets||[]).forEach(m=>$('meet').add(new Option(`${m.name} — ${fmtDate(m.meet_date)}`,m.id)));
-  const want=new URLSearchParams(location.search).get('meet'); if(want) $('meet').value=want;
-  ['meet','div','gen','conf'].forEach(i=>$(i).onchange=load); $('q').oninput=render; load(); });
+sb.auth.onAuthStateChange((_e,s)=>{ if(!s) return; $('login').classList.add('hidden'); $('app').classList.remove('hidden');
+  setTimeout(async()=>{ // defer: calling supabase queries synchronously inside onAuthStateChange deadlocks the client
+    const {data:meets}=await sb.from('meets').select('id,name,meet_date').order('meet_date',{ascending:false});
+    (meets||[]).forEach(m=>$('meet').add(new Option(`${m.name} — ${fmtDate(m.meet_date)}`,m.id)));
+    const want=new URLSearchParams(location.search).get('meet'); if(want) $('meet').value=want;
+    ['meet','div','gen','conf'].forEach(i=>$(i).onchange=load); $('q').oninput=render; load();
+  },0);
+});
 async function load(){
   const m=$('meet').value;
   const q=m==='season'?sb.from('season_best').select('*'):sb.from('results').select('*, meets(name,meet_date)').eq('meet_id',m);

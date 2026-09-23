@@ -40,7 +40,7 @@ $('send').onclick=async()=>{
   const {error}=await sb.auth.signInWithOtp({email:$('email').value.trim(), options:{emailRedirectTo:location.href.split('#')[0]}});
   $('msg').textContent=error?error.message:'Check your email and tap the link.';
 };
-sb.auth.onAuthStateChange(async(_e,s)=>{ if(!s) return; $('login').classList.add('hidden'); $('app').classList.remove('hidden'); load(); });
+sb.auth.onAuthStateChange((_e,s)=>{ if(!s) return; $('login').classList.add('hidden'); $('app').classList.remove('hidden'); setTimeout(load,0); }); // defer: calling supabase queries synchronously inside onAuthStateChange deadlocks the client
 
 $('create').onclick=async()=>{
   const name=$('mName').value.trim(), date=$('mDate').value, close=$('mClose').value;

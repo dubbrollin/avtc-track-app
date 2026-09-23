@@ -41,12 +41,14 @@ $('send').onclick=async()=>{
   $('msg').textContent=error?error.message:'Check your email and tap the link.';
 };
 $('logout').onclick=()=>sb.auth.signOut().then(()=>location.reload());
-sb.auth.onAuthStateChange(async(_e,session)=>{
+sb.auth.onAuthStateChange((_e,session)=>{
   if(!session) return; me=session.user.email;
   $('login').classList.add('hidden'); $('app').classList.remove('hidden');
-  const {data:c}=await sb.from('coaches').select('*').eq('email',me).eq('approved',true).maybeSingle();
-  myCoachRow=c||null; isCoach=!!c;
-  await loadMeets();
+  setTimeout(async()=>{ // defer: calling supabase queries synchronously inside onAuthStateChange deadlocks the client
+    const {data:c}=await sb.from('coaches').select('*').eq('email',me).eq('approved',true).maybeSingle();
+    myCoachRow=c||null; isCoach=!!c;
+    await loadMeets();
+  },0);
 });
 
 async function loadMeets(){

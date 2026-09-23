@@ -77,11 +77,11 @@ $('loginBtn').onclick=async()=>{
   $('loginMsg').textContent=error?('Error: '+error.message):'Check your email and tap the sign-in link.';
 };
 $('logout').onclick=async()=>{await sb.auth.signOut(); location.reload();};
-sb.auth.onAuthStateChange(async(_e,session)=>{
+sb.auth.onAuthStateChange((_e,session)=>{
   user=session?.user||null;
   if(!user) return;
   $('login').classList.add('hidden'); $('app').classList.remove('hidden');
-  await loadMe();
+  setTimeout(loadMe,0); // defer: calling supabase queries synchronously inside onAuthStateChange deadlocks the client
 });
 
 // background-check status, given season year rules: 2yr window normally, 3yr if USATF certified
