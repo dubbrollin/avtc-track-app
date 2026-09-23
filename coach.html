@@ -10,6 +10,8 @@
 <script src="config.js"></script>
 <script src="shared.js"></script>
 <script src="pdf.js"></script>
+<script src="events.js"></script>
+<script src="results.js"></script>
 <style>
   body{background:#f3f4f6}
   .card{background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
@@ -60,6 +62,15 @@
         <p class="text-xs text-gray-500 mb-2">Approve a new coach registration, or review background-check status. Only head coaches should approve others.</p>
         <div id="coachList"></div>
       </div>
+
+      <div class="card">
+        <h2 class="font-bold mb-2">Upload meet results</h2>
+        <p class="text-xs text-gray-500 mb-2">Pick the meet, then upload the results file straight from Meet Manager or Team Manager — the same "TCL01-01.tcl" file your software already exports works as-is, no converting needed. This only feeds the Results &amp; rankings page; it doesn't touch entries.</p>
+        <select id="resMeet" class="w-full mb-2"><option value="">Select meet…</option></select>
+        <input type="file" id="resFile" accept=".txt,.csv,.sd3,.tcl,text/plain" class="text-sm">
+        <label class="text-xs ml-2"><input type="checkbox" id="resAll"> include other teams (semicolon format only)</label>
+        <div id="resPreview" class="text-sm mt-2"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -106,7 +117,45 @@ async function loadMe(){
   const st=bgStatus(myCoach);
   $('bgStatusLine').innerHTML = `Your background-check status: <span class="pill ${st.cls}">${st.label}</span>`;
   await load();
+  await loadResultsMeets();
 }
+
+// ---- meet results upload (feeds Results & rankings only; separate from athlete entries) ----
+async function loadResultsMeets(){
+  const {data}=await sb.from('meets').select('id,name,meet_date').order('meet_date',{ascending:false});
+  const sel=$('resMeet');
+  sel.innerHTML='<option value="">Select meet…</option>'+(data||[]).map(m=>`<option value="${m.id}">${m.name} — ${fmtDate(m.meet_date)}</option>`).join('');
+}
+$('resFile').onchange=async ev=>{
+  const meetId=$('resMeet').value, pv=$('resPreview');
+  if(!meetId){ pv.innerHTML='<span class="text-red-600">Pick a meet first.</span>'; ev.target.value=''; return; }
+  const file=ev.target.files[0]; if(!file) return;
+  const text=await file.text();
+  const isTeamFile=window.looksLikeHytekTeamFile(text);
+  let out, summary;
+  if(isTeamFile){
+    const parsed=window.parseHytekTeamFile(text, rows);
+    out=parsed.rows.map(r=>({registration_id:r.registration_id, athlete_name:r.athlete_name, gender:r.gender, division:r.division,
+      event_code:r.event_name, event_name:r.event_name, is_relay:false, round:r.round, mark:r.mark, mark_value:r.mark_value,
+      is_time:r.is_time, place:r.place, source:'hytek-tm'}));
+    if(!out.length){ pv.innerHTML='<span class="text-red-600">No results found in that .tcl file.</span>'; return; }
+    summary=`Found <b>${out.length}</b> results${parsed.meetName?` from "${parsed.meetName}"`:''} (Team Manager .tcl format detected).`
+      +(parsed.unmatched.length?`<br><span class="text-orange-700">Not matched to a registered athlete on your team (still saved, but won't link to their record): ${parsed.unmatched.join(', ')}</span>`:'');
+  } else {
+    const parsed=window.parseHytekResults(text,CFG,rows,[],$('resAll').checked);
+    if(!parsed.rows.length){ pv.innerHTML='<span class="text-red-600">No results found in that file for '+CFG.TEAM_CODE+'.</span>'; return; }
+    out=parsed.rows;
+    summary=`Found <b>${out.length}</b> results${parsed.header?` from "${parsed.header.meet}"`:''} (${parsed.skippedOtherTeams} other-team rows skipped).`
+      +(parsed.unmatched.length?`<br><span class="text-orange-700">Not matched to a registered athlete on your team (still saved, but won't link to their record): ${parsed.unmatched.join(', ')}</span>`:'');
+  }
+  pv.innerHTML=summary+'<br><button id="resSaveBtn" class="btn bg-purple-600 text-white text-sm mt-2">Save these results</button>';
+  $('resSaveBtn').onclick=async()=>{
+    const toSave=out.map(r=>({...r,meet_id:meetId}));
+    const {error}=await sb.from('results').insert(toSave);
+    pv.innerHTML=error?`<span class="text-red-600">${error.message}</span>`:`Saved ${toSave.length} results. <a class="underline text-blue-700" href="results.html?meet=${meetId}" target="_blank">View results</a>`;
+    ev.target.value='';
+  };
+};
 
 // ---- data ----
 async function load(){
