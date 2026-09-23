@@ -113,10 +113,10 @@ async function resultsPanel(m){
   const {count}=await sb.from('results').select('*',{count:'exact',head:true}).eq('meet_id',m.id);
   p.innerHTML=`<div class="border rounded p-3 bg-purple-50">
     <p class="text-sm mb-2"><b>${count||0}</b> results stored for this meet. <a class="underline" href="results.html?meet=${m.id}" target="_blank">View</a></p>
-    <p class="text-sm font-semibold">Upload the Hy-Tek results file</p>
-    <p class="text-xs text-gray-600 mb-1">In Meet Manager: File → Import → Semi-Colon Delimited Rosters/Entries → Export Results. Only ${CFG.TEAM_CODE} athletes are kept.</p>
-    <input type="file" id="rf-${m.id}" accept=".txt,.csv,.sd3,text/plain" class="text-sm">
-    <label class="text-xs ml-2"><input type="checkbox" id="rall-${m.id}"> include other teams</label>
+    <p class="text-sm font-semibold">Upload the results file</p>
+    <p class="text-xs text-gray-600 mb-1">Either the semicolon-delimited Meet Manager export, or your Team Manager's own "TCL01-01.tcl" results file (auto-detected). Only ${CFG.TEAM_CODE} athletes are kept from the semicolon format; the .tcl format only ever contains your own team.</p>
+    <input type="file" id="rf-${m.id}" accept=".txt,.csv,.sd3,.tcl,text/plain" class="text-sm">
+    <label class="text-xs ml-2"><input type="checkbox" id="rall-${m.id}"> include other teams (semicolon format only)</label>
     <div id="rprev-${m.id}" class="text-sm mt-2"></div>
     <hr class="my-3">
     <p class="text-sm font-semibold">Add one result by hand</p>
@@ -146,16 +146,29 @@ async function resultsPanel(m){
     await sb.from('results').delete().eq('meet_id',m.id); resultsPanel(m); };
   $('rf-'+m.id).onchange=async ev=>{
     const text=await ev.target.files[0].text();
-    const parsed=parseHytekResults(text,CFG,regs,[],$('rall-'+m.id).checked);
     const pv=$('rprev-'+m.id);
-    if(!parsed.rows.length) return pv.innerHTML='<span class="text-red-600">No results found in that file for '+CFG.TEAM_CODE+'.</span>';
-    pv.innerHTML=`Found <b>${parsed.rows.length}</b> results${parsed.header?` from "${parsed.header.meet}"`:''} (${parsed.skippedOtherTeams} other-team rows skipped).`
-      +(parsed.unmatched.length?`<br><span class="text-orange-700">Not matched to a registered athlete (still saved, but won't link to their record): ${parsed.unmatched.join(', ')}</span>`:'')
-      +`<br><button id="rgo-${m.id}" class="btn bg-purple-600 text-white text-sm mt-2">Save these results</button>`;
+    const isTeamFile = window.looksLikeHytekTeamFile(text);
+    let rows, summary;
+    if(isTeamFile){
+      const parsed=window.parseHytekTeamFile(text, regs);
+      rows=parsed.rows.map(r=>({registration_id:r.registration_id, athlete_name:r.athlete_name, gender:r.gender, division:r.division,
+        event_code:r.event_name, event_name:r.event_name, is_relay:false, round:r.round, mark:r.mark, mark_value:r.mark_value,
+        is_time:r.is_time, place:r.place, source:'hytek-tm'}));
+      if(!rows.length) return pv.innerHTML='<span class="text-red-600">No results found in that .tcl file.</span>';
+      summary=`Found <b>${rows.length}</b> results${parsed.meetName?` from "${parsed.meetName}"`:''} for team ${parsed.teamCode||CFG.TEAM_CODE} (Team Manager .tcl format detected).`
+        +(parsed.unmatched.length?`<br><span class="text-orange-700">Not matched to a registered athlete (still saved, but won't link to their record): ${parsed.unmatched.join(', ')}</span>`:'');
+    } else {
+      const parsed=parseHytekResults(text,CFG,regs,[],$('rall-'+m.id).checked);
+      if(!parsed.rows.length) return pv.innerHTML='<span class="text-red-600">No results found in that file for '+CFG.TEAM_CODE+'.</span>';
+      rows=parsed.rows;
+      summary=`Found <b>${parsed.rows.length}</b> results${parsed.header?` from "${parsed.header.meet}"`:''} (${parsed.skippedOtherTeams} other-team rows skipped).`
+        +(parsed.unmatched.length?`<br><span class="text-orange-700">Not matched to a registered athlete (still saved, but won't link to their record): ${parsed.unmatched.join(', ')}</span>`:'');
+    }
+    pv.innerHTML=summary+`<br><button id="rgo-${m.id}" class="btn bg-purple-600 text-white text-sm mt-2">Save these results</button>`;
     $('rgo-'+m.id).onclick=async()=>{
-      const rows=parsed.rows.map(r=>({...r,meet_id:m.id}));
-      const {error}=await sb.from('results').insert(rows);
-      pv.innerHTML=error?`<span class="text-red-600">${error.message}</span>`:`Saved ${rows.length} results.`; if(!error) setTimeout(()=>resultsPanel(m),1200);
+      const toSave=rows.map(r=>({...r,meet_id:m.id}));
+      const {error}=await sb.from('results').insert(toSave);
+      pv.innerHTML=error?`<span class="text-red-600">${error.message}</span>`:`Saved ${toSave.length} results.`; if(!error) setTimeout(()=>resultsPanel(m),1200);
     };
   };
 }

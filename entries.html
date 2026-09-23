@@ -62,7 +62,8 @@ async function loadMeet(){
   const m=cur(); if(!m) return;
   $('meetInfo').textContent=`${m.location||''} · Entries ${isOpen(m)?'close':'closed'} ${new Date(m.entries_close).toLocaleString()}`;
   let athleteQuery=sb.from('registrations').select('id,first_name,last_name,division,gender,status,team_code,email').eq('status','verified').order('last_name');
-  athleteQuery = isCoach ? athleteQuery.eq('team_code', myCoachRow.team_code) : athleteQuery.eq('email', me);
+  if(isCoach && !myCoachRow.is_admin) athleteQuery = athleteQuery.eq('team_code', myCoachRow.team_code);
+  else if(!isCoach) athleteQuery = athleteQuery.eq('email', me);
   const [a,e,n]=await Promise.all([
     athleteQuery,
     sb.from('meet_events').select('*').eq('meet_id',m.id),

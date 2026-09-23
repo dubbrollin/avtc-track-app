@@ -102,7 +102,7 @@ async function loadMe(){
   myCoach=data;
   $('notCoachBox').style.display='none'; $('coachApp').style.display='block';
   const team=window.VYC_TEAMS.find(t=>t.code===myCoach.team_code);
-  $('teamLabel').textContent = team ? `— ${team.name} (${team.conference})` : '';
+  $('teamLabel').textContent = myCoach.is_admin ? '— ADMIN VIEW: all teams' : (team ? `— ${team.name} (${team.conference})` : '');
   const st=bgStatus(myCoach);
   $('bgStatusLine').innerHTML = `Your background-check status: <span class="pill ${st.cls}">${st.label}</span>`;
   await load();
@@ -110,13 +110,17 @@ async function loadMe(){
 
 // ---- data ----
 async function load(){
-  const {data,error}=await sb.from('registrations').select('*').eq('team_code',myCoach.team_code).order('created_at',{ascending:false});
+  let q=sb.from('registrations').select('*').order('created_at',{ascending:false});
+  if(!myCoach.is_admin) q=q.eq('team_code',myCoach.team_code);
+  const {data,error}=await q;
   if(error){ $('msg').textContent='Could not load: '+error.message; return; }
   rows=data||[]; render();
   const pending=rows.filter(r=>r.dob_check_status==='pending');
   if(pending.length) runChecks(pending);
 
-  const {data:cdata,error:cerr}=await sb.from('coaches').select('*').eq('team_code',myCoach.team_code).order('created_at',{ascending:false});
+  let cq=sb.from('coaches').select('*').order('team_code').order('created_at',{ascending:false});
+  if(!myCoach.is_admin) cq=cq.eq('team_code',myCoach.team_code);
+  const {data:cdata,error:cerr}=await cq;
   if(!cerr){ coachRows=cdata||[]; renderCoaches(); }
 }
 function pill(r){
@@ -132,7 +136,7 @@ function render(){
   <div class="card" data-id="${r.id}">
     <div class="flex flex-wrap items-center gap-2">
       <div class="flex-1 min-w-0">
-        <div class="font-bold text-base">${esc(r.last_name)}, ${esc(r.first_name)} <span class="text-gray-500 font-normal text-sm">${r.gender} · ${r.division} (${r.age_on_dec31}) · ${esc(r.sport)}</span></div>
+        <div class="font-bold text-base">${esc(r.last_name)}, ${esc(r.first_name)} <span class="text-gray-500 font-normal text-sm">${r.gender} · ${r.division} (${r.age_on_dec31}) · ${esc(r.sport)}${myCoach.is_admin?' · <b>'+esc(r.team_code)+'</b>':''}</span></div>
         <div class="text-xs text-gray-500">DOB ${fmtDate(r.dob)} · submitted ${fmtDate(r.created_at)} · ${r.is_returning?('Returning'+(r.ran_for_other_team?' from '+esc(r.prior_team):'')):'New athlete'}${r.medical_option==='conditions'?' · <b class="text-red-700">Medical conditions noted</b>':''}</div>
       </div>
       ${pill(r)} <span class="pill ${r.status==='verified'?'bg-green-600 text-white':r.status==='rejected'?'bg-red-600 text-white':'bg-gray-200'}">${r.status}</span>
