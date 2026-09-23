@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Parent Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script><script src="shared.js"></script><script src="events.js"></script>
+<style>
+.btn{padding:.6rem 1rem;border-radius:.5rem;font-weight:600}
+.card{background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.pill{font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px}
+.raceBtn{padding:.5rem .9rem;border-radius:.5rem;border:1px solid #d1d5db;font-size:.875rem;cursor:pointer;background:#fff}
+.raceBtn.active{background:var(--brand);color:#fff;border-color:var(--brand)}
+</style>
+</head><body class="text-gray-900"><header class="topnav"><div class="topnav-inner">
+  <a class="brand" href="home.html">VYC <b>Track &amp; Field</b></a>
+  <nav>
+    <a href="home.html">Home</a>
+    <a href="index.html">Register</a>
+    <a href="coach.html">Coach Dashboard</a>
+    <a href="parent.html">Parent Dashboard</a>
+    <a href="results.html">Results</a>
+  </nav>
+</div></header>
+<div class="max-w-2xl mx-auto p-4">
+  <h1 class="text-2xl font-bold" id="club"></h1>
+  <p class="text-gray-600 mb-4">Parent Dashboard — your athletes and meet sign-ups</p>
+
+  <div id="login" class="card">
+    <p class="mb-2">Enter the email you used to register your athlete. We'll email you a sign-in link — no password.</p>
+    <input id="email" type="email" class="w-full border rounded p-2 mb-2" placeholder="you@example.com">
+    <button id="send" class="btn bg-blue-600 text-white w-full">Email me a sign-in link</button>
+    <p id="msg" class="mt-2 text-sm"></p>
+  </div>
+
+  <div id="app" class="hidden">
+    <div class="flex justify-end mb-2">
+      <button id="logout" class="btn bg-gray-200 text-sm">Sign out</button>
+    </div>
+
+    <div class="card">
+      <h2 class="font-bold mb-2">My athletes</h2>
+      <div id="myAthletes"></div>
+      <p class="text-xs text-gray-500 mt-2">Registered a new athlete? <a class="text-blue-600 underline" href="index.html">Add one here</a>. Not verified yet? A coach on their team needs to review it first.</p>
+    </div>
+
+    <div class="card" id="registerCard">
+      <h2 class="font-bold mb-1">Meet sign-up</h2>
+      <p class="text-xs text-gray-500 mb-2">Pick a meet, then check off which races your verified athlete(s) are running.</p>
+      <div class="flex flex-wrap items-center gap-2 mb-2">
+        <select id="meet" class="border rounded p-2 flex-1"></select>
+      </div>
+      <p id="meetInfo" class="text-sm text-gray-600 mb-3"></p>
+      <div id="athletes"></div>
+      <p id="none" class="hidden text-gray-600 text-sm">No verified athletes found for this email yet. Once a coach verifies your athlete, races will show up here.</p>
+    </div>
+  </div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const CFG=window.APP_CONFIG;
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+$('club').textContent=CFG.CLUB_NAME;
+let sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } });
+let me=null, myRegs=[], meets=[], athletes=[], events=[], entries=[];
+
+$('send').onclick=async()=>{
+  const email=$('email').value.trim(); if(!email) return;
+  const {error}=await sb.auth.signInWithOtp({email, options:{emailRedirectTo:location.href.split('#')[0]}});
+  $('msg').textContent=error?error.message:'Check your email and tap the link.';
+};
+$('logout').onclick=()=>sb.auth.signOut().then(()=>location.reload());
+sb.auth.onAuthStateChange(async(_e,session)=>{
+  if(!session) return; me=session.user.email;
+  sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // rebuild client: the original can wedge after processing a magic-link redirect, hanging every later query forever
+  $('login').classList.add('hidden'); $('app').classList.remove('hidden');
+  await loadMyAthletes();
+  await loadMeets();
+});
+
+async function loadMyAthletes(){
+  const {data,error}=await sb.from('registrations').select('*').eq('email',me).order('created_at',{ascending:false});
+  myRegs=data||[];
+  if(error){ $('myAthletes').innerHTML='<p class="text-sm text-red-700">Could not load: '+error.message+'</p>'; return; }
+  if(!myRegs.length){ $('myAthletes').innerHTML='<p class="text-sm text-gray-500">No athletes registered with this email yet.</p>'; return; }
+  const pillCls={verified:'bg-green-600 text-white',rejected:'bg-red-600 text-white',submitted:'bg-gray-200'};
+  $('myAthletes').innerHTML=myRegs.map(r=>`
+    <div class="flex flex-wrap items-center gap-2 py-2 border-t first:border-t-0">
+      <div class="flex-1 min-w-0">
+        <div class="font-bold">${esc(r.first_name)} ${esc(r.last_name)} <span class="text-gray-500 font-normal text-sm">${esc(r.gender)} · ${esc(r.division)} · ${esc(r.sport)}</span></div>
+        <div class="text-xs text-gray-500">Submitted ${fmtDate(r.created_at)}</div>
+      </div>
+      <span class="pill ${pillCls[r.status]||'bg-gray-200'}">${r.status==='submitted'?'Awaiting review':r.status}</span>
+    </div>`).join('');
+}
+
+async function loadMeets(){
+  const {data}=await sb.from('meets').select('*').neq('status','archived').order('meet_date');
+  meets=data||[];
+  $('meet').innerHTML=meets.map(m=>`<option value="${m.id}">${m.name} — ${fmtDate(m.meet_date)}</option>`).join('')||'<option value="">No meets posted yet</option>';
+  $('meet').onchange=loadMeet; if(meets.length) await loadMeet(); else $('meetInfo').textContent='';
+}
+const cur=()=>meets.find(m=>m.id===$('meet').value);
+function isOpen(m){ return m.status==='open' && new Date()<=new Date(m.entries_close); }
+
+async function loadMeet(){
+  const m=cur(); if(!m) return;
+  $('meetInfo').textContent=`${m.location||''} · Entries ${isOpen(m)?'close':'closed'} ${new Date(m.entries_close).toLocaleString()}`;
+  const [e,n]=await Promise.all([
+    sb.from('meet_events').select('*').eq('meet_id',m.id),
+    sb.from('entries').select('*').eq('meet_id',m.id)
+  ]);
+  athletes=myRegs.filter(r=>r.status==='verified');
+  events=e.data||[]; entries=n.data||[];
+  $('none').classList.toggle('hidden',athletes.length>0);
+  render();
+}
+
+function render(){
+  if(!athletes.length){ $('athletes').innerHTML=''; return; }
+  const m=cur(), open=isOpen(m);
+  $('athletes').innerHTML=athletes.map(a=>{
+    const mine=entries.filter(x=>x.registration_id===a.id);
+    const myEvs=mine.map(x=>events.find(v=>v.id===x.meet_event_id)).filter(Boolean).map(v=>({relay:v.is_relay}));
+    const opts=events.filter(v=>v.division===a.division&&v.gender===a.gender);
+    const rule=ENTRY_RULES[a.division];
+    return `<div class="bg-white rounded-xl border p-3 mb-3">
+      <div class="font-bold">${esc(a.first_name)} ${esc(a.last_name)} <span class="text-sm font-normal text-gray-500">${esc(a.division)} · ${esc(a.gender)}</span></div>
+      <div class="text-xs text-gray-500 mb-2">${mine.length}/${rule.max} events${rule.relayRequiredFor4th?' (4th must be a relay)':''}</div>
+      ${opts.length?opts.map(v=>{
+        const en=mine.find(x=>x.meet_event_id===v.id);
+        const err=en?null:checkLimits(a.division,myEvs,{relay:v.is_relay});
+        const seed=!en||v.is_relay?'':en.seed_source==='result'?`<span class="text-xs text-green-700 ml-auto">seed ${esc(en.seed_mark)} <span class="text-gray-400">(from results)</span></span>`:en.seed_mark?`<span class="text-xs text-gray-600 ml-auto">seed ${esc(en.seed_mark)}</span>`:'';
+        return `<label class="flex items-center gap-2 py-1 ${err&&!en?'opacity-40':''}">
+          <input type="checkbox" data-a="${a.id}" data-e="${v.id}" ${en?'checked':''} ${(!open)||(err&&!en)?'disabled':''}>
+          <span>${esc(v.name)}${v.is_relay?' <span class="text-xs bg-yellow-100 px-1 rounded">relay</span>':''}</span>${seed}</label>`;
+      }).join(''):'<p class="text-sm text-gray-500">No events offered for this division at this meet.</p>'}
+    </div>`;
+  }).join('');
+  document.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.onchange=toggle);
+}
+
+async function toggle(ev){
+  const cb=ev.target, aId=cb.dataset.a, eId=cb.dataset.e, m=cur();
+  cb.disabled=true;
+  if(cb.checked){
+    const {error}=await sb.from('entries').insert({meet_id:m.id,registration_id:aId,meet_event_id:eId,entered_by:me});
+    if(error){ alert(error.message.replace(/^.*?: /,'')); cb.checked=false; }
+  } else {
+    const en=entries.find(x=>x.registration_id===aId&&x.meet_event_id===eId);
+    const {error}=await sb.from('entries').delete().eq('id',en.id);
+    if(error){ alert(error.message); cb.checked=true; }
+  }
+  await loadMeet();
+}
+</script></body></html>

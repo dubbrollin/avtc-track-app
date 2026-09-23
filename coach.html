@@ -12,6 +12,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="config.js"></script>
 <script src="shared.js"></script>
+<script src="events.js"></script>
 <script src="pdf.js"></script>
 <style>
   body{background:#f3f4f6}
@@ -19,6 +20,10 @@
   .btn{min-height:44px;padding:8px 14px;border-radius:8px;font-weight:600;font-size:14px}
   .pill{font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px}
   input,select{padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:15px;min-height:44px}
+  .seg{padding:.5rem .9rem;font-size:.875rem;cursor:pointer;background:#fff;border:0;min-height:auto}
+  .seg.active{background:var(--brand);color:#fff}
+  .raceBtn{padding:.5rem .9rem;border-radius:.5rem;border:1px solid #d1d5db;font-size:.875rem;cursor:pointer;background:#fff}
+  .raceBtn.active{background:var(--brand);color:#fff;border-color:var(--brand)}
 </style>
 </head>
 <body class="text-gray-900"><header class="topnav"><div class="topnav-inner">
@@ -27,7 +32,7 @@
     <a href="home.html">Home</a>
     <a href="index.html">Register</a>
     <a href="coach.html">Coach Dashboard</a>
-    <a href="entries.html">Meet Register</a>
+    <a href="parent.html">Parent Dashboard</a>
     <a href="meets-admin.html">Meet Admin</a>
     <a href="results.html">Results</a>
   </nav>
@@ -53,7 +58,7 @@
           <h1 class="text-lg font-bold">Coach Dashboard <span id="teamLabel" class="text-gray-500 font-normal text-sm"></span></h1>
           <p id="bgStatusLine" class="text-xs mt-1"></p>
         </div>
-        <a href="entries.html" class="btn bg-purple-700 text-white">Meet Register →</a>
+        <a href="#registerCard" class="btn bg-purple-700 text-white">Meet Register ↓</a>
         <a href="results.html" class="btn bg-gray-800 text-white">Results &amp; rankings</a>
         <button id="logout" class="btn bg-gray-200">Sign out</button>
       </div>
@@ -67,6 +72,26 @@
       </div>
       <p id="msg" class="text-sm text-gray-600 px-1 mb-2"></p>
       <div id="list"></div>
+
+      <div class="card" id="registerCard">
+        <h2 class="font-bold mb-1">Meet Register — enter your team into races</h2>
+        <p class="text-xs text-gray-500 mb-2">Pick a meet, then a division and Boys/Girls, then click a race to check off your verified athletes for it.</p>
+        <div class="flex flex-wrap items-center gap-2 mb-2">
+          <select id="regMeet" class="flex-1"></select>
+        </div>
+        <p id="regMeetInfo" class="text-xs text-gray-500 mb-2"></p>
+        <div id="regBody">
+          <div class="flex flex-wrap items-center gap-2 mb-2">
+            <select id="regDiv"></select>
+            <div class="flex rounded-lg overflow-hidden border text-sm">
+              <button data-g="Boy" class="seg regGenBtn" type="button">Boys</button>
+              <button data-g="Girl" class="seg regGenBtn" type="button">Girls</button>
+            </div>
+          </div>
+          <div id="regRaceButtons" class="flex flex-wrap gap-2 mb-3"></div>
+          <div id="regAthletes"></div>
+        </div>
+      </div>
 
       <div class="card">
         <h2 class="font-bold mb-2">Coaches on my team <span id="coachCount" class="text-gray-500 font-normal text-sm"></span></h2>
@@ -120,6 +145,7 @@ async function loadMe(){
   const st=bgStatus(myCoach);
   $('bgStatusLine').innerHTML = `Your background-check status: <span class="pill ${st.cls}">${st.label}</span>`;
   await load();
+  await loadMeetsForReg();
 }
 
 // ---- data ----
@@ -259,6 +285,79 @@ $('exportCsv').onclick=()=>{
   const csv=[cols.join(',')].concat(rows.map(r=>cols.map(c=>`"${String(r[c]??'').replace(/"/g,'""')}"`).join(','))).join('\n');
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download=`registrations_${myCoach.team_code}_${CFG.SEASON_YEAR}.csv`; a.click();
 };
+
+// ---- Meet Register, embedded (race-first: pick a meet, division, gender, race, then check off athletes) ----
+let regMeets=[], regEvents=[], regEntries=[], regDiv=null, regGender='Boy', regEventId=null;
+async function loadMeetsForReg(){
+  const {data}=await sb.from('meets').select('*').neq('status','archived').order('meet_date');
+  regMeets=data||[];
+  $('regMeet').innerHTML=regMeets.map(m=>`<option value="${m.id}">${m.name} — ${fmtDate(m.meet_date)}</option>`).join('')||'<option value="">No meets posted yet</option>';
+  $('regMeet').onchange=loadRegMeet;
+  document.querySelectorAll('.regGenBtn').forEach(b=>b.onclick=()=>{ regGender=b.dataset.g; regEventId=null; renderReg(); });
+  if(regMeets.length) await loadRegMeet(); else { $('regMeetInfo').textContent=''; $('regBody').innerHTML='<p class="text-sm text-gray-500">No meets posted yet.</p>'; }
+}
+const curRegMeet=()=>regMeets.find(m=>m.id===$('regMeet').value);
+function regMeetOpen(m){ return m.status==='open' && new Date()<=new Date(m.entries_close); }
+async function loadRegMeet(){
+  const m=curRegMeet(); if(!m) return;
+  $('regMeetInfo').textContent=`${m.location||''} · Entries ${regMeetOpen(m)?'close':'closed'} ${new Date(m.entries_close).toLocaleString()}`;
+  const [e,n]=await Promise.all([
+    sb.from('meet_events').select('*').eq('meet_id',m.id),
+    sb.from('entries').select('*').eq('meet_id',m.id)
+  ]);
+  regEvents=e.data||[]; regEntries=n.data||[];
+  renderReg();
+}
+function renderReg(){
+  const m=curRegMeet(); if(!m) return;
+  const verified=rows.filter(r=>r.status==='verified');
+  const divsPresent=[...new Set(verified.map(a=>a.division))];
+  const divOrder=(window.DIVISIONS||[]).map(d=>d.name);
+  const divs=divOrder.filter(d=>divsPresent.includes(d));
+  if(!divs.length){ $('regDiv').innerHTML=''; $('regRaceButtons').innerHTML='<p class="text-sm text-gray-500">No verified athletes on your team yet.</p>'; $('regAthletes').innerHTML=''; return; }
+  if(!regDiv || !divs.includes(regDiv)) regDiv=divs[0];
+  $('regDiv').innerHTML=divs.map(d=>`<option value="${d}" ${d===regDiv?'selected':''}>${d}</option>`).join('');
+  $('regDiv').onchange=()=>{ regDiv=$('regDiv').value; regEventId=null; renderReg(); };
+  document.querySelectorAll('.regGenBtn').forEach(b=>b.classList.toggle('active',b.dataset.g===regGender));
+
+  const opts=regEvents.filter(v=>v.division===regDiv&&v.gender===regGender).sort((x,y)=>x.name.localeCompare(y.name));
+  if(regEventId && !opts.some(o=>o.id===regEventId)) regEventId=null;
+  $('regRaceButtons').innerHTML = opts.length ? opts.map(v=>{
+    const count=regEntries.filter(x=>x.meet_event_id===v.id).length;
+    return `<button type="button" data-ev="${v.id}" class="raceBtn ${v.id===regEventId?'active':''}">${v.name}${v.is_relay?' 🔗':''} <span class="opacity-60">(${count})</span></button>`;
+  }).join('') : '<p class="text-sm text-gray-500">No events offered for this division/gender at this meet.</p>';
+  document.querySelectorAll('#regRaceButtons [data-ev]').forEach(b=>b.onclick=()=>{ regEventId=b.dataset.ev; renderReg(); });
+
+  const box=$('regAthletes');
+  if(!regEventId){ box.innerHTML='<p class="text-sm text-gray-500 p-2">Pick a race above to see your eligible athletes.</p>'; return; }
+  const ev=regEvents.find(v=>v.id===regEventId);
+  const open=regMeetOpen(m);
+  const pool=verified.filter(a=>a.division===regDiv&&a.gender===regGender);
+  box.innerHTML = pool.length ? pool.map(a=>{
+    const mine=regEntries.filter(x=>x.registration_id===a.id);
+    const myEvs=mine.map(x=>regEvents.find(v=>v.id===x.meet_event_id)).filter(Boolean).map(v=>({relay:v.is_relay}));
+    const rule=ENTRY_RULES[a.division];
+    const en=mine.find(x=>x.meet_event_id===regEventId);
+    const err=en?null:checkLimits(a.division,myEvs,{relay:ev.is_relay});
+    return `<label class="flex items-center gap-2 py-1.5 border-t ${err&&!en?'opacity-40':''}">
+      <input type="checkbox" data-a="${a.id}" data-e="${regEventId}" ${en?'checked':''} ${(!open)||(err&&!en)?'disabled':''}>
+      <span class="flex-1">${esc(a.first_name)} ${esc(a.last_name)} <span class="text-xs text-gray-500">(${mine.length}/${rule.max} events)</span></span></label>`;
+  }).join('') : '<p class="text-sm text-gray-500 py-2">No verified athletes in this division/gender.</p>';
+  document.querySelectorAll('#regAthletes input[type=checkbox]').forEach(cb=>cb.onchange=toggleReg);
+}
+async function toggleReg(ev){
+  const cb=ev.target, aId=cb.dataset.a, eId=cb.dataset.e, m=curRegMeet();
+  cb.disabled=true;
+  if(cb.checked){
+    const {error}=await sb.from('entries').insert({meet_id:m.id,registration_id:aId,meet_event_id:eId,entered_by:user.email});
+    if(error){ alert(error.message.replace(/^.*?: /,'')); cb.checked=false; }
+  } else {
+    const en=regEntries.find(x=>x.registration_id===aId&&x.meet_event_id===eId);
+    const {error}=await sb.from('entries').delete().eq('id',en.id);
+    if(error){ alert(error.message); cb.checked=true; }
+  }
+  await loadRegMeet();
+}
 </script>
 </body>
 </html>
