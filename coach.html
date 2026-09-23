@@ -24,6 +24,12 @@
   .seg.active{background:var(--brand);color:#fff}
   .raceBtn{padding:.5rem .9rem;border-radius:.5rem;border:1px solid #d1d5db;font-size:.875rem;cursor:pointer;background:#fff}
   .raceBtn.active{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .col-head{display:flex;align-items:center;gap:8px;padding:2px 4px 10px;border-bottom:2px solid var(--brand);margin-bottom:12px}
+  .col-head h2{font-weight:800;font-size:15px;letter-spacing:.03em;text-transform:uppercase;color:#111827}
+  @media (min-width:900px){
+    .dash-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:16px;align-items:start}
+    .dash-col-right{position:sticky;top:12px}
+  }
 </style>
 </head>
 <body class="text-gray-900"><header class="topnav"><div class="topnav-inner">
@@ -37,10 +43,10 @@
     <a href="results.html">Results</a>
   </nav>
 </div></header>
-<div class="max-w-3xl mx-auto p-3">
+<div class="max-w-6xl mx-auto p-3">
 
   <!-- LOGIN -->
-  <div id="login" class="card">
+  <div id="login" class="card max-w-lg mx-auto">
     <h1 class="text-xl font-bold">Coach Dashboard</h1>
     <p class="text-sm text-gray-600 mb-2">Enter your coach email. We'll send you a sign-in link (no password). You must have an <b>approved</b> coach registration to see anything here — register first on the Register page if you haven't.</p>
     <div class="flex gap-2"><input type="email" id="loginEmail" class="flex-1" placeholder="you@example.com"><button id="loginBtn" class="btn bg-blue-600 text-white">Send link</button></div>
@@ -49,7 +55,7 @@
 
   <!-- APP -->
   <div id="app" class="hidden">
-    <div class="card" id="notCoachBox" style="display:none">
+    <div class="card max-w-lg mx-auto" id="notCoachBox" style="display:none">
       <p class="text-sm text-red-700">We couldn't find an approved coach registration for this email. If you just registered, your club still needs to approve you. <a class="text-blue-600 underline" href="index.html">Register as a coach</a></p>
     </div>
     <div id="coachApp" style="display:none">
@@ -63,47 +69,57 @@
         <button id="logout" class="btn bg-gray-200">Sign out</button>
       </div>
 
-      <div class="card flex flex-wrap items-center gap-2">
-        <h2 class="font-bold flex-1">Athlete roster <span id="count" class="text-gray-500 font-normal text-sm"></span></h2>
-        <select id="filter"><option value="">All</option><option value="submitted">Needs review</option><option value="verified">Verified</option><option value="rejected">Rejected</option></select>
-        <button id="runChecks" class="btn bg-gray-800 text-white">Run ID checks</button>
-        <button id="exportCsv" class="btn bg-gray-200">Export CSV</button>
-        <button id="exportHytek" class="btn bg-gray-200">Hy-Tek roster</button>
-      </div>
-      <p id="rosterNote" class="text-xs text-gray-500 px-1 mb-2 hidden">You're seeing names, divisions and status only — full registration details (documents, contact info, medical info) are visible to head coaches only.</p>
-      <p id="msg" class="text-sm text-gray-600 px-1 mb-2"></p>
-      <div id="list"></div>
-
-      <div class="card" id="registerCard">
-        <h2 class="font-bold mb-1">Meet Register — enter your team into races</h2>
-        <p class="text-xs text-gray-500 mb-2">Pick a meet, then a division and Boys/Girls, then click a race to check off your verified athletes for it.</p>
-        <div class="flex flex-wrap items-center gap-2 mb-2">
-          <select id="regMeet" class="flex-1"></select>
+      <div class="dash-grid">
+        <!-- LEFT: roster only -->
+        <div class="dash-col-left">
+          <div class="card">
+            <div class="col-head"><h2 class="flex-1">Roster <span id="count" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
+            <div class="flex flex-wrap items-center gap-2 mb-2">
+              <select id="filter" class="flex-1 min-w-0"><option value="">All</option><option value="submitted">Needs review</option><option value="verified">Verified</option><option value="rejected">Rejected</option></select>
+              <button id="runChecks" class="btn bg-gray-800 text-white">Run ID checks</button>
+              <button id="exportCsv" class="btn bg-gray-200">Export CSV</button>
+              <button id="exportHytek" class="btn bg-gray-200">Hy-Tek roster</button>
+            </div>
+            <p id="rosterNote" class="text-xs text-gray-500 mb-2 hidden">You're seeing names, divisions and status only — full registration details (documents, contact info, medical info) are visible to head coaches only.</p>
+            <p id="msg" class="text-sm text-gray-600 mb-2"></p>
+            <div id="list"></div>
+          </div>
         </div>
-        <p id="regMeetInfo" class="text-xs text-gray-500 mb-2"></p>
-        <div id="regBody">
-          <div class="flex flex-wrap items-center gap-2 mb-2">
-            <select id="regDiv"></select>
-            <div class="flex rounded-lg overflow-hidden border text-sm">
-              <button data-g="Boy" class="seg regGenBtn" type="button">Boys</button>
-              <button data-g="Girl" class="seg regGenBtn" type="button">Girls</button>
+
+        <!-- RIGHT: registrations / meet entries / results / team management -->
+        <div class="dash-col-right">
+          <div class="card" id="registerCard">
+            <div class="col-head"><h2>Meet Register</h2></div>
+            <p class="text-xs text-gray-500 mb-2">Pick a meet, then a division and Boys/Girls, then click a race to check off your verified athletes for it.</p>
+            <div class="flex flex-wrap items-center gap-2 mb-2">
+              <select id="regMeet" class="flex-1"></select>
+            </div>
+            <p id="regMeetInfo" class="text-xs text-gray-500 mb-2"></p>
+            <div id="regBody">
+              <div class="flex flex-wrap items-center gap-2 mb-2">
+                <select id="regDiv"></select>
+                <div class="flex rounded-lg overflow-hidden border text-sm">
+                  <button data-g="Boy" class="seg regGenBtn" type="button">Boys</button>
+                  <button data-g="Girl" class="seg regGenBtn" type="button">Girls</button>
+                </div>
+              </div>
+              <div id="regRaceButtons" class="flex flex-wrap gap-2 mb-3"></div>
+              <div id="regAthletes"></div>
             </div>
           </div>
-          <div id="regRaceButtons" class="flex flex-wrap gap-2 mb-3"></div>
-          <div id="regAthletes"></div>
+
+          <div class="card">
+            <div class="col-head"><h2>Meet Results</h2></div>
+            <p class="text-xs text-gray-500 mb-2">Upload a meet's results (Hy-Tek Meet Manager export or your Team Manager .tcl file), or add one by hand — that happens on the Meet Admin page: find the meet in the list there and click "Results".</p>
+            <a href="meets-admin.html" class="btn bg-purple-600 text-white text-sm inline-block">Go to Meet Admin →</a>
+          </div>
+
+          <div class="card" id="coachesCard">
+            <div class="col-head"><h2 class="flex-1">Coaches on my team <span id="coachCount" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
+            <p class="text-xs text-gray-500 mb-2">Approve a new coach registration, or review background-check status. Only head coaches should approve others.</p>
+            <div id="coachList"></div>
+          </div>
         </div>
-      </div>
-
-      <div class="card">
-        <h2 class="font-bold mb-1">Meet results</h2>
-        <p class="text-xs text-gray-500 mb-2">Upload a meet's results (Hy-Tek Meet Manager export or your Team Manager .tcl file), or add one by hand — that happens on the Meet Admin page: find the meet in the list there and click "Results".</p>
-        <a href="meets-admin.html" class="btn bg-purple-600 text-white text-sm inline-block">Go to Meet Admin →</a>
-      </div>
-
-      <div class="card" id="coachesCard">
-        <h2 class="font-bold mb-2">Coaches on my team <span id="coachCount" class="text-gray-500 font-normal text-sm"></span></h2>
-        <p class="text-xs text-gray-500 mb-2">Approve a new coach registration, or review background-check status. Only head coaches should approve others.</p>
-        <div id="coachList"></div>
       </div>
     </div>
   </div>
