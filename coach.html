@@ -158,7 +158,7 @@ function renderCoaches(){
     return `<div class="card" style="margin-bottom:8px">
       <div class="flex flex-wrap items-center gap-2">
         <div class="flex-1 min-w-0">
-          <div class="font-bold">${esc(c.first_name)} ${esc(c.last_name)} <span class="text-gray-500 font-normal text-sm">${esc(c.email)} · ${c.role_type==='head_age_group'?esc(c.age_group_or_division||'Head/age-group coach'):esc(c.event_specialty||'Event specialist')}</span></div>
+          <div class="font-bold">${esc(c.first_name||c.name)} ${esc(c.last_name||'')} <span class="text-gray-500 font-normal text-sm">${esc(c.email)} · ${c.role_type==='head_age_group'?esc(c.division_or_age_group||'Head/age-group coach'):esc(c.event_specialty||'Event specialist')}</span></div>
           <div class="text-xs text-gray-500">${c.usatf_certified?'USATF certified':'Background check: '+(c.background_check_date?fmtDate(c.background_check_date):'no date on file')}</div>
         </div>
         <span class="pill ${st.cls}">${st.label}</span>
