@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VYC / AVTC Registration</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&display=swap" rel="stylesheet">
@@ -26,7 +29,17 @@
 </style>
 </head>
 <body class="text-gray-900">
-<div style="background:#111827;color:#fff;padding:8px 12px;font-size:13px;display:flex;gap:14px;flex-wrap:wrap" id="__devnav"><b style="opacity:.6">Pages:</b><a href="home.html" style="color:#93c5fd">Home</a><a href="index.html" style="color:#93c5fd">Register</a><a href="coach.html" style="color:#93c5fd">Coach dashboard</a><a href="entries.html" style="color:#93c5fd">Meet entries</a><a href="meets-admin.html" style="color:#93c5fd">Meet admin</a><a href="results.html" style="color:#93c5fd">Results &amp; rankings</a></div>
+<header class="topnav"><div class="topnav-inner">
+  <a class="brand" href="home.html">VYC <b>Track &amp; Field</b></a>
+  <nav>
+    <a href="home.html">Home</a>
+    <a href="index.html">Register</a>
+    <a href="coach.html">Coach Dashboard</a>
+    <a href="entries.html">Meet Register</a>
+    <a href="meets-admin.html">Meet Admin</a>
+    <a href="results.html">Results</a>
+  </nav>
+</div></header>
 
 <div class="max-w-3xl mx-auto p-3">
   <div class="card">
@@ -454,7 +467,7 @@ $('parentForm').addEventListener('submit', async(e)=>{
       doctor_name:$('doctorName').value.trim(), doctor_date:$('physicalDate').value,
       parent1_name:$('parent1Name').value.trim(), parent1_relationship:$('parent1Rel').value,
       parent2_name:$('parent2Name').value.trim()||null, parent2_relationship:$('parent2Rel').value||null,
-      registered_via_email:String($('viaEmail').checked),
+      registered_via_email:$('viaEmail').checked,
       athlete_signature:aSig.png, athlete_signature_method:aSig.method,
       parent_signature:pSig.png, parent_signature_method:pSig.method,
       contract_signed_at:new Date().toISOString(), contract_version:'VYC-2026',
@@ -475,19 +488,17 @@ $('coachForm').addEventListener('submit', async(e)=>{
   try{
     const isHead=document.querySelector('input[name=cRole]:checked').value==='head_age_group';
     if($('cUsatf').checked && !$('cUsatfDate').value) throw new Error('Please provide your USATF certification date.');
-    const first=$('cFirst').value.trim(), last=$('cLast').value.trim();
     const row={
       season_year:CFG.SEASON_YEAR,
-      first_name:first, last_name:last, name:`${first} ${last}`,
+      first_name:$('cFirst').value.trim(), last_name:$('cLast').value.trim(),
       email:$('cEmail').value.trim(), phone:$('cPhone').value.trim(), team_code:$('cTeam').value,
       role_type: isHead?'head_age_group':'event_specialist',
-      division_or_age_group: isHead?$('cAgeGroup').value:null,
+      age_group_or_division: isHead?$('cAgeGroup').value:null,
       event_specialty: isHead?null:$('cEvent').value,
       background_check_date: $('cUsatf').checked ? null : ($('cBgDate').value||null),
       usatf_certified: $('cUsatf').checked,
       usatf_cert_date: $('cUsatf').checked ? ($('cUsatfDate').value||null) : null,
-      approved:false, contract_signed_at:new Date().toISOString(), contract_version:'VYC-2026',
-      registered_at:new Date().toISOString()
+      approved:false, contract_signed_at:new Date().toISOString(), contract_version:'VYC-2026'
     };
     if(!row.team_code) throw new Error('Please select a team.');
     const {error}=await sb.from('coaches').insert(row);
@@ -511,22 +522,20 @@ $('vusForm').addEventListener('submit', async(e)=>{
     }));
     if(!rows.length) throw new Error('Please add at least one event.');
     const max=vusMaxEvents(); if(rows.length>max) throw new Error(`Maximum ${max} events for this age division.`);
-    const p1name=$('vParent1Name').value.trim(), p1phone=$('vPhone').value.trim(), p1email=$('vEmail').value.trim();
     const row={
       season_year:CFG.SEASON_YEAR,
       first_name:$('vFirst').value.trim(), last_name:$('vLast').value.trim(), gender:$('vGender').value, dob:$('vDob').value,
-      age_division:$('vDivision').value,
-      vyc_home_team: $('vHomeTeam').value==='__HS' ? 'High school (15+)' : $('vHomeTeam').value,
-      eligible_by_current_season_vyc:$('vRanThisSeason').checked,
-      eligible_by_age: ['15/16','17/18'].includes($('vDivision').value) || $('vHomeTeam').value==='__HS',
-      plans_to_return: returning.value==='yes',
-      parent_name:p1name, parent_phone:p1phone, parent_email:p1email,
-      parent1_name:p1name, parent1_relationship:$('vParent1Rel').value,
+      vus_division:$('vDivision').value,
+      home_team_code: $('vHomeTeam').value==='__HS' ? null : $('vHomeTeam').value,
+      ran_this_season:$('vRanThisSeason').checked,
+      age_15_plus: ['15/16','17/18'].includes($('vDivision').value) || $('vHomeTeam').value==='__HS',
+      returning_next_season: returning.value==='yes',
+      parent1_name:$('vParent1Name').value.trim(), parent1_relationship:$('vParent1Rel').value,
       parent2_name:$('vParent2Name').value.trim()||null, parent2_relationship:$('vParent2Rel').value||null,
-      phone:p1phone, email:p1email,
+      phone:$('vPhone').value.trim(), email:$('vEmail').value.trim(),
       address:$('vAddress').value.trim(), city:$('vCity').value.trim(), state:$('vState').value.trim(), zip:$('vZip').value.trim(),
       events: rows, shirt_size:$('vShirt').value,
-      signature:vSig.png, signature_method:vSig.method, signature_date:new Date().toISOString().slice(0,10),
+      signature:vSig.png, signature_method:vSig.method, signed_at:new Date().toISOString(),
       fee_amount_cents:25000, fee_paid:false, status:'submitted'
     };
     const {error}=await sb.from('postseason_registrations').insert(row);

@@ -5,13 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Coach Dashboard</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="config.js"></script>
 <script src="shared.js"></script>
 <script src="pdf.js"></script>
-<script src="events.js"></script>
-<script src="results.js"></script>
 <style>
   body{background:#f3f4f6}
   .card{background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
@@ -20,7 +21,17 @@
   input,select{padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:15px;min-height:44px}
 </style>
 </head>
-<body class="text-gray-900"><div style="background:#111827;color:#fff;padding:8px 12px;font-size:13px;display:flex;gap:14px;flex-wrap:wrap" id="__devnav"><b style="opacity:.6">Pages:</b><a href="home.html" style="color:#93c5fd">Home</a><a href="index.html" style="color:#93c5fd">Register</a><a href="coach.html" style="color:#93c5fd">Coach dashboard</a><a href="entries.html" style="color:#93c5fd">Meet entries</a><a href="meets-admin.html" style="color:#93c5fd">Meet admin</a><a href="results.html" style="color:#93c5fd">Results &amp; rankings</a></div>
+<body class="text-gray-900"><header class="topnav"><div class="topnav-inner">
+  <a class="brand" href="home.html">VYC <b>Track &amp; Field</b></a>
+  <nav>
+    <a href="home.html">Home</a>
+    <a href="index.html">Register</a>
+    <a href="coach.html">Coach Dashboard</a>
+    <a href="entries.html">Meet Register</a>
+    <a href="meets-admin.html">Meet Admin</a>
+    <a href="results.html">Results</a>
+  </nav>
+</div></header>
 <div class="max-w-3xl mx-auto p-3">
 
   <!-- LOGIN -->
@@ -42,7 +53,7 @@
           <h1 class="text-lg font-bold">Coach Dashboard <span id="teamLabel" class="text-gray-500 font-normal text-sm"></span></h1>
           <p id="bgStatusLine" class="text-xs mt-1"></p>
         </div>
-        <a href="entries.html" class="btn bg-purple-700 text-white">Meet entries →</a>
+        <a href="entries.html" class="btn bg-purple-700 text-white">Meet Register →</a>
         <a href="results.html" class="btn bg-gray-800 text-white">Results &amp; rankings</a>
         <button id="logout" class="btn bg-gray-200">Sign out</button>
       </div>
@@ -62,15 +73,6 @@
         <p class="text-xs text-gray-500 mb-2">Approve a new coach registration, or review background-check status. Only head coaches should approve others.</p>
         <div id="coachList"></div>
       </div>
-
-      <div class="card">
-        <h2 class="font-bold mb-2">Upload meet results</h2>
-        <p class="text-xs text-gray-500 mb-2">Pick the meet, then upload the results file straight from Meet Manager or Team Manager — the same "TCL01-01.tcl" file your software already exports works as-is, no converting needed. This only feeds the Results &amp; rankings page; it doesn't touch entries.</p>
-        <select id="resMeet" class="w-full mb-2"><option value="">Select meet…</option></select>
-        <input type="file" id="resFile" accept=".txt,.csv,.sd3,.tcl,text/plain" class="text-sm">
-        <label class="text-xs ml-2"><input type="checkbox" id="resAll"> include other teams (semicolon format only)</label>
-        <div id="resPreview" class="text-sm mt-2"></div>
-      </div>
     </div>
   </div>
 </div>
@@ -88,11 +90,11 @@ $('loginBtn').onclick=async()=>{
   $('loginMsg').textContent=error?('Error: '+error.message):'Check your email and tap the sign-in link.';
 };
 $('logout').onclick=async()=>{await sb.auth.signOut(); location.reload();};
-sb.auth.onAuthStateChange((_e,session)=>{
+sb.auth.onAuthStateChange(async(_e,session)=>{
   user=session?.user||null;
   if(!user) return;
   $('login').classList.add('hidden'); $('app').classList.remove('hidden');
-  setTimeout(loadMe,0); // defer: calling supabase queries synchronously inside onAuthStateChange deadlocks the client
+  await loadMe();
 });
 
 // background-check status, given season year rules: 2yr window normally, 3yr if USATF certified
@@ -117,45 +119,7 @@ async function loadMe(){
   const st=bgStatus(myCoach);
   $('bgStatusLine').innerHTML = `Your background-check status: <span class="pill ${st.cls}">${st.label}</span>`;
   await load();
-  await loadResultsMeets();
 }
-
-// ---- meet results upload (feeds Results & rankings only; separate from athlete entries) ----
-async function loadResultsMeets(){
-  const {data}=await sb.from('meets').select('id,name,meet_date').order('meet_date',{ascending:false});
-  const sel=$('resMeet');
-  sel.innerHTML='<option value="">Select meet…</option>'+(data||[]).map(m=>`<option value="${m.id}">${m.name} — ${fmtDate(m.meet_date)}</option>`).join('');
-}
-$('resFile').onchange=async ev=>{
-  const meetId=$('resMeet').value, pv=$('resPreview');
-  if(!meetId){ pv.innerHTML='<span class="text-red-600">Pick a meet first.</span>'; ev.target.value=''; return; }
-  const file=ev.target.files[0]; if(!file) return;
-  const text=await file.text();
-  const isTeamFile=window.looksLikeHytekTeamFile(text);
-  let out, summary;
-  if(isTeamFile){
-    const parsed=window.parseHytekTeamFile(text, rows);
-    out=parsed.rows.map(r=>({registration_id:r.registration_id, athlete_name:r.athlete_name, gender:r.gender, division:r.division,
-      event_code:r.event_name, event_name:r.event_name, is_relay:false, round:r.round, mark:r.mark, mark_value:r.mark_value,
-      is_time:r.is_time, place:r.place, source:'hytek-tm'}));
-    if(!out.length){ pv.innerHTML='<span class="text-red-600">No results found in that .tcl file.</span>'; return; }
-    summary=`Found <b>${out.length}</b> results${parsed.meetName?` from "${parsed.meetName}"`:''} (Team Manager .tcl format detected).`
-      +(parsed.unmatched.length?`<br><span class="text-orange-700">Not matched to a registered athlete on your team (still saved, but won't link to their record): ${parsed.unmatched.join(', ')}</span>`:'');
-  } else {
-    const parsed=window.parseHytekResults(text,CFG,rows,[],$('resAll').checked);
-    if(!parsed.rows.length){ pv.innerHTML='<span class="text-red-600">No results found in that file for '+CFG.TEAM_CODE+'.</span>'; return; }
-    out=parsed.rows;
-    summary=`Found <b>${out.length}</b> results${parsed.header?` from "${parsed.header.meet}"`:''} (${parsed.skippedOtherTeams} other-team rows skipped).`
-      +(parsed.unmatched.length?`<br><span class="text-orange-700">Not matched to a registered athlete on your team (still saved, but won't link to their record): ${parsed.unmatched.join(', ')}</span>`:'');
-  }
-  pv.innerHTML=summary+'<br><button id="resSaveBtn" class="btn bg-purple-600 text-white text-sm mt-2">Save these results</button>';
-  $('resSaveBtn').onclick=async()=>{
-    const toSave=out.map(r=>({...r,meet_id:meetId}));
-    const {error}=await sb.from('results').insert(toSave);
-    pv.innerHTML=error?`<span class="text-red-600">${error.message}</span>`:`Saved ${toSave.length} results. <a class="underline text-blue-700" href="results.html?meet=${meetId}" target="_blank">View results</a>`;
-    ev.target.value='';
-  };
-};
 
 // ---- data ----
 async function load(){

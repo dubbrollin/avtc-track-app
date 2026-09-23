@@ -3,10 +3,23 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Meets — Admin</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script><script src="shared.js"></script><script src="events.js"></script><script src="results.js"></script>
 <style>.btn{padding:.5rem .9rem;border-radius:.5rem;font-weight:600}</style>
-</head><body class="bg-gray-50 text-gray-900"><div style="background:#111827;color:#fff;padding:8px 12px;font-size:13px;display:flex;gap:14px;flex-wrap:wrap" id="__devnav"><b style="opacity:.6">Pages:</b><a href="home.html" style="color:#93c5fd">Home</a><a href="index.html" style="color:#93c5fd">Register</a><a href="coach.html" style="color:#93c5fd">Coach dashboard</a><a href="entries.html" style="color:#93c5fd">Meet entries</a><a href="meets-admin.html" style="color:#93c5fd">Meet admin</a><a href="results.html" style="color:#93c5fd">Results &amp; rankings</a></div>
+</head><body class="bg-gray-50 text-gray-900"><header class="topnav"><div class="topnav-inner">
+  <a class="brand" href="home.html">VYC <b>Track &amp; Field</b></a>
+  <nav>
+    <a href="home.html">Home</a>
+    <a href="index.html">Register</a>
+    <a href="coach.html">Coach Dashboard</a>
+    <a href="entries.html">Meet Register</a>
+    <a href="meets-admin.html">Meet Admin</a>
+    <a href="results.html">Results</a>
+  </nav>
+</div></header>
 <div class="max-w-3xl mx-auto p-4">
   <h1 class="text-2xl font-bold">Meets — Admin</h1>
   <div id="login" class="bg-white rounded-xl shadow p-4 mt-3">
@@ -40,7 +53,7 @@ $('send').onclick=async()=>{
   const {error}=await sb.auth.signInWithOtp({email:$('email').value.trim(), options:{emailRedirectTo:location.href.split('#')[0]}});
   $('msg').textContent=error?error.message:'Check your email and tap the link.';
 };
-sb.auth.onAuthStateChange((_e,s)=>{ if(!s) return; $('login').classList.add('hidden'); $('app').classList.remove('hidden'); setTimeout(load,0); }); // defer: calling supabase queries synchronously inside onAuthStateChange deadlocks the client
+sb.auth.onAuthStateChange(async(_e,s)=>{ if(!s) return; $('login').classList.add('hidden'); $('app').classList.remove('hidden'); load(); });
 
 $('create').onclick=async()=>{
   const name=$('mName').value.trim(), date=$('mDate').value, close=$('mClose').value;

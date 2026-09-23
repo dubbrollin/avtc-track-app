@@ -1,15 +1,34 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Meet Entries</title>
+<title>Meet Register</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script><script src="shared.js"></script><script src="events.js"></script>
-<style>.btn{padding:.6rem 1rem;border-radius:.5rem;font-weight:600}</style>
-</head><body class="bg-gray-50 text-gray-900"><div style="background:#111827;color:#fff;padding:8px 12px;font-size:13px;display:flex;gap:14px;flex-wrap:wrap" id="__devnav"><b style="opacity:.6">Pages:</b><a href="home.html" style="color:#93c5fd">Home</a><a href="index.html" style="color:#93c5fd">Register</a><a href="coach.html" style="color:#93c5fd">Coach dashboard</a><a href="entries.html" style="color:#93c5fd">Meet entries</a><a href="meets-admin.html" style="color:#93c5fd">Meet admin</a><a href="results.html" style="color:#93c5fd">Results &amp; rankings</a></div>
+<style>.btn{padding:.6rem 1rem;border-radius:.5rem;font-weight:600}
+.seg{padding:.5rem .8rem;font-size:.875rem;cursor:pointer}
+.seg.active{background:var(--brand);color:#fff}
+.raceBtn{padding:.5rem .9rem;border-radius:.5rem;border:1px solid #d1d5db;font-size:.875rem;cursor:pointer;background:#fff}
+.raceBtn.active{background:var(--brand);color:#fff;border-color:var(--brand)}
+.raceBtn.full{opacity:.5}
+</style>
+</head><body class="bg-gray-50 text-gray-900"><header class="topnav"><div class="topnav-inner">
+  <a class="brand" href="home.html">VYC <b>Track &amp; Field</b></a>
+  <nav>
+    <a href="home.html">Home</a>
+    <a href="index.html">Register</a>
+    <a href="coach.html">Coach Dashboard</a>
+    <a href="entries.html">Meet Register</a>
+    <a href="meets-admin.html">Meet Admin</a>
+    <a href="results.html">Results</a>
+  </nav>
+</div></header>
 <div class="max-w-2xl mx-auto p-4">
   <h1 class="text-2xl font-bold" id="club"></h1>
-  <p class="text-gray-600 mb-4">Meet event sign-up</p>
+  <p class="text-gray-600 mb-4">Meet Register — enter your athletes into races</p>
 
   <div id="login" class="bg-white rounded-xl shadow p-4">
     <p class="mb-2">Enter the email you used to register your athlete. We'll email you a sign-in link — no password.</p>
@@ -19,12 +38,38 @@
   </div>
 
   <div id="app" class="hidden">
-    <div class="flex items-center gap-2 mb-3">
+    <div class="flex items-center gap-2 mb-2 flex-wrap">
       <select id="meet" class="border rounded p-2 flex-1"></select>
       <button id="logout" class="btn bg-gray-200 text-sm">Sign out</button>
     </div>
     <p id="meetInfo" class="text-sm text-gray-600 mb-3"></p>
-    <div id="athletes"></div>
+
+    <div class="flex rounded-lg overflow-hidden border text-sm mb-3 w-fit">
+      <button id="viewRace" class="seg">By race</button>
+      <button id="viewAthlete" class="seg">By athlete</button>
+    </div>
+
+    <!-- BY RACE: pick a division + event first (like Team Manager's Entry by Event), then add athletes -->
+    <div id="raceView">
+      <div class="bg-white rounded-xl shadow p-3 mb-3">
+        <div class="flex flex-wrap items-center gap-2 mb-2">
+          <select id="rDiv" class="border rounded p-2"></select>
+          <div class="flex rounded-lg overflow-hidden border text-sm">
+            <button data-g="Boy" class="seg genBtn">Boys</button>
+            <button data-g="Girl" class="seg genBtn">Girls</button>
+          </div>
+        </div>
+        <p class="text-xs text-gray-500 mb-2">Click a race to add or remove your athletes from it.</p>
+        <div id="raceButtons" class="flex flex-wrap gap-2"></div>
+      </div>
+      <div id="raceAthletes"></div>
+    </div>
+
+    <!-- BY ATHLETE: original view, one card per athlete with all their eligible events -->
+    <div id="athleteView" class="hidden">
+      <div id="athletes"></div>
+    </div>
+
     <p id="none" class="hidden text-gray-600">No verified athletes found for this email. If you registered recently, a coach has to verify the athlete first.</p>
   </div>
 </div>
@@ -34,6 +79,7 @@ const CFG=window.APP_CONFIG;
 $('club').textContent=CFG.CLUB_NAME;
 const sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // avoid cross-tab navigator.locks deadlock when multiple app pages are open at once
 let me=null, isCoach=false, myCoachRow=null, meets=[], athletes=[], events=[], entries=[];
+let view='race', rDiv=null, rGender='Boy', rEventId=null;
 
 $('send').onclick=async()=>{
   const email=$('email').value.trim(); if(!email) return;
@@ -41,15 +87,24 @@ $('send').onclick=async()=>{
   $('msg').textContent=error?error.message:'Check your email and tap the link.';
 };
 $('logout').onclick=()=>sb.auth.signOut().then(()=>location.reload());
-sb.auth.onAuthStateChange((_e,session)=>{
+sb.auth.onAuthStateChange(async(_e,session)=>{
   if(!session) return; me=session.user.email;
   $('login').classList.add('hidden'); $('app').classList.remove('hidden');
-  setTimeout(async()=>{ // defer: calling supabase queries synchronously inside onAuthStateChange deadlocks the client
-    const {data:c}=await sb.from('coaches').select('*').eq('email',me).eq('approved',true).maybeSingle();
-    myCoachRow=c||null; isCoach=!!c;
-    await loadMeets();
-  },0);
+  const {data:c}=await sb.from('coaches').select('*').eq('email',me).eq('approved',true).maybeSingle();
+  myCoachRow=c||null; isCoach=!!c;
+  view = isCoach ? 'race' : 'athlete'; // coaches manage a whole roster -> race-first is faster; parents have 1-2 kids -> athlete view is simpler
+  await loadMeets();
 });
+
+$('viewRace').onclick=()=>{ view='race'; renderViewToggle(); };
+$('viewAthlete').onclick=()=>{ view='athlete'; renderViewToggle(); };
+function renderViewToggle(){
+  $('viewRace').classList.toggle('active',view==='race');
+  $('viewAthlete').classList.toggle('active',view==='athlete');
+  $('raceView').classList.toggle('hidden',view!=='race');
+  $('athleteView').classList.toggle('hidden',view!=='athlete');
+  render();
+}
 
 async function loadMeets(){
   const {data}=await sb.from('meets').select('*').neq('status','archived').order('meet_date');
@@ -74,10 +129,67 @@ async function loadMeet(){
   athletes=a.data||[]; events=e.data||[]; entries=n.data||[];
   $('none').textContent = isCoach ? 'No verified athletes found for your team yet.' : 'No verified athletes found for this email. If you registered recently, a coach has to verify the athlete first, and you must have checked "use this email to sign in" on the registration.';
   $('none').classList.toggle('hidden',athletes.length>0);
-  render();
+  renderViewToggle();
 }
 
 function render(){
+  if(!athletes.length) return;
+  if(view==='race') renderRaceView(); else renderAthleteView();
+}
+
+// ---- BY RACE: pick division + gender + one event, then check off eligible athletes ----
+function renderRaceView(){
+  const divsPresent=[...new Set(athletes.map(a=>a.division))];
+  const divOrder=(window.DIVISIONS||[]).map(d=>d.name);
+  const divs=divOrder.filter(d=>divsPresent.includes(d));
+  if(!divs.length) return;
+  if(!rDiv || !divs.includes(rDiv)) rDiv=divs[0];
+  $('rDiv').innerHTML=divs.map(d=>`<option value="${d}" ${d===rDiv?'selected':''}>${d}</option>`).join('');
+  $('rDiv').onchange=()=>{ rDiv=$('rDiv').value; rEventId=null; renderRaceView(); };
+  document.querySelectorAll('.genBtn').forEach(b=>{
+    b.classList.toggle('active',b.dataset.g===rGender);
+    b.onclick=()=>{ rGender=b.dataset.g; rEventId=null; renderRaceView(); };
+  });
+
+  const opts=events.filter(v=>v.division===rDiv&&v.gender===rGender).sort((x,y)=>x.name.localeCompare(y.name));
+  if(rEventId && !opts.some(o=>o.id===rEventId)) rEventId=null;
+  $('raceButtons').innerHTML = opts.length ? opts.map(v=>{
+    const count=entries.filter(x=>x.meet_event_id===v.id).length;
+    return `<button data-ev="${v.id}" class="raceBtn ${v.id===rEventId?'active':''}">${v.name}${v.is_relay?' 🔗':''} <span class="opacity-60">(${count})</span></button>`;
+  }).join('') : '<p class="text-sm text-gray-500">No events offered for this division/gender at this meet.</p>';
+  document.querySelectorAll('[data-ev]').forEach(b=>b.onclick=()=>{ rEventId=b.dataset.ev; renderRaceView(); });
+
+  const box=$('raceAthletes');
+  if(!rEventId){ box.innerHTML='<p class="text-sm text-gray-500 p-3">Pick a race above to see eligible athletes.</p>'; return; }
+  const ev=events.find(v=>v.id===rEventId);
+  const m=cur(), open=isOpen(m);
+  const pool=athletes.filter(a=>a.division===rDiv&&a.gender===rGender);
+  box.innerHTML = `<div class="bg-white rounded-xl shadow p-3">
+    <div class="font-bold mb-2">${ev.name} — ${rDiv} ${rGender==='Girl'?'Girls':'Boys'}</div>
+    ${pool.length ? pool.map(a=>{
+      const mine=entries.filter(x=>x.registration_id===a.id);
+      const myEvs=mine.map(x=>events.find(v=>v.id===x.meet_event_id)).filter(Boolean).map(v=>({relay:v.is_relay}));
+      const rule=ENTRY_RULES[a.division];
+      const en=mine.find(x=>x.meet_event_id===rEventId);
+      const err=en?null:checkLimits(a.division,myEvs,{relay:ev.is_relay});
+      const canWrite=en&&!ev.is_relay&&en.seed_source!=='result'&&open&&(isCoach||CFG.SEED_WRITE_IN==='parents');
+      const seed=!en||ev.is_relay?'':en.seed_source==='result'?`<span class="text-xs text-green-700 ml-2">seed ${en.seed_mark} <span class="text-gray-400">(from results, locked)</span></span>`
+        :canWrite?`<input data-seed="${en.id}" value="${en.seed_mark||''}" placeholder="seed time" class="ml-2 border rounded px-1 text-sm w-24">`
+        :en.seed_mark?`<span class="text-xs text-gray-600 ml-2">seed ${en.seed_mark}</span>`:'';
+      return `<label class="flex items-center gap-2 py-1.5 border-t ${err&&!en?'opacity-40':''}">
+        <input type="checkbox" data-a="${a.id}" data-e="${rEventId}" ${en?'checked':''} ${(!open)||(err&&!en)?'disabled':''}>
+        <span class="flex-1">${a.first_name} ${a.last_name} <span class="text-xs text-gray-500">(${mine.length}/${rule.max} events)</span></span>${seed}</label>`;
+    }).join('') : '<p class="text-sm text-gray-500 py-2">No athletes in this division/gender on your team.</p>'}
+  </div>`;
+  document.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.onchange=toggle);
+  document.querySelectorAll('input[data-seed]').forEach(inp=>inp.onchange=async()=>{
+    const {error}=await sb.from('entries').update({seed_mark:inp.value.trim()||null}).eq('id',inp.dataset.seed);
+    if(error) alert(error.message); await loadMeet();
+  });
+}
+
+// ---- BY ATHLETE: original card-per-athlete view ----
+function renderAthleteView(){
   const m=cur(), open=isOpen(m);
   $('athletes').innerHTML=athletes.map(a=>{
     const mine=entries.filter(x=>x.registration_id===a.id);

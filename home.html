@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Valley Youth Conference</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css">
 <script src="config.js"></script>
 <style>
   body{background:#f3f4f6}
@@ -15,7 +18,17 @@
 </style>
 </head>
 <body class="text-gray-900">
-<div style="background:#111827;color:#fff;padding:8px 12px;font-size:13px;display:flex;gap:14px;flex-wrap:wrap" id="__devnav"><b style="opacity:.6">Pages:</b><a href="home.html" style="color:#93c5fd">Home</a><a href="index.html" style="color:#93c5fd">Register</a><a href="coach.html" style="color:#93c5fd">Coach dashboard</a><a href="entries.html" style="color:#93c5fd">Meet entries</a><a href="meets-admin.html" style="color:#93c5fd">Meet admin</a><a href="results.html" style="color:#93c5fd">Results &amp; rankings</a></div>
+<header class="topnav"><div class="topnav-inner">
+  <a class="brand" href="home.html">VYC <b>Track &amp; Field</b></a>
+  <nav>
+    <a href="home.html">Home</a>
+    <a href="index.html">Register</a>
+    <a href="coach.html">Coach Dashboard</a>
+    <a href="entries.html">Meet Register</a>
+    <a href="meets-admin.html">Meet Admin</a>
+    <a href="results.html">Results</a>
+  </nav>
+</div></header>
 
 <div class="max-w-3xl mx-auto p-3">
   <div class="card text-center">
@@ -35,8 +48,8 @@
       <p class="text-sm text-gray-600 mt-1">Approved coaches: review your team's registrations, manage coach approvals, and jump to meet entries.</p>
     </a>
     <a class="tile" href="entries.html">
-      <div class="text-lg font-bold">📅 Meet Entries</div>
-      <p class="text-sm text-gray-600 mt-1">Parents who registered with their email: enter your athlete into an upcoming meet.</p>
+      <div class="text-lg font-bold">📅 Meet Register</div>
+      <p class="text-sm text-gray-600 mt-1">Coaches: add your team into races. Parents who registered with their email can enter their own athlete too.</p>
     </a>
     <a class="tile" href="results.html">
       <div class="text-lg font-bold">🏆 Results &amp; Rankings</div>
