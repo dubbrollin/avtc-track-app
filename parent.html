@@ -47,6 +47,11 @@
       <p class="text-xs text-gray-500 mt-2">Registered a new athlete? <a class="text-blue-600 underline" href="index.html">Add one here</a>. Not verified yet? A coach on their team needs to review it first.</p>
     </div>
 
+    <div class="card">
+      <h2 class="font-bold mb-2">Meet results</h2>
+      <div id="myResults"><p class="text-sm text-gray-500">Loading…</p></div>
+    </div>
+
     <div class="card" id="registerCard">
       <h2 class="font-bold mb-1">Meet sign-up</h2>
       <p class="text-xs text-gray-500 mb-2">Pick a meet, then check off which races your verified athlete(s) are running.</p>
@@ -78,6 +83,7 @@ sb.auth.onAuthStateChange(async(_e,session)=>{
   sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // rebuild client: the original can wedge after processing a magic-link redirect, hanging every later query forever
   $('login').classList.add('hidden'); $('app').classList.remove('hidden');
   await loadMyAthletes();
+  await loadMyResults();
   await loadMeets();
 });
 
@@ -94,6 +100,28 @@ async function loadMyAthletes(){
         <div class="text-xs text-gray-500">Submitted ${fmtDate(r.created_at)}</div>
       </div>
       <span class="pill ${pillCls[r.status]||'bg-gray-200'}">${r.status==='submitted'?'Awaiting review':r.status}</span>
+    </div>`).join('');
+}
+
+async function loadMyResults(){
+  const ids=myRegs.filter(r=>r.status==='verified').map(r=>r.id);
+  if(!ids.length){ $('myResults').innerHTML='<p class="text-sm text-gray-500">No results yet.</p>'; return; }
+  const {data,error}=await sb.from('results').select('*, meets(name,meet_date)').in('registration_id',ids).order('created_at',{ascending:false});
+  if(error){ $('myResults').innerHTML='<p class="text-sm text-red-700">Could not load results: '+error.message+'</p>'; return; }
+  const rows=data||[];
+  if(!rows.length){ $('myResults').innerHTML='<p class="text-sm text-gray-500">No results posted yet for your athlete(s). A coach adds these after a meet on the Meet Admin page.</p>'; return; }
+  const byMeet={};
+  rows.forEach(r=>{ const key=r.meets?.name||'Meet'; (byMeet[key] ??= {date:r.meets?.meet_date, rows:[]}).rows.push(r); });
+  const sorted=Object.entries(byMeet).sort((a,b)=>new Date(b[1].date||0)-new Date(a[1].date||0));
+  $('myResults').innerHTML=sorted.map(([name,g])=>`
+    <div class="mb-3">
+      <div class="font-bold text-sm">${esc(name)} <span class="text-gray-500 font-normal">${fmtDate(g.date)}</span></div>
+      <table class="w-full text-sm mt-1">${g.rows.map(r=>`<tr class="border-t">
+        <td class="py-1">${esc(r.athlete_name)}</td>
+        <td class="py-1">${esc(r.event_name)}</td>
+        <td class="py-1 text-right font-mono">${esc(r.mark)}${r.wind?` <span class="text-xs text-gray-400">w${esc(r.wind)}</span>`:''}</td>
+        <td class="py-1 text-right text-xs text-gray-500">${r.place?`${r.place}${['st','nd','rd'][r.place-1]||'th'}`:''}</td>
+      </tr>`).join('')}</table>
     </div>`).join('');
 }
 

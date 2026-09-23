@@ -64,12 +64,13 @@
       </div>
 
       <div class="card flex flex-wrap items-center gap-2">
-        <h2 class="font-bold flex-1">Athlete registrations — my team <span id="count" class="text-gray-500 font-normal text-sm"></span></h2>
+        <h2 class="font-bold flex-1">Athlete roster <span id="count" class="text-gray-500 font-normal text-sm"></span></h2>
         <select id="filter"><option value="">All</option><option value="submitted">Needs review</option><option value="verified">Verified</option><option value="rejected">Rejected</option></select>
         <button id="runChecks" class="btn bg-gray-800 text-white">Run ID checks</button>
         <button id="exportCsv" class="btn bg-gray-200">Export CSV</button>
         <button id="exportHytek" class="btn bg-gray-200">Hy-Tek roster</button>
       </div>
+      <p id="rosterNote" class="text-xs text-gray-500 px-1 mb-2 hidden">You're seeing names, divisions and status only — full registration details (documents, contact info, medical info) are visible to head coaches only.</p>
       <p id="msg" class="text-sm text-gray-600 px-1 mb-2"></p>
       <div id="list"></div>
 
@@ -94,6 +95,12 @@
       </div>
 
       <div class="card">
+        <h2 class="font-bold mb-1">Meet results</h2>
+        <p class="text-xs text-gray-500 mb-2">Upload a meet's results (Hy-Tek Meet Manager export or your Team Manager .tcl file), or add one by hand — that happens on the Meet Admin page: find the meet in the list there and click "Results".</p>
+        <a href="meets-admin.html" class="btn bg-purple-600 text-white text-sm inline-block">Go to Meet Admin →</a>
+      </div>
+
+      <div class="card" id="coachesCard">
         <h2 class="font-bold mb-2">Coaches on my team <span id="coachCount" class="text-gray-500 font-normal text-sm"></span></h2>
         <p class="text-xs text-gray-500 mb-2">Approve a new coach registration, or review background-check status. Only head coaches should approve others.</p>
         <div id="coachList"></div>
@@ -105,8 +112,20 @@
 <script>
 const CFG=window.APP_CONFIG, $=id=>document.getElementById(id);
 let sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } });
-let rows=[], coachRows=[], user=null, myCoach=null;
+let rows=[], coachRows=[], user=null, myCoach=null, fullAccess=false;
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// A coach is "full access" (sees documents/contact/medical info, can verify/reject, manage coaches) when
+// they're an admin, registered as Head Coach, or (grandfathered) registered under the old combined
+// "Head / age-group coach" option before this Head/Division split existed. Everyone else — Division
+// Coach or Event-Specialist Coach — gets a names-and-status-only roster, scoped to their division for
+// Division Coaches (Event-Specialist Coaches see the whole team, per how that role works).
+function isFullAccess(c){ return !!(c.is_admin || c.role_type==='head_coach' || c.role_type==='head_age_group' || !c.role_type); }
+function roleLabel(c){
+  if(c.role_type==='division_coach') return `${c.division_or_age_group||'Division'} Coach`;
+  if(c.role_type==='event_specialist') return `${c.event_specialty||'Event'} Coach`;
+  return 'Head Coach';
+}
 
 // ---- auth ----
 $('loginBtn').onclick=async()=>{
@@ -139,29 +158,46 @@ async function loadMe(){
   const {data,error}=await sb.from('coaches').select('*').eq('email',user.email).eq('approved',true).maybeSingle();
   if(error || !data){ $('notCoachBox').style.display='block'; $('coachApp').style.display='none'; return; }
   myCoach=data;
+  fullAccess=isFullAccess(myCoach);
   $('notCoachBox').style.display='none'; $('coachApp').style.display='block';
   const team=window.VYC_TEAMS.find(t=>t.code===myCoach.team_code);
-  $('teamLabel').textContent = myCoach.is_admin ? '— ADMIN VIEW: all teams' : (team ? `— ${team.name} (${team.conference})` : '');
+  $('teamLabel').textContent = myCoach.is_admin ? '— ADMIN VIEW: all teams' : (team ? `— ${team.name} (${team.conference}) · ${roleLabel(myCoach)}` : `— ${roleLabel(myCoach)}`);
   const st=bgStatus(myCoach);
   $('bgStatusLine').innerHTML = `Your background-check status: <span class="pill ${st.cls}">${st.label}</span>`;
+  $('runChecks').style.display=fullAccess?'':'none';
+  $('exportCsv').style.display=fullAccess?'':'none';
+  $('exportHytek').style.display=fullAccess?'':'none';
+  $('rosterNote').classList.toggle('hidden',fullAccess);
+  $('coachesCard').style.display=fullAccess?'':'none';
   await load();
   await loadMeetsForReg();
 }
 
 // ---- data ----
 async function load(){
-  let q=sb.from('registrations').select('*').order('created_at',{ascending:false});
-  if(!myCoach.is_admin) q=q.eq('team_code',myCoach.team_code);
-  const {data,error}=await q;
-  if(error){ $('msg').textContent='Could not load: '+error.message; return; }
-  rows=data||[]; render();
+  if(fullAccess){
+    let q=sb.from('registrations').select('*').order('created_at',{ascending:false});
+    if(!myCoach.is_admin) q=q.eq('team_code',myCoach.team_code);
+    const {data,error}=await q;
+    if(error){ $('msg').textContent='Could not load: '+error.message; return; }
+    rows=data||[];
+  } else {
+    // Division/event-specialist coaches: roster-only columns via the team_roster() RPC.
+    // Team scoping and division scoping (for Division Coaches) are enforced server-side in that function.
+    const {data,error}=await sb.rpc('team_roster');
+    if(error){ $('msg').textContent='Could not load: '+error.message; return; }
+    rows=data||[];
+  }
+  render();
   const pending=rows.filter(r=>r.dob_check_status==='pending');
-  if(pending.length) runChecks(pending);
+  if(fullAccess && pending.length) runChecks(pending);
 
-  let cq=sb.from('coaches').select('*').order('team_code').order('created_at',{ascending:false});
-  if(!myCoach.is_admin) cq=cq.eq('team_code',myCoach.team_code);
-  const {data:cdata,error:cerr}=await cq;
-  if(!cerr){ coachRows=cdata||[]; renderCoaches(); }
+  if(fullAccess){
+    let cq=sb.from('coaches').select('*').order('team_code').order('created_at',{ascending:false});
+    if(!myCoach.is_admin) cq=cq.eq('team_code',myCoach.team_code);
+    const {data:cdata,error:cerr}=await cq;
+    if(!cerr){ coachRows=cdata||[]; renderCoaches(); }
+  }
 }
 function pill(r){
   const s=r.dob_check_status;
@@ -172,6 +208,18 @@ function render(){
   const f=$('filter').value; const shown=rows.filter(r=>!f||r.status===f);
   $('count').textContent=`(${shown.length})`;
   if(!shown.length){ $('list').innerHTML='<div class="card text-gray-500 text-sm">No registrations yet for your team. Share the registration link with parents.</div>'; return; }
+  if(!fullAccess){
+    $('list').innerHTML=shown.map(r=>`
+    <div class="card" data-id="${r.id}">
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="flex-1 min-w-0">
+          <div class="font-bold text-base">${esc(r.last_name)}, ${esc(r.first_name)} <span class="text-gray-500 font-normal text-sm">${r.gender} · ${r.division} · ${esc(r.sport)}</span></div>
+        </div>
+        <span class="pill ${r.status==='verified'?'bg-green-600 text-white':r.status==='rejected'?'bg-red-600 text-white':'bg-gray-200'}">${r.status}</span>
+      </div>
+    </div>`).join('');
+    return;
+  }
   $('list').innerHTML=shown.map(r=>`
   <div class="card" data-id="${r.id}">
     <div class="flex flex-wrap items-center gap-2">
@@ -202,7 +250,7 @@ function renderCoaches(){
     return `<div class="card" style="margin-bottom:8px">
       <div class="flex flex-wrap items-center gap-2">
         <div class="flex-1 min-w-0">
-          <div class="font-bold">${esc(c.first_name||c.name)} ${esc(c.last_name||'')} <span class="text-gray-500 font-normal text-sm">${esc(c.email)} · ${c.role_type==='head_age_group'?esc(c.division_or_age_group||'Head/age-group coach'):esc(c.event_specialty||'Event specialist')}</span></div>
+          <div class="font-bold">${esc(c.first_name||c.name)} ${esc(c.last_name||'')} <span class="text-gray-500 font-normal text-sm">${esc(c.email)} · ${esc(roleLabel(c))}</span></div>
           <div class="text-xs text-gray-500">${c.usatf_certified?'USATF certified':'Background check: '+(c.background_check_date?fmtDate(c.background_check_date):'no date on file')}</div>
         </div>
         <span class="pill ${st.cls}">${st.label}</span>

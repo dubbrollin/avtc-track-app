@@ -179,11 +179,12 @@
   </div>
   <div class="card">
     <h2 class="font-bold text-lg mb-2">What kind of coach are you?</h2>
-    <div class="flex gap-4 text-sm mb-2">
-      <label class="flex items-center gap-1"><input type="radio" name="cRole" value="head_age_group" checked> Head / age-group coach</label>
-      <label class="flex items-center gap-1"><input type="radio" name="cRole" value="event_specialist"> Event-specialist coach</label>
+    <div class="flex flex-col gap-2 text-sm mb-2">
+      <label class="flex items-center gap-1"><input type="radio" name="cRole" value="head_coach" checked> Head Coach / Team Admin <span class="text-gray-500">— full access to your team's roster, documents, and coach approvals</span></label>
+      <label class="flex items-center gap-1"><input type="radio" name="cRole" value="division_coach"> Division Coach <span class="text-gray-500">— you coach one division/age group; you'll see names, divisions and status for your division only</span></label>
+      <label class="flex items-center gap-1"><input type="radio" name="cRole" value="event_specialist"> Event-Specialist Coach <span class="text-gray-500">— you coach a specific event across the team; you'll see names, divisions and status for the whole team</span></label>
     </div>
-    <div id="cAgeGroupWrap"><label class="f req">Which division or age group do you coach?</label>
+    <div id="cAgeGroupWrap" class="hidden"><label class="f req">Which division or age group do you coach?</label>
       <select id="cAgeGroup"><option>Sub-Gremlin</option><option>Gremlin</option><option>Bantam</option><option>Juniors</option><option>Youth</option><option>Intermediates</option><option>All ages / whole team</option></select>
     </div>
     <div id="cEventWrap" class="hidden"><label class="f req">Which event(s) do you coach?</label>
@@ -371,9 +372,9 @@ $('physicalDate').addEventListener('change',()=>{
 
 // ---- coach role toggle ----
 document.querySelectorAll('input[name=cRole]').forEach(r=>r.onchange=()=>{
-  const isHead=document.querySelector('input[name=cRole]:checked').value==='head_age_group';
-  $('cAgeGroupWrap').classList.toggle('hidden',!isHead);
-  $('cEventWrap').classList.toggle('hidden',isHead);
+  const role=document.querySelector('input[name=cRole]:checked').value;
+  $('cAgeGroupWrap').classList.toggle('hidden',role!=='division_coach');
+  $('cEventWrap').classList.toggle('hidden',role!=='event_specialist');
 });
 function bgCheckHint(){
   const usatf=$('cUsatf').checked;
@@ -486,15 +487,15 @@ $('coachForm').addEventListener('submit', async(e)=>{
   e.preventDefault();
   const msg=$('coachMsg'); msg.textContent='Submitting…'; msg.className='text-sm mt-2 text-gray-600';
   try{
-    const isHead=document.querySelector('input[name=cRole]:checked').value==='head_age_group';
+    const role=document.querySelector('input[name=cRole]:checked').value; // 'head_coach' | 'division_coach' | 'event_specialist'
     if($('cUsatf').checked && !$('cUsatfDate').value) throw new Error('Please provide your USATF certification date.');
     const row={
       season_year:CFG.SEASON_YEAR,
       first_name:$('cFirst').value.trim(), last_name:$('cLast').value.trim(),
       email:$('cEmail').value.trim(), phone:$('cPhone').value.trim(), team_code:$('cTeam').value,
-      role_type: isHead?'head_age_group':'event_specialist',
-      age_group_or_division: isHead?$('cAgeGroup').value:null,
-      event_specialty: isHead?null:$('cEvent').value,
+      role_type: role,
+      division_or_age_group: role==='division_coach'?$('cAgeGroup').value:null,
+      event_specialty: role==='event_specialist'?$('cEvent').value:null,
       background_check_date: $('cUsatf').checked ? null : ($('cBgDate').value||null),
       usatf_certified: $('cUsatf').checked,
       usatf_cert_date: $('cUsatf').checked ? ($('cUsatfDate').value||null) : null,
