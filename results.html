@@ -62,7 +62,7 @@
 const $=id=>document.getElementById(id);
 const CFG=window.APP_CONFIG;
 $('club').textContent=CFG.CLUB_NAME;
-const sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // avoid cross-tab navigator.locks deadlock when multiple app pages are open at once
+let sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // avoid cross-tab navigator.locks deadlock when multiple app pages are open at once
 let allResults=[], seasonBest=[], meets=[], mode='season';
 DIVISIONS.forEach(d=>$('div').add(new Option(d.name,d.name)));
 
@@ -78,7 +78,7 @@ function setMode(m){
   render();
 }
 
-sb.auth.onAuthStateChange(async(_e,s)=>{ if(!s) return; $('login').classList.add('hidden'); $('app').classList.remove('hidden');
+sb.auth.onAuthStateChange(async(_e,s)=>{ if(!s) return; sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } } /* rebuild: original client can wedge after a magic-link redirect */); $('login').classList.add('hidden'); $('app').classList.remove('hidden');
   const {data:m}=await sb.from('meets').select('id,name,meet_date').order('meet_date',{ascending:false});
   meets=m||[];
   $('meet').innerHTML=meets.map(m=>`<option value="${m.id}">${m.name} — ${fmtDate(m.meet_date)}</option>`).join('')||'<option value="">No meets yet</option>';

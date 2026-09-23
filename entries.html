@@ -77,7 +77,7 @@
 const $=id=>document.getElementById(id);
 const CFG=window.APP_CONFIG;
 $('club').textContent=CFG.CLUB_NAME;
-const sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // avoid cross-tab navigator.locks deadlock when multiple app pages are open at once
+let sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // avoid cross-tab navigator.locks deadlock when multiple app pages are open at once
 let me=null, isCoach=false, myCoachRow=null, meets=[], athletes=[], events=[], entries=[];
 let view='race', rDiv=null, rGender='Boy', rEventId=null;
 
@@ -89,6 +89,7 @@ $('send').onclick=async()=>{
 $('logout').onclick=()=>sb.auth.signOut().then(()=>location.reload());
 sb.auth.onAuthStateChange(async(_e,session)=>{
   if(!session) return; me=session.user.email;
+  sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // rebuild client: the original can wedge after processing a magic-link redirect, hanging every later query forever
   $('login').classList.add('hidden'); $('app').classList.remove('hidden');
   const {data:c}=await sb.from('coaches').select('*').eq('email',me).eq('approved',true).maybeSingle();
   myCoachRow=c||null; isCoach=!!c;
