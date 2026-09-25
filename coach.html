@@ -416,7 +416,9 @@ async function loadRegSeeds(){
   (data||[]).forEach(x=>{ const k=x.registration_id+'|'+x.event_code, cur=regSeeds[k]; if(!cur||(x.is_time?x.mark_value<cur.mark_value:x.mark_value>cur.mark_value)) regSeeds[k]=x; });
 }
 function bestMark(a,ev){ const code=ev.is_relay?(RELAY_LEG[ev.code]||ev.code):ev.code; const s=regSeeds&&regSeeds[a.id+'|'+code]; return s?{mark:s.mark,value:s.mark_value,time:s.is_time}:null; }
-function eligiblePool(ev){ return rows.filter(a=>a.status==='verified'&&(ev.division==='ALL'||a.division===ev.division)&&(ev.gender==='Mixed'||a.gender===ev.gender)).sort((p,q)=>(p.last_name+p.first_name).localeCompare(q.last_name+q.first_name)); }
+// Age-group rule: an athlete competes ONLY in their own age group, by age on December 31 (no competing up or down).
+function evAgeRange(ev){ if(ev.division==='ALL') return [5,18]; const d=(window.DIVISIONS||[]).find(x=>x.name===ev.division); return d?[d.min,d.max]:[-1,-1]; }
+function eligiblePool(ev){ const [lo,hi]=evAgeRange(ev); return rows.filter(a=>a.status==='verified'&&(a.age_on_dec31!=null?(a.age_on_dec31>=lo&&a.age_on_dec31<=hi):(ev.division==='ALL'||a.division===ev.division))&&(ev.gender==='Mixed'||a.gender===ev.gender)).sort((p,q)=>(p.last_name+p.first_name).localeCompare(q.last_name+q.first_name)); }
 const myEventsOf=a=>regEntries.filter(x=>x.registration_id===a.id).map(x=>regEvents.find(v=>v.id===x.meet_event_id)).filter(Boolean).map(v=>({relay:v.is_relay}));
 function renderReg(){
   const m=curRegMeet(); if(!m) return;
@@ -458,7 +460,7 @@ function renderAthletePanel(ev,m){
       <label class="flex items-center gap-1"><input type="checkbox" id="regOnlyEntered" ${regOnlyEntered?'checked':''}> Only athletes already entered</label>
       ${open?'':'<span class="text-red-600">Entries are closed for this meet.</span>'}
     </div>`;
-  const body=pool.length?`<table class="athtbl"><thead><tr><th>Entered</th><th>Last name</th><th>First name</th><th>Best</th><th>Age</th><th>Gen</th>${wide?'<th>Div</th>':''}</tr></thead><tbody>`+pool.map(a=>{
+  const body=pool.length?`<table class="athtbl"><thead><tr><th>Entered</th><th>Last name</th><th>First name</th><th>Best</th><th title="Age on December 31">Age (12/31)</th><th>Gen</th>${wide?'<th>Div</th>':''}</tr></thead><tbody>`+pool.map(a=>{
       const en=enOf(a), err=en?null:checkLimits(a.division,myEventsOf(a),{relay:false}), b=bestMark(a,ev);
       return `<tr class="${en?'entered':''}"><td><input type="checkbox" data-a="${a.id}" data-e="${ev.id}" ${en?'checked':''} ${(!open)||(err&&!en)?'disabled':''} title="${err?esc(err):''}"></td>
         <td>${esc(a.last_name)}</td><td>${esc(a.first_name)}</td><td class="font-mono">${b?esc(b.mark):'NT'}</td><td>${a.age_on_dec31??''}</td><td>${a.gender==='Girl'?'F':'M'}</td>${wide?`<td>${divAbbr(a.division)}</td>`:''}</tr>`; }).join('')+`</tbody></table>`
@@ -500,7 +502,7 @@ function renderRelayPanel(ev,m){
       <button type="button" id="rlBest" class="btn bg-gray-200" ${open&&regRelay?'':'disabled'}>Find Best Relay</button>
       ${open?'':'<span class="text-red-600">Entries are closed for this meet.</span>'}
     </div>`;
-  const left=`<div><div class="text-xs font-semibold mb-1">Eligible athletes — click Add to put them on Relay ${regRelay||'…'}</div><table class="athtbl"><thead><tr><th></th><th>Last name</th><th>First name</th><th>Best</th><th>Age</th></tr></thead><tbody>`+
+  const left=`<div><div class="text-xs font-semibold mb-1">Eligible athletes — click Add to put them on Relay ${regRelay||'…'}</div><table class="athtbl"><thead><tr><th></th><th>Last name</th><th>First name</th><th>Best</th><th title="Age on December 31">Age (12/31)</th></tr></thead><tbody>`+
     pool.map(a=>{ const b=bestMark(a,ev), where=inRelay[a.id]; return `<tr class="${where?'entered':''}"><td>${where?`<span class="text-xs font-bold">${where}</span>`:`<button type="button" data-add="${a.id}" class="btn bg-gray-200 text-xs" ${open&&regRelay?'':'disabled'}>Add</button>`}</td><td>${esc(a.last_name)}</td><td>${esc(a.first_name)}</td><td class="font-mono">${b?esc(b.mark):'NT'}</td><td>${a.age_on_dec31??''}</td></tr>`; }).join('')+`</tbody></table></div>`;
   const right=`<div><div class="text-xs font-semibold mb-1">${regRelay?`Relay ${regRelay} runners`:'Click New Relay to start'}</div><div class="border rounded">`+
     slots.map((en,i)=>{ const a=en&&rows.find(r=>r.id===en.registration_id); return `<div class="relaySlot"><span class="w-12 text-xs text-gray-500">${i<4?'Leg '+(i+1):'Alt '+(i-3)}</span><span class="flex-1">${a?esc(a.last_name+', '+a.first_name):'<span class="text-gray-300">—</span>'}</span>${a&&open?`<button type="button" data-rm="${en.id}" class="text-red-600 text-xs">✕</button>`:''}</div>`; }).join('')+`</div></div>`;
