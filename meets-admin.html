@@ -285,7 +285,8 @@ function hytekEntries(rows,cfg,rosterOnly){
     const [tc,evCode,div,g,rt]=k.split('|'); const age=div==='ALL'?18:(DIVISIONS.find(d=>d.name===div)?.max??''); const tn=tname(items[0].r);
     items.sort((p,q)=>(p.leg??99)-(q.leg??99));           // runners in leg order (legs 1-4, then alternates)
     for(let i=0,L=0;i<items.length;i+=8,L++){
-      const runners=items.slice(i,i+8).flatMap(({r})=>[c(r.last_name,20),c(r.first_name,20),'',r.gender==='Girl'?'F':'M',fmtDate(r.dob),String(r.age_on_dec31??''),'','']);
+      // Each runner is 9 fields in Meet Manager's real import (last, first, initial, gender, birth date, age, school year, comp #, ALTERNATE flag) — confirmed by test import. Legs 5-8 are alternates.
+      const runners=items.slice(i,i+8).flatMap(({r},k)=>[c(r.last_name,20),c(r.first_name,20),'',r.gender==='Girl'?'F':'M',fmtDate(r.dob),String(r.age_on_dec31??''),'','',k>=4?'Y':'']);
       out.push(['Q',tc,tn,rt||String.fromCharCode(65+L),g==='Girl'?'F':g==='Boy'?'M':'X',String(age),evCode,'','M',DIVNUM[div]??'','','','','',...runners].join(';'));
     }
   }
