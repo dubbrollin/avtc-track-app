@@ -169,27 +169,30 @@ async function act(a,id){
   }
   if(a==='results') return resultsPanel(m);
   if(a==='summary'||a==='export'){
-    const [{data:evs},{data:ens}]=await Promise.all([
-      sb.from('meet_events').select('*').eq('meet_id',id),
-      sb.from('entries').select('*').eq('meet_id',id).limit(10000)
-    ]);
-    // Look up only the athletes who actually have entries (every team), in chunks — the server caps a single request at 1,000 rows.
-    const regIds=[...new Set(ens.map(n=>n.registration_id))], regs=[];
-    for(let i=0;i<regIds.length;i+=150){
-      const {data:part}=await sb.from('registrations').select('id,first_name,last_name,gender,dob,division,age_on_dec31,team_code').in('id',regIds.slice(i,i+150)).eq('status','verified');
-      regs.push(...(part||[]));
+    // The server returns at most 1,000 rows per request, and a big meet (the Invitational) has 1,000+ athletes and several thousand entries,
+    // so every lookup below is paged until it runs dry.
+    const pageAll=async(mk)=>{ const all=[]; for(let f=0;;f+=1000){ const {data,error}=await mk().range(f,f+999); if(error){ alert(error.message); break; } all.push(...(data||[])); if(!data||data.length<1000) break; } return all; };
+    const evs=await pageAll(()=>sb.from('meet_events').select('*').eq('meet_id',id).order('id'));
+    const ens=await pageAll(()=>sb.from('entries').select('*').eq('meet_id',id).order('id'));
+    // Every athlete on every team that entered this meet (the complete roster), verified only.
+    const entRegIds=new Set(ens.map(n=>n.registration_id)), regs=[];
+    const teamsIn=new Set();
+    for(let i=0;i<[...entRegIds].length;i+=150){
+      const {data:part}=await sb.from('registrations').select('team_code').in('id',[...entRegIds].slice(i,i+150)); (part||[]).forEach(x=>teamsIn.add(x.team_code));
     }
+    for(const tc of teamsIn){ regs.push(...await pageAll(()=>sb.from('registrations').select('id,first_name,last_name,gender,dob,division,age_on_dec31,team_code').eq('team_code',tc).eq('status','verified').order('id'))); }
     const R=Object.fromEntries(regs.map(r=>[r.id,r])), E=Object.fromEntries(evs.map(e=>[e.id,e]));
     const rows=ens.map(n=>({r:R[n.registration_id],e:E[n.meet_event_id],mark:n.seed_mark,rt:n.relay_team,leg:n.leg})).filter(x=>x.r&&x.e);
+    const rosterOnly=regs.filter(r=>!entRegIds.has(r.id));
     if(a==='summary'){
       const byEv={}; rows.forEach(x=>(byEv[`${x.e.division} ${x.e.gender} — ${x.e.name}`]??=[]).push(`${x.r.first_name} ${x.r.last_name}${x.mark?' ('+x.mark+')':''}`));
       $('panel-'+id).innerHTML=`<p class="text-sm font-semibold">${rows.length} entries, ${new Set(rows.map(x=>x.r.id)).size} athletes</p>`+
         Object.entries(byEv).sort().map(([k,v])=>`<div class="text-sm"><b>${k}</b>: ${v.join(', ')}</div>`).join('');
     } else {
       if(!rows.length) return alert('No entries yet.');
-      const txt=hytekEntries(rows,CFG);
+      const txt=hytekEntries(rows,CFG,rosterOnly);
       const a2=document.createElement('a'); a2.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));
-      a2.download=`${m.name.replace(/[^\w]+/g,'_')}_ALL_TEAMS_entries.txt`; a2.click();
+      a2.download=`${m.name.replace(/[^\w]+/g,'_')}_ALL_TEAMS_entries_and_roster.txt`; a2.click();
     }
   }
 }
@@ -260,7 +263,7 @@ async function resultsPanel(m){
 }
 
 // Hy-Tek Meet Manager: D records (individual entries) + Q records (relays, up to 8 names per team letter)
-function hytekEntries(rows,cfg){
+function hytekEntries(rows,cfg,rosterOnly){
   // ALL teams entered in the meet go into one file; each athlete/relay carries its own team code + name.
   const c=(s,n)=>String(s??'').replace(/[;\r\n]/g,' ').trim().slice(0,n);
   const tcode=r=>c(r.team_code||cfg.TEAM_CODE||'UNA',4).toUpperCase();
@@ -278,6 +281,8 @@ function hytekEntries(rows,cfg){
       out.push(['Q',tc,tn,rt||String.fromCharCode(65+L),g==='Girl'?'F':g==='Boy'?'M':'X',String(age),evCode,'','M','','','','','','',...runners].join(';'));
     }
   }
+  // Complete roster: athletes on the participating teams who have no entries yet go out as athlete lines with no event, so Meet Manager still knows them.
+  (rosterOnly||[]).sort((p,q)=>tcode(p).localeCompare(tcode(q))||(p.last_name+p.first_name).localeCompare(q.last_name+q.first_name)).forEach(r=>out.push(['D',...ath(r),'','','M','','','','','','',''].join(';')));
   return out.join('\r\n')+'\r\n';
 }
 </script></body></html>
