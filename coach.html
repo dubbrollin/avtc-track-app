@@ -222,7 +222,7 @@ async function loadMe(){
   fullAccess=isFullAccess(myCoach);
   $('notCoachBox').style.display='none'; $('coachApp').style.display='block';
   const team=window.VYC_TEAMS.find(t=>t.code===myCoach.team_code);
-  $('teamLabel').textContent = (team ? `— ${team.name} (${team.conference}) · ${roleLabel(myCoach)}${myCoach.is_admin?' · Site admin':''}` : `— ${roleLabel(myCoach)}`);
+  $('teamLabel').textContent = (team ? `— ${team.name}${team.conference?' ('+team.conference+')':''} · ${roleLabel(myCoach)}${myCoach.is_admin?' · Site admin':''}` : `— ${roleLabel(myCoach)}`);
   const st=bgStatus(myCoach);
   $('bgStatusLine').innerHTML = `Your background-check status: <span class="pill ${st.cls}">${st.label}</span>`;
   $('runChecks').style.display=fullAccess?'':'none';
