@@ -156,7 +156,7 @@ function render(){
       <td class="py-1 w-8 text-gray-500">${mode==='records'?'':(r.mark_value!=null?i+1:'')}</td>
       <td class="py-1">${r.athlete_name}${r.team_code?` <span class="text-xs text-gray-400">${r.team_code}</span>`:''}${r.relay_runners?`<div class="text-xs text-gray-500">${r.relay_runners}</div>`:''}</td>
       <td class="py-1 font-mono text-right font-semibold">${r.mark}${r.wind?` <span class="text-xs text-gray-400">w${r.wind}</span>`:''}</td>
-      <td class="py-1 text-right text-gray-500 text-xs">${(mode==='season'||mode==='records')?`${r.meet_name||''}`:(r.place?`${r.place}${['st','nd','rd'][r.place-1]||'th'} overall`:'')}</td></tr>`).join('')}</table></div>`).join('')
+      <td class="py-1 text-right text-gray-500 text-xs">${(mode==='season'||mode==='records')?`${r.meet_name||''}`:((r.overall_place||r.place)?`${r.overall_place||r.place}${['st','nd','rd'][(r.overall_place||r.place)-1]||'th'} overall`:'')}</td></tr>`).join('')}</table></div>`).join('')
     ||'<p class="text-gray-500">No results yet.</p>';
 }
 // ---------- Meet results, always sectioned by HEAT (like Meet Manager's results): division/gender/event -> round -> heat, places are within the heat ----------
