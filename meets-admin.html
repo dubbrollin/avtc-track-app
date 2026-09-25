@@ -190,7 +190,8 @@ async function act(a,id){
         Object.entries(byEv).sort().map(([k,v])=>`<div class="text-sm"><b>${k}</b>: ${v.join(', ')}</div>`).join('');
     } else {
       if(!rows.length) return alert('No entries yet.');
-      const txt=hytekEntries(rows,CFG,rosterOnly);
+      window.__hyDropped=0; const txt=hytekEntries(rows,CFG,rosterOnly);
+      if(window.__hyDropped) alert(window.__hyDropped+' relay alternate(s) were left out of the file because their relay has fewer than 4 runners — fill legs 1-4 first, then re-download.');
       const a2=document.createElement('a'); a2.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));
       a2.download=`${m.name.replace(/[^\w]+/g,'_')}_ALL_TEAMS_entries_and_roster.txt`; a2.click();
     }
@@ -284,6 +285,10 @@ function hytekEntries(rows,cfg,rosterOnly){
   for(const [k,items] of Object.entries(relays)){
     const [tc,evCode,div,g,rt]=k.split('|'); const age=div==='ALL'?18:(DIVISIONS.find(d=>d.name===div)?.max??''); const tn=tname(items[0].r);
     items.sort((p,q)=>(p.leg??99)-(q.leg??99));           // runners in leg order (legs 1-4, then alternates)
+    // Legs 1-4 are the runners; legs 5-8 are alternates. Meet Manager packs names upward and skips empty slots (confirmed by test),
+    // so an alternate would slide into a runner slot if the relay has fewer than four runners — in that case the alternates are left out.
+    { const runnersN=items.filter(x=>(x.leg??1)<=4).length, alts=items.filter(x=>(x.leg??1)>4);
+      if(runnersN<4 && alts.length){ window.__hyDropped=(window.__hyDropped||0)+alts.length; items.splice(0,items.length,...items.filter(x=>(x.leg??1)<=4)); } }
     for(let i=0,L=0;i<items.length;i+=8,L++){
       // Q record = 15 header fields, then 8 fields per runner (last, first, initial, gender, birth date, age, school year, comp #) — per Meet Manager's own help;
       // confirmed by test import (a header one field short shifts every runner and none are added).
