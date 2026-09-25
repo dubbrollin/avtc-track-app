@@ -562,7 +562,12 @@ async function compactRelay(ev,letter){
   const mine=new Set(rows.map(r=>r.id));
   const list=regEntries.filter(x=>x.meet_event_id===ev.id&&(x.relay_team||'A')===letter&&mine.has(x.registration_id)).sort((p,q)=>(p.leg??99)-(q.leg??99));
   let changed=false;
-  for(let i=0;i<list.length;i++){ if(list[i].leg!==i+1){ const {error}=await sb.from('entries').update({leg:i+1}).eq('id',list[i].id); if(error){ alert(error.message); break; } changed=true; } }
+  // Coaches may add and remove entries but not edit them, so a runner is moved up by removing and re-adding the same entry in its new spot.
+  for(let i=0;i<list.length;i++){ const e=list[i]; if(e.leg===i+1) continue;
+    const {error:de}=await sb.from('entries').delete().eq('id',e.id); if(de){ alert(de.message); break; }
+    const {error:ie}=await sb.from('entries').insert({meet_id:e.meet_id,registration_id:e.registration_id,meet_event_id:e.meet_event_id,entered_by:e.entered_by,seed_mark:e.seed_mark,seed_source:e.seed_source,relay_team:e.relay_team,leg:i+1});
+    if(ie){ alert('Could not move '+((rows.find(r=>r.id===e.registration_id)||{}).last_name||'a runner')+' up: '+ie.message); changed=true; break; }
+    changed=true; }
   if(changed) await loadRegMeet();
 }
 async function addRunner(ev,aId,slots,legOverride,quiet){
