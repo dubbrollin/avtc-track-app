@@ -274,7 +274,7 @@ async function load(){
   if(fullAccess && pending.length) runChecks(pending);
 
   if(fullAccess){
-    let cq=sb.from('coaches').select('*').order('team_code').order('created_at',{ascending:false});
+    let cq=sb.from('coaches').select('*').order('team_code').order('registered_at',{ascending:false});
     cq=cq.eq('team_code',myCoach.team_code);
     const {data:cdata,error:cerr}=await cq;
     if(!cerr){ coachRows=cdata||[]; renderCoaches(); }
