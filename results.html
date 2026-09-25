@@ -86,6 +86,7 @@ function setMode(m){
   ['modeSeason','modeMeet','modeRecords'].forEach(id=>$(id).classList.toggle('active', id==='mode'+m[0].toUpperCase()+m.slice(1)));
   $('meetPicker').classList.toggle('hidden', mode!=='meet');
   $('qOnlyWrap').classList.toggle('hidden', mode!=='season');
+  $('conf').classList.toggle('hidden', mode==='records');
   render();
 }
 
@@ -127,7 +128,7 @@ function baseRows(){
 }
 
 function populateEventFilter(){
-  const seen=new Set(baseRows().map(r=>r.event_name).filter(Boolean));
+  const seen=new Set(mode==='records'?(window.STANDARD_EVENTS||[]).map(e=>e.name):baseRows().map(r=>r.event_name).filter(Boolean));
   const order=(window.STANDARD_EVENTS||[]).map(e=>e.name);
   const names=[...seen].sort((a,b)=>{ const ia=order.indexOf(a), ib=order.indexOf(b); if(ia===-1&&ib===-1) return a.localeCompare(b); if(ia===-1) return 1; if(ib===-1) return -1; return ia-ib; });
   const keep=$('evt').value;
@@ -142,6 +143,7 @@ function render(){
   const bestPerAthlete = mode!=='meet';
   const isMeetRecord = mode==='meet' && $('meetRecord').checked;
   const cap = mode==='records' ? 1 : (mode==='season' ? 50 : null);
+  if(mode==='records'){ renderRecordBoxes(d,g,ev,q); return; }
   if(mode==='meet' && !$('meet').value){ renderAllMeets(d,g,ev,q,conf); return; }
   if(mode==='meet' && !isMeetRecord){ renderSingleMeet(conf?rs.filter(r=>r.conference===conf):rs); return; }
   const qOnly = mode==='season' && $('qOnly').checked;
@@ -179,6 +181,35 @@ function render(){
     ${ref?`<div class="text-xs text-gray-500 mt-0.5">${ref}${gp.std&&mode!=='records'?` &nbsp;·&nbsp; <b class="text-green-700">${gp.qCount} of ${gp.total} met the standard</b>`:''}</div>`:''}
     <table class="w-full text-sm mt-1">${rowsHtml}</table></div>`; }).join('')
     ||'<p class="text-gray-500">'+(qOnly?'No athletes have met the standard for these filters yet.':'No results yet.')+'</p>';
+}
+
+// ---------- All-Time Records: one box per championship record book (Eastern League, Western League, IEC Conference) ----------
+const REC_AGE_DIV={'5-6':'Sub-Gremlin','7-8':'Gremlin','9-10':'Bantam','11-12':'Juniors','13-14':'Youth','15-18':'Intermediates'};
+function recBook(r){ return {...r, division:REC_AGE_DIV[r.age_low+'-'+r.age_high]||(r.age_low+'-'+r.age_high)}; }
+function renderRecordBoxes(d,g,ev,q){
+  const evs=window.STANDARD_EVENTS||[], evIdx=r=>evs.findIndex(e=>e.code===r.event_code&&!!e.relay===!!r.is_relay);
+  const evName=r=>{ const e=evs[evIdx(r)]; return e?e.name:r.event_code; };
+  const divOrder=DIVISIONS.map(x=>x.name);
+  const books=[
+    {title:'Eastern League Records', sub:'Eastern Open championship', rows:(window.LEAGUE_RECORDS||{}).East||[], empty:'No Eastern League records loaded yet.'},
+    {title:'Western League Records', sub:'Western Open championship', rows:(window.LEAGUE_RECORDS||{}).West||[], empty:'No Western League records loaded yet.'},
+    {title:'IEC Conference Records', sub:'Conference championship', rows:recs, empty:'No conference records loaded yet.'}
+  ];
+  const pdfGroups=[]; let html='';
+  books.forEach(b=>{
+    let rows=b.rows.map(recBook).filter(r=>(!d||r.division===d)&&(!g||r.gender===g)&&(!ev||evName(r)===ev)&&(!q||(r.holder+' '+(r.relay_names||'')+' '+(r.team||'')).toLowerCase().includes(q)));
+    rows.sort((a,b2)=>((evIdx(a)<0?999:evIdx(a))-(evIdx(b2)<0?999:evIdx(b2)))||(divOrder.indexOf(a.division)-divOrder.indexOf(b2.division))||String(a.gender).localeCompare(String(b2.gender)));
+    const byEv={}; rows.forEach(r=>{ (byEv[evName(r)]??=[]).push(r); });
+    const inner=Object.entries(byEv).map(([name,rs])=>{
+      pdfGroups.push({division:b.title.replace(' Records',''),gender:'',event:name,rows:rs.map(r=>({athlete_name:(r.is_relay?(r.relay_names||r.holder):r.holder)+` (${r.division} ${r.gender==='Boy'?'Boys':'Girls'})`,team_code:r.team,mark:r.mark_text,mark_value:1,_rank:r.rec_year||''}))});
+      return `<div class="mb-3"><div class="heathead">${name}</div><table class="w-full text-sm">${rs.map(r=>`<tr class="border-t"><td class="py-1 w-28 text-gray-600">${r.division} ${r.gender==='Boy'?'Boys':'Girls'}</td><td class="py-1 font-mono font-semibold w-20">${r.mark_text||''}</td><td class="py-1">${r.is_relay?(r.relay_names||r.holder):r.holder}${r.team?` <span class="text-xs text-gray-400">${r.team}</span>`:''}</td><td class="py-1 text-right text-xs text-gray-500">${r.rec_year||''}</td></tr>`).join('')}</table></div>`;
+    }).join('');
+    html+=`<div class="bg-white rounded-xl shadow p-3 mb-4"><div class="flex items-baseline gap-2"><span class="rec-medal">🏅</span><span class="font-bold text-lg">${b.title}</span><span class="text-xs text-gray-500">${b.sub} · ${rows.length} record${rows.length===1?'':'s'}</span></div>
+      <div style="max-height:70vh;overflow-y:auto;margin-top:8px;padding:8px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb">${inner||`<p class="text-gray-500 text-sm">${(b.rows.length?'No records match these filters.':b.empty)}</p>`}</div></div>`;
+  });
+  lastGroups=pdfGroups;
+  $('hint').textContent='Championship records only — Eastern League, Western League and IEC Conference. Each is its own record book.';
+  $('list').innerHTML=html;
 }
 // ---------- Meet results, always sectioned by HEAT (like Meet Manager's results): division/gender/event -> round -> heat, places are within the heat ----------
 const DIV_AGES={'Sub-Gremlin':[5,6],'Gremlin':[7,8],'Bantam':[9,10],'Juniors':[11,12],'Youth':[13,14],'Intermediates':[15,18]};
