@@ -79,17 +79,17 @@
     <div id="coachApp" style="display:none">
       <div class="card flex flex-wrap items-center gap-2">
         <div class="flex-1 min-w-0">
-          <h1 class="text-lg font-bold">Coach Dashboard <span id="teamLabel" class="text-gray-500 font-normal text-sm"></span></h1>
+          <h1 class="text-lg font-bold"><span id="pageTitle">Coach Dashboard</span> <span id="teamLabel" class="text-gray-500 font-normal text-sm"></span></h1>
           <p id="bgStatusLine" class="text-xs mt-1"></p>
         </div>
-        <a href="#registerCard" class="btn bg-purple-700 text-white">Meet Register ↓</a>
+        <a id="rosterBtn" href="coach.html?view=roster" class="btn bg-blue-600 text-white hidden">Roster</a>
+        <a id="backBtn" href="coach.html" class="btn bg-blue-600 text-white hidden">← Back to dashboard</a>
         <a href="results.html" class="btn bg-gray-800 text-white">Results &amp; rankings</a>
         <button id="logout" class="btn bg-gray-200">Sign out</button>
       </div>
 
-      <div class="dash-grid">
-        <!-- LEFT: roster only -->
-        <div class="dash-col-left">
+      <!-- ROSTER & INTAKE (head coaches only, opened from the Roster button) -->
+      <div id="rosterView" class="hidden"><div class="max-w-5xl mx-auto">
           <div class="card">
             <div class="col-head"><h2 class="flex-1">Roster <span id="count" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
             <div class="flex flex-wrap items-center gap-2 mb-2">
@@ -102,10 +102,15 @@
             <p id="msg" class="text-sm text-gray-600 mb-2"></p>
             <div id="list"></div>
           </div>
-        </div>
+          <div class="card" id="coachesCard">
+            <div class="col-head"><h2 class="flex-1">Coaches on my team <span id="coachCount" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
+            <p class="text-xs text-gray-500 mb-2">Approve a new coach registration, or review background-check status. Only head coaches should approve others.</p>
+            <div id="coachList"></div>
+          </div>
+      </div></div>
 
-        <!-- RIGHT: registrations / meet entries / results / team management -->
-        <div class="dash-col-right">
+      <!-- DASHBOARD -->
+      <div id="dashView"><div class="max-w-4xl mx-auto">
           <div class="card" id="registerCard">
             <div class="col-head"><h2>Meet Register</h2></div>
             <p class="text-xs text-gray-500 mb-2">Works like Team Manager's Entry by Event: pick a division, click an event, then tick the athletes who will run it.</p>
@@ -134,13 +139,7 @@
             <a href="meets-admin.html" class="btn bg-purple-600 text-white text-sm inline-block">Go to Meet Admin →</a>
           </div>
 
-          <div class="card" id="coachesCard">
-            <div class="col-head"><h2 class="flex-1">Coaches on my team <span id="coachCount" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
-            <p class="text-xs text-gray-500 mb-2">Approve a new coach registration, or review background-check status. Only head coaches should approve others.</p>
-            <div id="coachList"></div>
-          </div>
-        </div>
-      </div>
+      </div></div>
     </div>
   </div>
 </div>
@@ -213,6 +212,11 @@ async function loadMe(){
   $('exportHytek').style.display=fullAccess?'':'none';
   $('rosterNote').classList.toggle('hidden',fullAccess);
   $('coachesCard').style.display=fullAccess?'':'none';
+  // Roster lives on its own view (head coaches only) — the everyday dashboard is just Meet Register + Results.
+  const wantRoster = fullAccess && new URLSearchParams(location.search).get('view')==='roster';
+  $('rosterView').classList.toggle('hidden',!wantRoster); $('dashView').classList.toggle('hidden',wantRoster);
+  $('rosterBtn').classList.toggle('hidden',!fullAccess||wantRoster); $('backBtn').classList.toggle('hidden',!wantRoster);
+  $('pageTitle').textContent = wantRoster ? 'Roster & intake' : 'Coach Dashboard';
   await load();
   await loadMeetsForReg();
 }
