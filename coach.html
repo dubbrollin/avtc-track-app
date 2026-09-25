@@ -48,9 +48,8 @@
   <!-- LOGIN -->
   <div id="login" class="card max-w-lg mx-auto">
     <h1 class="text-xl font-bold">Coach Dashboard</h1>
-    <p class="text-sm text-gray-600 mb-2">Enter your coach email. We'll send you a sign-in link (no password). You must have an <b>approved</b> coach registration to see anything here — register first on the Register page if you haven't.</p>
-    <div class="flex gap-2"><input type="email" id="loginEmail" class="flex-1" placeholder="you@example.com"><button id="loginBtn" class="btn bg-blue-600 text-white">Send link</button></div>
-    <p id="loginMsg" class="text-sm mt-2"></p>
+    <p class="text-sm text-gray-600 mb-2">You must have an <b>approved</b> coach registration to see anything here — register first on the Register page if you haven't.</p>
+    <div id="loginWidget"></div>
   </div>
 
   <!-- APP -->
@@ -144,16 +143,12 @@ function roleLabel(c){
 }
 
 // ---- auth ----
-$('loginBtn').onclick=async()=>{
-  const email=$('loginEmail').value.trim(); if(!email) return;
-  const {error}=await sb.auth.signInWithOtp({email, options:{emailRedirectTo:location.href.split('#')[0]}});
-  $('loginMsg').textContent=error?('Error: '+error.message):'Check your email and tap the sign-in link.';
-};
+window.mountLoginWidget(sb, $('loginWidget'));
 $('logout').onclick=async()=>{await sb.auth.signOut(); location.reload();};
 sb.auth.onAuthStateChange(async(_e,session)=>{
   user=session?.user||null;
   if(!user) return;
-  sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // rebuild client: the original can wedge after processing a magic-link redirect, hanging every later query forever
+  sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // rebuild client: the original can wedge after an OAuth redirect, hanging every later query forever
   $('login').classList.add('hidden'); $('app').classList.remove('hidden');
   await loadMe();
 });

@@ -127,9 +127,21 @@
       </div>
     </div>
     <label class="flex items-start gap-2 text-sm mt-3">
-      <input type="checkbox" id="viaEmail" class="mt-1">
-      <span>Use this registration's email address (above) to sign in to the parent dashboard, so I can view the meet schedule, enter my athlete into meets, and see results/rankings.</span>
+      <input type="checkbox" id="viaEmail" class="mt-1" checked>
+      <span>Create a parent dashboard login with this registration's email (above), so I can view the meet schedule, enter my athlete into meets, and see results/rankings.</span>
     </label>
+    <div id="parentAcctWrap" class="mt-3 border-t pt-3">
+      <div id="parentAcctGoogleDone" class="hidden text-sm text-green-700 font-semibold mb-2"></div>
+      <div id="parentAcctFields">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div><label class="f">Choose a password</label><input type="password" id="parentPass" autocomplete="new-password"></div>
+          <div><label class="f">Confirm password</label><input type="password" id="parentPass2" autocomplete="new-password"></div>
+        </div>
+        <p class="text-xs text-gray-500 mt-1">At least 6 characters. Or skip the password and use Google instead:</p>
+        <button type="button" id="parentGoogleBtn" class="btn bg-white border mt-2">Sign up with Google instead</button>
+        <p class="text-xs text-amber-700 mt-1">Signing up with Google will take you to Google and bring you back to this page — you'll need to re-fill the form below after.</p>
+      </div>
+    </div>
   </div>
 
   <div class="card">
@@ -175,6 +187,18 @@
       <div><label class="f req">Email (this becomes your sign-in)</label><input type="email" id="cEmail" required></div>
       <div><label class="f req">Phone</label><input id="cPhone" required></div>
       <div><label class="f req">Team</label><select id="cTeam" required></select></div>
+    </div>
+    <div class="mt-3 border-t pt-3">
+      <div id="coachAcctGoogleDone" class="hidden text-sm text-green-700 font-semibold mb-2"></div>
+      <div id="coachAcctFields">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div><label class="f req">Choose a password</label><input type="password" id="cPass" autocomplete="new-password"></div>
+          <div><label class="f req">Confirm password</label><input type="password" id="cPass2" autocomplete="new-password"></div>
+        </div>
+        <p class="text-xs text-gray-500 mt-1">At least 6 characters. This is your sign-in for the Coach Dashboard. Or skip the password and use Google instead:</p>
+        <button type="button" id="coachGoogleBtn" class="btn bg-white border mt-2">Sign up with Google instead</button>
+        <p class="text-xs text-amber-700 mt-1">Signing up with Google will take you to Google and bring you back to this page — you'll need to re-fill the form below after.</p>
+      </div>
     </div>
   </div>
   <div class="card">
@@ -290,6 +314,39 @@
 <script>
 const CFG=window.APP_CONFIG, $=id=>document.getElementById(id);
 const sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } });
+
+// ---- account creation (password or Google) alongside registration — replaces old magic-link login ----
+let authSession=null;
+sb.auth.getSession().then(({data})=>{ authSession=data.session; reflectAcctState(); });
+sb.auth.onAuthStateChange((_e,s)=>{ authSession=s; reflectAcctState(); });
+function reflectAcctState(){
+  const email=authSession?.user?.email||'';
+  ['parent','coach'].forEach(prefix=>{
+    const done=$(prefix+'AcctGoogleDone'), fields=$(prefix+'AcctFields');
+    if(!done||!fields) return;
+    if(email){ done.textContent=`Signed in with Google as ${email} — you're all set, no password needed.`; done.classList.remove('hidden'); fields.classList.add('hidden'); }
+    else { done.classList.add('hidden'); fields.classList.remove('hidden'); }
+  });
+}
+$('viaEmail').addEventListener('change',()=>$('parentAcctWrap').classList.toggle('hidden',!$('viaEmail').checked));
+$('parentGoogleBtn').onclick=async()=>{
+  if(!confirm("This will take you to Google and bring you back here — you'll need to re-fill this form afterward. Continue?")) return;
+  await sb.auth.signInWithOAuth({provider:'google', options:{redirectTo:location.href.split('#')[0]}});
+};
+$('coachGoogleBtn').onclick=async()=>{
+  if(!confirm("This will take you to Google and bring you back here — you'll need to re-fill this form afterward. Continue?")) return;
+  await sb.auth.signInWithOAuth({provider:'google', options:{redirectTo:location.href.split('#')[0]}});
+};
+// Creates the login account for `email` if the user filled in a password (skipped if they already have a Google session).
+// Never blocks the registration itself — an account-creation problem is reported but the registration has already been saved.
+async function ensureAccount(email, password, msgEl){
+  if(authSession?.user?.email?.toLowerCase()===email.toLowerCase()) return; // already signed in via Google
+  if(!password) return;
+  const {error}=await sb.auth.signUp({email,password});
+  if(error && !/already registered|already exists/i.test(error.message)){
+    msgEl.textContent += ` (Note: registration saved, but there was a problem creating your dashboard login: ${error.message})`;
+  }
+}
 
 // ---- role tabs ----
 const forms={parent:$('parentForm'), coach:$('coachForm'), vus:$('vusForm')};
@@ -448,6 +505,11 @@ $('parentForm').addEventListener('submit', async(e)=>{
     const physDate=new Date($('physicalDate').value+'T00:00:00Z');
     if(physDate < physicalCutoff()) throw new Error(`The physical exam date must be on or after ${physicalCutoff().toISOString().slice(0,10)}.`);
     if(!$('parent1Rel').value) throw new Error('Please select the relationship for Parent/Guardian 1.');
+    const wantsAcct=$('viaEmail').checked, alreadyGoogle=authSession?.user?.email?.toLowerCase()===$('email').value.trim().toLowerCase();
+    const p1=$('parentPass').value, p2=$('parentPass2').value;
+    if(wantsAcct && !alreadyGoogle){
+      if(p1 || p2){ if(p1.length<6) throw new Error('Password must be at least 6 characters.'); if(p1!==p2) throw new Error('Passwords do not match.'); }
+    }
     const teamCode=$('teamCode').value; if(!teamCode) throw new Error('Please select a team.');
     const file=$('proofFile').files[0]; if(!file) throw new Error('Please upload proof of birth.');
     const dob=$('dob').value, age=window.ageOnDec31(dob,CFG.SEASON_YEAR), division=window.divisionFor(age);
@@ -478,6 +540,7 @@ $('parentForm').addEventListener('submit', async(e)=>{
     const {error}=await sb.from('registrations').insert(row);
     if(error) throw error;
     msg.textContent='Registration submitted! Your team will review it shortly.'; msg.className='text-sm mt-2 text-green-700 font-semibold';
+    if(wantsAcct) await ensureAccount($('email').value.trim(), p1, msg);
     e.target.reset();
   }catch(err){ msg.textContent='Error: '+(err.message||err); msg.className='text-sm mt-2 text-red-600'; }
 });
@@ -489,6 +552,13 @@ $('coachForm').addEventListener('submit', async(e)=>{
   try{
     const role=document.querySelector('input[name=cRole]:checked').value; // 'head_coach' | 'division_coach' | 'event_specialist'
     if($('cUsatf').checked && !$('cUsatfDate').value) throw new Error('Please provide your USATF certification date.');
+    const alreadyGoogle=authSession?.user?.email?.toLowerCase()===$('cEmail').value.trim().toLowerCase();
+    const cp1=$('cPass').value, cp2=$('cPass2').value;
+    if(!alreadyGoogle){
+      if(!cp1||!cp2) throw new Error('Please choose a password, or use "Sign up with Google instead."');
+      if(cp1.length<6) throw new Error('Password must be at least 6 characters.');
+      if(cp1!==cp2) throw new Error('Passwords do not match.');
+    }
     const row={
       season_year:CFG.SEASON_YEAR,
       first_name:$('cFirst').value.trim(), last_name:$('cLast').value.trim(),
@@ -505,6 +575,7 @@ $('coachForm').addEventListener('submit', async(e)=>{
     const {error}=await sb.from('coaches').insert(row);
     if(error) throw error;
     msg.textContent='Coach registration submitted! Your club will review and approve access — you will be notified once approved.'; msg.className='text-sm mt-2 text-green-700 font-semibold';
+    await ensureAccount($('cEmail').value.trim(), cp1, msg);
     e.target.reset(); bgCheckHint();
   }catch(err){ msg.textContent='Error: '+(err.message||err); msg.className='text-sm mt-2 text-red-600'; }
 });

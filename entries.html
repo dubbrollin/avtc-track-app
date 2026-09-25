@@ -31,10 +31,7 @@
   <p class="text-gray-600 mb-4">Meet Register — enter your athletes into races</p>
 
   <div id="login" class="bg-white rounded-xl shadow p-4">
-    <p class="mb-2">Enter the email you used to register your athlete. We'll email you a sign-in link — no password.</p>
-    <input id="email" type="email" class="w-full border rounded p-2 mb-2" placeholder="you@example.com">
-    <button id="send" class="btn bg-blue-600 text-white w-full">Email me a sign-in link</button>
-    <p id="msg" class="mt-2 text-sm"></p>
+    <div id="loginWidget"></div>
   </div>
 
   <div id="app" class="hidden">
@@ -81,15 +78,11 @@ let sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: 
 let me=null, isCoach=false, myCoachRow=null, meets=[], athletes=[], events=[], entries=[];
 let view='race', rDiv=null, rGender='Boy', rEventId=null;
 
-$('send').onclick=async()=>{
-  const email=$('email').value.trim(); if(!email) return;
-  const {error}=await sb.auth.signInWithOtp({email, options:{emailRedirectTo:location.href.split('#')[0]}});
-  $('msg').textContent=error?error.message:'Check your email and tap the link.';
-};
+window.mountLoginWidget(sb, $('loginWidget'), {hint:"Sign in with the email you used to register your athlete."});
 $('logout').onclick=()=>sb.auth.signOut().then(()=>location.reload());
 sb.auth.onAuthStateChange(async(_e,session)=>{
   if(!session) return; me=session.user.email;
-  sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // rebuild client: the original can wedge after processing a magic-link redirect, hanging every later query forever
+  sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // rebuild client: the original can wedge after an OAuth redirect, hanging every later query forever
   $('login').classList.add('hidden'); $('app').classList.remove('hidden');
   const {data:c}=await sb.from('coaches').select('*').eq('email',me).eq('approved',true).maybeSingle();
   myCoachRow=c||null; isCoach=!!c;

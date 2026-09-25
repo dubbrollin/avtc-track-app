@@ -23,9 +23,7 @@
 <div class="max-w-3xl mx-auto p-4">
   <h1 class="text-2xl font-bold">Meets — Admin</h1>
   <div id="login" class="bg-white rounded-xl shadow p-4 mt-3">
-    <input id="email" type="email" class="w-full border rounded p-2 mb-2" placeholder="coach email">
-    <button id="send" class="btn bg-blue-600 text-white w-full">Email me a sign-in link</button>
-    <p id="msg" class="mt-2 text-sm"></p>
+    <div id="loginWidget"></div>
   </div>
 
   <div id="app" class="hidden">
@@ -49,11 +47,8 @@ const $=id=>document.getElementById(id);
 const CFG=window.APP_CONFIG;
 let sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // avoid cross-tab navigator.locks deadlock when multiple app pages are open at once
 let meets=[];
-$('send').onclick=async()=>{
-  const {error}=await sb.auth.signInWithOtp({email:$('email').value.trim(), options:{emailRedirectTo:location.href.split('#')[0]}});
-  $('msg').textContent=error?error.message:'Check your email and tap the link.';
-};
-sb.auth.onAuthStateChange(async(_e,s)=>{ if(!s) return; sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } } /* rebuild: original client can wedge after a magic-link redirect */); $('login').classList.add('hidden'); $('app').classList.remove('hidden'); load(); });
+window.mountLoginWidget(sb, $('loginWidget'), {hint:"Coach sign-in."});
+sb.auth.onAuthStateChange(async(_e,s)=>{ if(!s) return; sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } } /* rebuild: original client can wedge after an OAuth redirect */); $('login').classList.add('hidden'); $('app').classList.remove('hidden'); load(); });
 
 $('create').onclick=async()=>{
   const name=$('mName').value.trim(), date=$('mDate').value, close=$('mClose').value;
