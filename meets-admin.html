@@ -175,7 +175,7 @@ async function act(a,id){
       sb.from('registrations').select('id,first_name,last_name,gender,dob,division,age_on_dec31').eq('status','verified')
     ]);
     const R=Object.fromEntries(regs.map(r=>[r.id,r])), E=Object.fromEntries(evs.map(e=>[e.id,e]));
-    const rows=ens.map(n=>({r:R[n.registration_id],e:E[n.meet_event_id],mark:n.seed_mark})).filter(x=>x.r&&x.e);
+    const rows=ens.map(n=>({r:R[n.registration_id],e:E[n.meet_event_id],mark:n.seed_mark,rt:n.relay_team,leg:n.leg})).filter(x=>x.r&&x.e);
     if(a==='summary'){
       const byEv={}; rows.forEach(x=>(byEv[`${x.e.division} ${x.e.gender} — ${x.e.name}`]??=[]).push(`${x.r.first_name} ${x.r.last_name}${x.mark?' ('+x.mark+')':''}`));
       $('panel-'+id).innerHTML=`<p class="text-sm font-semibold">${rows.length} entries, ${new Set(rows.map(x=>x.r.id)).size} athletes</p>`+
@@ -261,12 +261,13 @@ function hytekEntries(rows,cfg){
   const ath=r=>[c(r.last_name,20),c(r.first_name,20),'',r.gender==='Girl'?'F':'M',fmtDate(r.dob),code,team,String(r.age_on_dec31??''),''];
   const out=[];
   rows.filter(x=>!x.e.is_relay).forEach(x=>out.push(['D',...ath(x.r),x.e.event_number||x.e.code,c(x.mark,11),'M','','','','','','',''].join(';')));
-  const relays={}; rows.filter(x=>x.e.is_relay).forEach(x=>(relays[`${x.e.event_number||x.e.code}|${x.e.division}|${x.e.gender}`]??=[]).push(x.r));
-  for(const [k,list] of Object.entries(relays)){
-    const [evCode,div,g]=k.split('|'); const age=div==='ALL'?18:(DIVISIONS.find(d=>d.name===div)?.max??'');
-    for(let i=0,L=0;i<list.length;i+=8,L++){
-      const runners=list.slice(i,i+8).flatMap(r=>[c(r.last_name,20),c(r.first_name,20),'',r.gender==='Girl'?'F':'M',fmtDate(r.dob),String(r.age_on_dec31??''),'','']);
-      out.push(['Q',code,team,String.fromCharCode(65+L),g==='Girl'?'F':g==='Boy'?'M':'X',String(age),evCode,'','M','','','','','','',...runners].join(';'));
+  const relays={}; rows.filter(x=>x.e.is_relay).forEach(x=>(relays[`${x.e.event_number||x.e.code}|${x.e.division}|${x.e.gender}|${x.rt||''}`]??=[]).push(x));
+  for(const [k,items] of Object.entries(relays)){
+    const [evCode,div,g,rt]=k.split('|'); const age=div==='ALL'?18:(DIVISIONS.find(d=>d.name===div)?.max??'');
+    items.sort((p,q)=>(p.leg??99)-(q.leg??99));           // runners in leg order (legs 1-4, then alternates)
+    for(let i=0,L=0;i<items.length;i+=8,L++){
+      const runners=items.slice(i,i+8).flatMap(({r})=>[c(r.last_name,20),c(r.first_name,20),'',r.gender==='Girl'?'F':'M',fmtDate(r.dob),String(r.age_on_dec31??''),'','']);
+      out.push(['Q',code,team,rt||String.fromCharCode(65+L),g==='Girl'?'F':g==='Boy'?'M':'X',String(age),evCode,'','M','','','','','','',...runners].join(';'));
     }
   }
   return out.join('\r\n')+'\r\n';

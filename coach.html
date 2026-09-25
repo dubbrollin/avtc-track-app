@@ -22,6 +22,16 @@
   input,select{padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:15px;min-height:44px}
   .seg{padding:.5rem .9rem;font-size:.875rem;cursor:pointer;background:#fff;border:0;min-height:auto}
   .seg.active{background:var(--brand);color:#fff}
+  .evgrid{max-height:15rem;overflow:auto;border:1px solid #e5e7eb;border-radius:.5rem}
+  .evtbl{width:100%;font-size:.85rem;border-collapse:collapse}
+  .evtbl th{position:sticky;top:0;background:#f3f4f6;font-size:.7rem;text-align:left;padding:.25rem .5rem;color:#374151}
+  .evtbl td{padding:.25rem .5rem;border-top:1px solid #f3f4f6;cursor:pointer;white-space:nowrap}
+  .evtbl tr.sel td{background:#1d4ed8;color:#fff}
+  .athtbl{width:100%;font-size:.9rem;border-collapse:collapse}
+  .athtbl th{background:#f3f4f6;font-size:.7rem;text-align:left;padding:.25rem .5rem;color:#374151}
+  .athtbl td{padding:.3rem .5rem;border-top:1px solid #f3f4f6}
+  .athtbl tr.entered td{background:#fef08a}
+  .relaySlot{display:flex;align-items:center;gap:.4rem;padding:.25rem .5rem;border-top:1px solid #f3f4f6;font-size:.9rem}
   .raceBtn{padding:.5rem .9rem;border-radius:.5rem;border:1px solid #d1d5db;font-size:.875rem;cursor:pointer;background:#fff}
   .raceBtn.active{background:var(--brand);color:#fff;border-color:var(--brand)}
   .col-head{display:flex;align-items:center;gap:8px;padding:2px 4px 10px;border-bottom:2px solid var(--brand);margin-bottom:12px}
@@ -98,20 +108,22 @@
         <div class="dash-col-right">
           <div class="card" id="registerCard">
             <div class="col-head"><h2>Meet Register</h2></div>
-            <p class="text-xs text-gray-500 mb-2">Pick a meet, then a division and Boys/Girls, then click a race to check off your verified athletes for it.</p>
+            <p class="text-xs text-gray-500 mb-2">Works like Team Manager's Entry by Event: pick a division, click an event, then tick the athletes who will run it.</p>
             <div class="flex flex-wrap items-center gap-2 mb-2">
               <select id="regMeet" class="flex-1"></select>
             </div>
             <p id="regMeetInfo" class="text-xs text-gray-500 mb-2"></p>
             <div id="regBody">
               <div class="flex flex-wrap items-center gap-2 mb-2">
+                <label class="text-sm font-semibold">Division</label>
                 <select id="regDiv"></select>
-                <div class="flex rounded-lg overflow-hidden border text-sm">
-                  <button data-g="Boy" class="seg regGenBtn" type="button">Boys</button>
-                  <button data-g="Girl" class="seg regGenBtn" type="button">Girls</button>
+                <div class="flex items-center gap-1 ml-auto text-sm">
+                  <button id="regPrev" type="button" class="btn bg-gray-200">◀</button>
+                  <span>Event <b id="regEvNo">–</b></span>
+                  <button id="regNext" type="button" class="btn bg-gray-200">▶</button>
                 </div>
               </div>
-              <div id="regRaceButtons" class="flex flex-wrap gap-2 mb-3"></div>
+              <div id="regEvGrid" class="evgrid mb-3"></div>
               <div id="regAthletes"></div>
             </div>
           </div>
@@ -375,7 +387,6 @@ async function loadMeetsForReg(){
   $('regMeet').innerHTML=regMeets.map(m=>`<option value="${m.id}">${m.name} — ${fmtDate(m.meet_date)}${evCount[m.id]?'':' (no events set up yet)'}</option>`).join('')||'<option value="">No meets posted yet</option>';
   const pick=regMeets.find(m=>evCount[m.id]&&regMeetOpen(m))||regMeets.find(m=>evCount[m.id]); if(pick) $('regMeet').value=pick.id; // start on a meet that has events, not an empty one
   $('regMeet').onchange=loadRegMeet;
-  document.querySelectorAll('.regGenBtn').forEach(b=>b.onclick=()=>{ regGender=b.dataset.g; regEventId=null; renderReg(); });
   if(regMeets.length) await loadRegMeet(); else { $('regMeetInfo').textContent=''; $('regBody').innerHTML='<p class="text-sm text-gray-500">No meets posted yet.</p>'; }
 }
 const curRegMeet=()=>regMeets.find(m=>m.id===$('regMeet').value);
@@ -390,45 +401,130 @@ async function loadRegMeet(){
   regEvents=e.data||[]; regEntries=n.data||[];
   renderReg();
 }
+// ---- Team Manager "Entry by Event" style register ----
+let regSeeds=null, regRelay=null, regRelayNew={}, regOnlyEntered=false;
+const genCode=g=>g==='Girl'?'F':g==='Boy'?'M':'X';
+const genWord=g=>g==='Girl'?'Female':g==='Boy'?'Male':'Mixed';
+const divAbbr=d=>({'ALL':'ALL','Sub-Gremlin':'SG','Gremlin':'G','Bantam':'BN','Juniors':'MI','Youth':'YH','Intermediates':'IY'})[d]||d;
+function ageRange(d){ if(d==='ALL') return '05-18'; const x=(window.DIVISIONS||[]).find(v=>v.name===d); return x?String(x.min).padStart(2,'0')+'-'+String(x.max).padStart(2,'0'):''; }
+const RELAY_LEG={'400':'100','1600':'400','3200':'800'}; // which single event shows in "Best" for a relay
+const evSort=(x,y)=>((x.event_number??9999)-(y.event_number??9999))||x.name.localeCompare(y.name);
+async function loadRegSeeds(){
+  regSeeds={};
+  const ids=rows.filter(r=>r.status==='verified').map(r=>r.id); if(!ids.length) return;
+  const {data}=await sb.from('season_best').select('registration_id,event_code,mark,mark_value,is_time').in('registration_id',ids);
+  (data||[]).forEach(x=>{ const k=x.registration_id+'|'+x.event_code, cur=regSeeds[k]; if(!cur||(x.is_time?x.mark_value<cur.mark_value:x.mark_value>cur.mark_value)) regSeeds[k]=x; });
+}
+function bestMark(a,ev){ const code=ev.is_relay?(RELAY_LEG[ev.code]||ev.code):ev.code; const s=regSeeds&&regSeeds[a.id+'|'+code]; return s?{mark:s.mark,value:s.mark_value,time:s.is_time}:null; }
+function eligiblePool(ev){ return rows.filter(a=>a.status==='verified'&&(ev.division==='ALL'||a.division===ev.division)&&(ev.gender==='Mixed'||a.gender===ev.gender)).sort((p,q)=>(p.last_name+p.first_name).localeCompare(q.last_name+q.first_name)); }
+const myEventsOf=a=>regEntries.filter(x=>x.registration_id===a.id).map(x=>regEvents.find(v=>v.id===x.meet_event_id)).filter(Boolean).map(v=>({relay:v.is_relay}));
 function renderReg(){
   const m=curRegMeet(); if(!m) return;
+  if(!regSeeds){ loadRegSeeds().then(renderReg); return; }
   const verified=rows.filter(r=>r.status==='verified');
-  const divsPresent=[...new Set(verified.map(a=>a.division))];
   const divOrder=(window.DIVISIONS||[]).map(d=>d.name);
-  const divs=divOrder.filter(d=>divsPresent.includes(d));
-  if(!divs.length){ $('regDiv').innerHTML=''; $('regRaceButtons').innerHTML='<p class="text-sm text-gray-500">No verified athletes on your team yet.</p>'; $('regAthletes').innerHTML=''; return; }
-  if(!regDiv || !divs.includes(regDiv)) regDiv=divs[0];
+  const divs=divOrder.filter(d=>verified.some(a=>a.division===d));
+  if(!divs.length){ $('regDiv').innerHTML=''; $('regEvGrid').innerHTML='<p class="text-sm text-gray-500 p-2">No verified athletes on your team yet.</p>'; $('regAthletes').innerHTML=''; return; }
+  if(!regDiv||!divs.includes(regDiv)) regDiv=divs[0];
   $('regDiv').innerHTML=divs.map(d=>`<option value="${d}" ${d===regDiv?'selected':''}>${d}</option>`).join('');
   $('regDiv').onchange=()=>{ regDiv=$('regDiv').value; regEventId=null; renderReg(); };
-  document.querySelectorAll('.regGenBtn').forEach(b=>b.classList.toggle('active',b.dataset.g===regGender));
-
-  // Same as Team Manager: the meet's own numbered events for this division/gender, PLUS its 'ALL divisions' and 'Mixed' events
-  const opts=regEvents.filter(v=>(v.division===regDiv||v.division==='ALL')&&(v.gender===regGender||v.gender==='Mixed')).sort((x,y)=>((x.event_number??9999)-(y.event_number??9999))||x.name.localeCompare(y.name));
-  if(regEventId && !opts.some(o=>o.id===regEventId)) regEventId=null;
-  $('regRaceButtons').innerHTML = opts.length ? opts.map(v=>{
-    const count=regEntries.filter(x=>x.meet_event_id===v.id).length;
-    const tag=(v.division==='ALL'||v.gender==='Mixed')?' <span class="opacity-60">(mixed/all ages)</span>':'';
-    return `<button type="button" data-ev="${v.id}" class="raceBtn ${v.id===regEventId?'active':''}">${v.event_number?`<b>#${v.event_number}</b> `:''}${v.name}${v.note?` <span class="opacity-60">${esc(v.note)}</span>`:''}${v.is_relay?' 🔗':''}${tag} <span class="opacity-60">(${count})</span></button>`;
-  }).join('') : '<p class="text-sm text-gray-500">No events offered for this division/gender at this meet.</p>';
-  document.querySelectorAll('#regRaceButtons [data-ev]').forEach(b=>b.onclick=()=>{ regEventId=b.dataset.ev; renderReg(); });
-
-  const box=$('regAthletes');
-  if(!regEventId){ box.innerHTML='<p class="text-sm text-gray-500 p-2">Pick a race above to see your eligible athletes.</p>'; return; }
+  const evs=regEvents.filter(v=>v.division===regDiv||v.division==='ALL').sort(evSort);
+  if(regEventId&&!evs.some(v=>v.id===regEventId)) regEventId=null;
+  if(!regEventId&&evs.length) regEventId=evs[0].id;
+  const myIds=new Set(verified.map(a=>a.id));
+  $('regEvGrid').innerHTML = evs.length ? `<table class="evtbl"><thead><tr><th>Ev #</th><th>Gen</th><th>Event</th><th>Note</th><th>Div</th><th>Age</th><th>Entered</th></tr></thead><tbody>`+
+    evs.map(v=>{ const n=regEntries.filter(x=>x.meet_event_id===v.id&&myIds.has(x.registration_id)).length;
+      return `<tr data-ev="${v.id}" class="${v.id===regEventId?'sel':''}"><td>${v.event_number||''}</td><td>${genCode(v.gender)}</td><td>${esc(v.name)}${v.is_relay?' 🔗':''}</td><td>${esc(v.note||'')}</td><td>${divAbbr(v.division)}</td><td>${ageRange(v.division)}</td><td>${n||''}</td></tr>`; }).join('')+`</tbody></table>`
+    : '<p class="text-sm text-gray-500 p-2">No events offered for this division at this meet.</p>';
+  document.querySelectorAll('#regEvGrid tr[data-ev]').forEach(tr=>tr.onclick=()=>{ regEventId=tr.dataset.ev; renderReg(); });
+  const idx=evs.findIndex(v=>v.id===regEventId);
+  $('regPrev').onclick=()=>{ if(idx>0){ regEventId=evs[idx-1].id; renderReg(); } };
+  $('regNext').onclick=()=>{ if(idx>=0&&idx<evs.length-1){ regEventId=evs[idx+1].id; renderReg(); } };
   const ev=regEvents.find(v=>v.id===regEventId);
-  const open=regMeetOpen(m);
-  const wide=(ev.division==='ALL'||ev.gender==='Mixed'); // mixed / all-ages events list every eligible athlete, like Team Manager does
-  const pool=verified.filter(a=>(ev.division==='ALL'||a.division===ev.division)&&(ev.gender==='Mixed'||a.gender===ev.gender));
-  box.innerHTML = pool.length ? pool.map(a=>{
-    const mine=regEntries.filter(x=>x.registration_id===a.id);
-    const myEvs=mine.map(x=>regEvents.find(v=>v.id===x.meet_event_id)).filter(Boolean).map(v=>({relay:v.is_relay}));
-    const rule=ENTRY_RULES[a.division];
-    const en=mine.find(x=>x.meet_event_id===regEventId);
-    const err=en?null:checkLimits(a.division,myEvs,{relay:ev.is_relay});
-    return `<label class="flex items-center gap-2 py-1.5 border-t ${err&&!en?'opacity-40':''}">
-      <input type="checkbox" data-a="${a.id}" data-e="${regEventId}" ${en?'checked':''} ${(!open)||(err&&!en)?'disabled':''}>
-      <span class="flex-1">${esc(a.first_name)} ${esc(a.last_name)} ${wide?`<span class="text-xs text-gray-500">${esc(a.division)} ${a.gender==='Girl'?'Girls':'Boys'}</span> `:''}<span class="text-xs text-gray-500">(${mine.length}/${rule.max} events)</span></span></label>`;
-  }).join('') : '<p class="text-sm text-gray-500 py-2">No verified athletes in this division/gender.</p>';
-  document.querySelectorAll('#regAthletes input[type=checkbox]').forEach(cb=>cb.onchange=toggleReg);
+  $('regEvNo').textContent=ev?(ev.event_number||''):'–';
+  const sel=document.querySelector('#regEvGrid tr.sel'); if(sel) sel.scrollIntoView({block:'nearest'});
+  if(!ev){ $('regAthletes').innerHTML=''; return; }
+  ev.is_relay ? renderRelayPanel(ev,m) : renderAthletePanel(ev,m);
+}
+function renderAthletePanel(ev,m){
+  const open=regMeetOpen(m), wide=(ev.division==='ALL'||ev.gender==='Mixed');
+  let pool=eligiblePool(ev);
+  const enOf=a=>regEntries.find(x=>x.registration_id===a.id&&x.meet_event_id===ev.id);
+  if(regOnlyEntered) pool=pool.filter(a=>enOf(a));
+  const head=`<div class="text-sm font-bold text-blue-800 mb-1">Event [${ev.event_number||''}] ${ageRange(ev.division)} ${genWord(ev.gender)} ${esc(ev.name)}${ev.note?' '+esc(ev.note):''}</div>
+    <div class="flex flex-wrap items-center gap-2 mb-2 text-sm">
+      <button type="button" id="regClearAll" class="btn bg-gray-200" ${open?'':'disabled'}>Clear All</button>
+      <button type="button" id="regEnterAll" class="btn bg-blue-600 text-white" ${open?'':'disabled'}>Enter All</button>
+      <label class="flex items-center gap-1"><input type="checkbox" id="regOnlyEntered" ${regOnlyEntered?'checked':''}> Only athletes already entered</label>
+      ${open?'':'<span class="text-red-600">Entries are closed for this meet.</span>'}
+    </div>`;
+  const body=pool.length?`<table class="athtbl"><thead><tr><th>Entered</th><th>Last name</th><th>First name</th><th>Best</th><th>Age</th><th>Gen</th>${wide?'<th>Div</th>':''}</tr></thead><tbody>`+pool.map(a=>{
+      const en=enOf(a), err=en?null:checkLimits(a.division,myEventsOf(a),{relay:false}), b=bestMark(a,ev);
+      return `<tr class="${en?'entered':''}"><td><input type="checkbox" data-a="${a.id}" data-e="${ev.id}" ${en?'checked':''} ${(!open)||(err&&!en)?'disabled':''} title="${err?esc(err):''}"></td>
+        <td>${esc(a.last_name)}</td><td>${esc(a.first_name)}</td><td class="font-mono">${b?esc(b.mark):'NT'}</td><td>${a.age_on_dec31??''}</td><td>${a.gender==='Girl'?'F':'M'}</td>${wide?`<td>${divAbbr(a.division)}</td>`:''}</tr>`; }).join('')+`</tbody></table>`
+    : '<p class="text-sm text-gray-500 py-2">No eligible athletes for this event.</p>';
+  $('regAthletes').innerHTML=head+body;
+  document.querySelectorAll('#regAthletes input[type=checkbox][data-a]').forEach(cb=>cb.onchange=toggleReg);
+  $('regOnlyEntered').onchange=e=>{ regOnlyEntered=e.target.checked; renderReg(); };
+  $('regEnterAll').onclick=()=>enterAll(ev);
+  $('regClearAll').onclick=()=>clearAll(ev);
+}
+async function enterAll(ev){
+  const m=curRegMeet(); const failed=[]; let n=0;
+  for(const a of eligiblePool(ev)){
+    if(regEntries.some(x=>x.registration_id===a.id&&x.meet_event_id===ev.id)) continue;
+    const err=checkLimits(a.division,myEventsOf(a),{relay:ev.is_relay}); if(err){ failed.push(`${a.first_name} ${a.last_name}: ${err}`); continue; }
+    const {data,error}=await sb.from('entries').insert({meet_id:m.id,registration_id:a.id,meet_event_id:ev.id,entered_by:user.email}).select().single();
+    if(error) failed.push(`${a.first_name} ${a.last_name}: ${error.message.replace(/^.*?: /,'')}`); else { regEntries.push(data); n++; }
+  }
+  await loadRegMeet(); if(failed.length) alert(`Entered ${n}. These could not be entered:\n`+failed.join('\n'));
+}
+async function clearAll(ev){
+  const mine=new Set(rows.map(r=>r.id)); const list=regEntries.filter(x=>x.meet_event_id===ev.id&&mine.has(x.registration_id));
+  if(!list.length) return; if(!confirm(`Remove all ${list.length} of your athletes from this event?`)) return;
+  const {error}=await sb.from('entries').delete().in('id',list.map(x=>x.id)); if(error) alert(error.message); await loadRegMeet();
+}
+// ---- relays: New Relay, add runners (legs 1-4 + alternates), Clear Runners, Find Best Relay ----
+function renderRelayPanel(ev,m){
+  const open=regMeetOpen(m), pool=eligiblePool(ev), mine=new Set(rows.map(r=>r.id));
+  const ens=regEntries.filter(x=>x.meet_event_id===ev.id&&mine.has(x.registration_id));
+  const letters=[...new Set([...ens.map(x=>x.relay_team||'A'),...(regRelayNew[ev.id]||[])])].sort();
+  if(!regRelay||!letters.includes(regRelay)) regRelay=letters[0]||null;
+  const inRelay={}; ens.forEach(x=>inRelay[x.registration_id]=x.relay_team||'A');
+  const slots=Array.from({length:8},(_,i)=>ens.find(x=>(x.relay_team||'A')===regRelay&&x.leg===i+1));
+  const head=`<div class="text-sm font-bold text-blue-800 mb-1">Event [${ev.event_number||''}] ${ageRange(ev.division)} ${genWord(ev.gender)} ${esc(ev.name)} (relay)</div>
+    <div class="flex flex-wrap items-center gap-2 mb-2 text-sm">
+      <button type="button" id="rlNew" class="btn bg-blue-600 text-white" ${open?'':'disabled'}>New Relay</button>
+      ${letters.map(l=>`<button type="button" data-rl="${l}" class="raceBtn ${l===regRelay?'active':''}">Relay ${l}</button>`).join('')}
+      <button type="button" id="rlClear" class="btn bg-gray-200" ${open&&regRelay?'':'disabled'}>Clear Runners</button>
+      <button type="button" id="rlBest" class="btn bg-gray-200" ${open&&regRelay?'':'disabled'}>Find Best Relay</button>
+      ${open?'':'<span class="text-red-600">Entries are closed for this meet.</span>'}
+    </div>`;
+  const left=`<div><div class="text-xs font-semibold mb-1">Eligible athletes — click Add to put them on Relay ${regRelay||'…'}</div><table class="athtbl"><thead><tr><th></th><th>Last name</th><th>First name</th><th>Best</th><th>Age</th></tr></thead><tbody>`+
+    pool.map(a=>{ const b=bestMark(a,ev), where=inRelay[a.id]; return `<tr class="${where?'entered':''}"><td>${where?`<span class="text-xs font-bold">${where}</span>`:`<button type="button" data-add="${a.id}" class="btn bg-gray-200 text-xs" ${open&&regRelay?'':'disabled'}>Add</button>`}</td><td>${esc(a.last_name)}</td><td>${esc(a.first_name)}</td><td class="font-mono">${b?esc(b.mark):'NT'}</td><td>${a.age_on_dec31??''}</td></tr>`; }).join('')+`</tbody></table></div>`;
+  const right=`<div><div class="text-xs font-semibold mb-1">${regRelay?`Relay ${regRelay} runners`:'Click New Relay to start'}</div><div class="border rounded">`+
+    slots.map((en,i)=>{ const a=en&&rows.find(r=>r.id===en.registration_id); return `<div class="relaySlot"><span class="w-12 text-xs text-gray-500">${i<4?'Leg '+(i+1):'Alt '+(i-3)}</span><span class="flex-1">${a?esc(a.last_name+', '+a.first_name):'<span class="text-gray-300">—</span>'}</span>${a&&open?`<button type="button" data-rm="${en.id}" class="text-red-600 text-xs">✕</button>`:''}</div>`; }).join('')+`</div></div>`;
+  $('regAthletes').innerHTML=head+`<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${left}${right}</div>`;
+  $('rlNew').onclick=()=>{ const used=new Set(letters); let L='A'; while(used.has(L)) L=String.fromCharCode(L.charCodeAt(0)+1); (regRelayNew[ev.id]??=[]).push(L); regRelay=L; renderReg(); };
+  document.querySelectorAll('[data-rl]').forEach(b=>b.onclick=()=>{ regRelay=b.dataset.rl; renderReg(); });
+  document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>addRunner(ev,b.dataset.add,slots));
+  document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=async()=>{ const {error}=await sb.from('entries').delete().eq('id',b.dataset.rm); if(error) alert(error.message); await loadRegMeet(); });
+  $('rlClear').onclick=async()=>{ const ids=slots.filter(Boolean).map(x=>x.id); if(ids.length){ if(!confirm(`Remove all runners from Relay ${regRelay}?`)) return; const {error}=await sb.from('entries').delete().in('id',ids); if(error) alert(error.message); } await loadRegMeet(); };
+  $('rlBest').onclick=async()=>{
+    const free=[1,2,3,4].filter(n=>!slots[n-1]); if(!free.length) return alert(`Relay ${regRelay} already has four runners.`);
+    const cand=pool.filter(a=>!inRelay[a.id]).map(a=>({a,b:bestMark(a,ev)})).sort((p,q)=>(p.b?p.b.value:Infinity)-(q.b?q.b.value:Infinity));
+    let i=0; for(const leg of free){ const c=cand[i++]; if(!c) break; await addRunner(ev,c.a.id,slots,leg,true); }
+    await loadRegMeet();
+  };
+}
+async function addRunner(ev,aId,slots,legOverride,quiet){
+  const m=curRegMeet(); const leg=legOverride||([1,2,3,4,5,6,7,8].find(n=>!slots[n-1]));
+  if(!leg) return alert(`Relay ${regRelay} is full (four runners and four alternates).`);
+  const a=rows.find(r=>r.id===aId); const err=checkLimits(a.division,myEventsOf(a),{relay:true});
+  if(err) return alert(`${a.first_name} ${a.last_name}: ${err}`);
+  const {data,error}=await sb.from('entries').insert({meet_id:m.id,registration_id:aId,meet_event_id:ev.id,entered_by:user.email,relay_team:regRelay,leg}).select().single();
+  if(error) return alert(error.message.replace(/^.*?: /,''));
+  regEntries.push(data); slots[leg-1]=data; if(!quiet) await loadRegMeet();
 }
 async function toggleReg(ev){
   const cb=ev.target, aId=cb.dataset.a, eId=cb.dataset.e, m=curRegMeet();
