@@ -169,11 +169,16 @@ async function act(a,id){
   }
   if(a==='results') return resultsPanel(m);
   if(a==='summary'||a==='export'){
-    const [{data:evs},{data:ens},{data:regs}]=await Promise.all([
+    const [{data:evs},{data:ens}]=await Promise.all([
       sb.from('meet_events').select('*').eq('meet_id',id),
-      sb.from('entries').select('*').eq('meet_id',id),
-      sb.from('registrations').select('id,first_name,last_name,gender,dob,division,age_on_dec31').eq('status','verified')
+      sb.from('entries').select('*').eq('meet_id',id).limit(10000)
     ]);
+    // Look up only the athletes who actually have entries (every team), in chunks — the server caps a single request at 1,000 rows.
+    const regIds=[...new Set(ens.map(n=>n.registration_id))], regs=[];
+    for(let i=0;i<regIds.length;i+=150){
+      const {data:part}=await sb.from('registrations').select('id,first_name,last_name,gender,dob,division,age_on_dec31,team_code').in('id',regIds.slice(i,i+150)).eq('status','verified');
+      regs.push(...(part||[]));
+    }
     const R=Object.fromEntries(regs.map(r=>[r.id,r])), E=Object.fromEntries(evs.map(e=>[e.id,e]));
     const rows=ens.map(n=>({r:R[n.registration_id],e:E[n.meet_event_id],mark:n.seed_mark,rt:n.relay_team,leg:n.leg})).filter(x=>x.r&&x.e);
     if(a==='summary'){
@@ -184,7 +189,7 @@ async function act(a,id){
       if(!rows.length) return alert('No entries yet.');
       const txt=hytekEntries(rows,CFG);
       const a2=document.createElement('a'); a2.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));
-      a2.download=`${CFG.TEAM_CODE}_${m.name.replace(/[^\w]+/g,'_')}_entries.txt`; a2.click();
+      a2.download=`${m.name.replace(/[^\w]+/g,'_')}_ALL_TEAMS_entries.txt`; a2.click();
     }
   }
 }
@@ -256,18 +261,21 @@ async function resultsPanel(m){
 
 // Hy-Tek Meet Manager: D records (individual entries) + Q records (relays, up to 8 names per team letter)
 function hytekEntries(rows,cfg){
+  // ALL teams entered in the meet go into one file; each athlete/relay carries its own team code + name.
   const c=(s,n)=>String(s??'').replace(/[;\r\n]/g,' ').trim().slice(0,n);
-  const code=c(cfg.TEAM_CODE||'UNA',4).toUpperCase(), team=c(cfg.CLUB_NAME||'Unattached',30);
-  const ath=r=>[c(r.last_name,20),c(r.first_name,20),'',r.gender==='Girl'?'F':'M',fmtDate(r.dob),code,team,String(r.age_on_dec31??''),''];
+  const tcode=r=>c(r.team_code||cfg.TEAM_CODE||'UNA',4).toUpperCase();
+  const tname=r=>{ const t=(window.VYC_TEAMS||[]).find(x=>x.code===tcode(r)); return c(t?t.name:(cfg.CLUB_NAME||'Unattached'),30); };
+  const ath=r=>[c(r.last_name,20),c(r.first_name,20),'',r.gender==='Girl'?'F':'M',fmtDate(r.dob),tcode(r),tname(r),String(r.age_on_dec31??''),''];
+  const teamOrder=x=>tcode(x.r); rows=[...rows].sort((p,q)=>teamOrder(p).localeCompare(teamOrder(q)));
   const out=[];
   rows.filter(x=>!x.e.is_relay).forEach(x=>out.push(['D',...ath(x.r),x.e.event_number||x.e.code,c(x.mark,11),'M','','','','','','',''].join(';')));
-  const relays={}; rows.filter(x=>x.e.is_relay).forEach(x=>(relays[`${x.e.event_number||x.e.code}|${x.e.division}|${x.e.gender}|${x.rt||''}`]??=[]).push(x));
+  const relays={}; rows.filter(x=>x.e.is_relay).forEach(x=>(relays[`${tcode(x.r)}|${x.e.event_number||x.e.code}|${x.e.division}|${x.e.gender}|${x.rt||''}`]??=[]).push(x));
   for(const [k,items] of Object.entries(relays)){
-    const [evCode,div,g,rt]=k.split('|'); const age=div==='ALL'?18:(DIVISIONS.find(d=>d.name===div)?.max??'');
+    const [tc,evCode,div,g,rt]=k.split('|'); const age=div==='ALL'?18:(DIVISIONS.find(d=>d.name===div)?.max??''); const tn=tname(items[0].r);
     items.sort((p,q)=>(p.leg??99)-(q.leg??99));           // runners in leg order (legs 1-4, then alternates)
     for(let i=0,L=0;i<items.length;i+=8,L++){
       const runners=items.slice(i,i+8).flatMap(({r})=>[c(r.last_name,20),c(r.first_name,20),'',r.gender==='Girl'?'F':'M',fmtDate(r.dob),String(r.age_on_dec31??''),'','']);
-      out.push(['Q',code,team,rt||String.fromCharCode(65+L),g==='Girl'?'F':g==='Boy'?'M':'X',String(age),evCode,'','M','','','','','','',...runners].join(';'));
+      out.push(['Q',tc,tn,rt||String.fromCharCode(65+L),g==='Girl'?'F':g==='Boy'?'M':'X',String(age),evCode,'','M','','','','','','',...runners].join(';'));
     }
   }
   return out.join('\r\n')+'\r\n';
