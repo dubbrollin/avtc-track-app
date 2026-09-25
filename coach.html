@@ -222,7 +222,7 @@ async function loadMe(){
   fullAccess=isFullAccess(myCoach);
   $('notCoachBox').style.display='none'; $('coachApp').style.display='block';
   const team=window.VYC_TEAMS.find(t=>t.code===myCoach.team_code);
-  $('teamLabel').textContent = myCoach.is_admin ? '— ADMIN VIEW: all teams' : (team ? `— ${team.name} (${team.conference}) · ${roleLabel(myCoach)}` : `— ${roleLabel(myCoach)}`);
+  $('teamLabel').textContent = (team ? `— ${team.name} (${team.conference}) · ${roleLabel(myCoach)}${myCoach.is_admin?' · Site admin':''}` : `— ${roleLabel(myCoach)}`);
   const st=bgStatus(myCoach);
   $('bgStatusLine').innerHTML = `Your background-check status: <span class="pill ${st.cls}">${st.label}</span>`;
   $('runChecks').style.display=fullAccess?'':'none';
@@ -245,7 +245,7 @@ async function loadMe(){
 async function load(){
   if(fullAccess){
     let q=sb.from('registrations').select('*').order('created_at',{ascending:false});
-    if(!myCoach.is_admin) q=q.eq('team_code',myCoach.team_code);
+    q=q.eq('team_code',myCoach.team_code); // every coach — admins included — sees ONLY their own team here; all-teams views live on Meet Admin
     const {data,error}=await q;
     if(error){ $('msg').textContent='Could not load: '+error.message; return; }
     rows=data||[];
@@ -262,7 +262,7 @@ async function load(){
 
   if(fullAccess){
     let cq=sb.from('coaches').select('*').order('team_code').order('created_at',{ascending:false});
-    if(!myCoach.is_admin) cq=cq.eq('team_code',myCoach.team_code);
+    cq=cq.eq('team_code',myCoach.team_code);
     const {data:cdata,error:cerr}=await cq;
     if(!cerr){ coachRows=cdata||[]; renderCoaches(); }
   }
@@ -302,7 +302,7 @@ function render(){
   <div class="card" data-id="${r.id}">
     <div class="flex flex-wrap items-center gap-2">
       <div class="flex-1 min-w-0">
-        <div class="font-bold text-base">${esc(r.last_name)}, ${esc(r.first_name)} <span class="text-gray-500 font-normal text-sm">${r.gender} · ${r.division} (${r.age_on_dec31}) · ${esc(r.sport)}${myCoach.is_admin?' · <b>'+esc(r.team_code)+'</b>':''}</span></div>
+        <div class="font-bold text-base">${esc(r.last_name)}, ${esc(r.first_name)} <span class="text-gray-500 font-normal text-sm">${r.gender} · ${r.division} (${r.age_on_dec31}) · ${esc(r.sport)}</span></div>
         <div class="text-xs text-gray-500">DOB ${fmtDate(r.dob)} · submitted ${fmtDate(r.created_at)} · ${r.is_returning?('Returning'+(r.ran_for_other_team?' from '+esc(r.prior_team):'')):'New athlete'}${r.medical_option==='conditions'?' · <b class="text-red-700">Medical conditions noted</b>':''}</div>
       </div>
       ${pill(r)} <span class="pill ${r.status==='verified'?'bg-green-600 text-white':r.status==='rejected'?'bg-red-600 text-white':'bg-gray-200'}">${r.status}</span>
