@@ -100,10 +100,8 @@ async function loadAll(){
   ]);
   const missing=[...new Set([...rr,...sb2].filter(r=>!r.team_code && r.registration_id).map(r=>r.registration_id))];
   let regsById={};
-  for(let i=0;i<missing.length;i+=100){
-    const {data:regs}=await sb.from('registrations').select('id,team_code').in('id',missing.slice(i,i+100));
-    (regs||[]).forEach(r=>regsById[r.id]=r);
-  }
+  const chunks=[]; for(let i=0;i<missing.length;i+=150) chunks.push(missing.slice(i,i+150));
+  (await Promise.all(chunks.map(c=>sb.from('registrations').select('id,team_code').in('id',c)))).forEach(({data:regs})=>(regs||[]).forEach(r=>regsById[r.id]=r)); // in parallel — sequential lookups made the page take ~20 seconds
   allResults=attachConference(rr.map(r=>({...r,meet_name:r.meets?.name,meet_date:r.meets?.meet_date})),regsById);
   seasonBest=attachConference(sb2,regsById);
 }
