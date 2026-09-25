@@ -264,15 +264,20 @@ async function resultsPanel(m){
 
 // Hy-Tek Meet Manager: D records (individual entries) + Q records (relays, up to 8 names per team letter)
 function hytekEntries(rows,cfg,rosterOnly){
+  // Follows Meet Manager's own "Import Entries from a Semi-Colon Delimited File" spec (Help > File Menu > Import):
+  //   I = athlete info (roster) record, D = individual entry (20 fields), Q = relay entry (15 fields + 8 fields per runner).
+  // Field 11 of D and field 7 of Q is the EVENT CODE (100, 3000, 80H, LJ, 400...), not the event number.
   // ALL teams entered in the meet go into one file; each athlete/relay carries its own team code + name.
   const c=(s,n)=>String(s??'').replace(/[;\r\n]/g,' ').trim().slice(0,n);
   const tcode=r=>c(r.team_code||cfg.TEAM_CODE||'UNA',4).toUpperCase();
   const tname=r=>{ const t=(window.VYC_TEAMS||[]).find(x=>x.code===tcode(r)); return c(t?t.name:(cfg.CLUB_NAME||'Unattached'),30); };
-  const ath=r=>[c(r.last_name,20),c(r.first_name,20),'',r.gender==='Girl'?'F':'M',fmtDate(r.dob),tcode(r),tname(r),String(r.age_on_dec31??''),''];
-  const teamOrder=x=>tcode(x.r); rows=[...rows].sort((p,q)=>teamOrder(p).localeCompare(teamOrder(q)));
+  const ath=r=>[c(r.last_name,20),c(r.first_name,20),'',r.gender==='Girl'?'F':'M',fmtDate(r.dob),tcode(r),tname(r),String(r.age_on_dec31??'')];
+  // Marks: times as-is; feet-inches like 12' 4" become 12-04 with measure E (English); everything else metric.
+  const mk=m=>{ m=String(m??'').trim(); const x=/^(\d+)\s*(?:'|-)\s*(\d+(?:\.\d+)?)\s*"?$/.exec(m); return x?{m:`${x[1]}-${String(x[2]).padStart(2,'0')}`,u:'E'}:{m:c(m,11),u:'M'}; };
+  rows=[...rows].sort((p,q)=>tcode(p.r).localeCompare(tcode(q.r)));
   const out=[];
-  rows.filter(x=>!x.e.is_relay).forEach(x=>out.push(['D',...ath(x.r),x.e.event_number||x.e.code,c(x.mark,11),'M','','','','','','',''].join(';')));
-  const relays={}; rows.filter(x=>x.e.is_relay).forEach(x=>(relays[`${tcode(x.r)}|${x.e.event_number||x.e.code}|${x.e.division}|${x.e.gender}|${x.rt||''}`]??=[]).push(x));
+  rows.filter(x=>!x.e.is_relay).forEach(x=>{ const k=mk(x.mark); out.push(['D',...ath(x.r),'',c(x.e.code,10),k.m,k.u,'','','','','','',''].join(';')); });
+  const relays={}; rows.filter(x=>x.e.is_relay).forEach(x=>(relays[`${tcode(x.r)}|${x.e.code}|${x.e.division}|${x.e.gender}|${x.rt||''}`]??=[]).push(x));
   for(const [k,items] of Object.entries(relays)){
     const [tc,evCode,div,g,rt]=k.split('|'); const age=div==='ALL'?18:(DIVISIONS.find(d=>d.name===div)?.max??''); const tn=tname(items[0].r);
     items.sort((p,q)=>(p.leg??99)-(q.leg??99));           // runners in leg order (legs 1-4, then alternates)
@@ -281,8 +286,8 @@ function hytekEntries(rows,cfg,rosterOnly){
       out.push(['Q',tc,tn,rt||String.fromCharCode(65+L),g==='Girl'?'F':g==='Boy'?'M':'X',String(age),evCode,'','M','','','','','','',...runners].join(';'));
     }
   }
-  // Complete roster: athletes on the participating teams who have no entries yet go out as athlete lines with no event, so Meet Manager still knows them.
-  (rosterOnly||[]).sort((p,q)=>tcode(p).localeCompare(tcode(q))||(p.last_name+p.first_name).localeCompare(q.last_name+q.first_name)).forEach(r=>out.push(['D',...ath(r),'','','M','','','','','','',''].join(';')));
+  // Complete roster: athletes on the participating teams with no entries yet go out as I (information) records.
+  (rosterOnly||[]).sort((p,q)=>tcode(p).localeCompare(tcode(q))||(p.last_name+p.first_name).localeCompare(q.last_name+q.first_name)).forEach(r=>out.push(['I',...ath(r)].join(';')));
   return out.join('\r\n')+'\r\n';
 }
 </script></body></html>
