@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="theme.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="config.js"></script><script src="shared.js"></script><script src="events.js"></script><script src="results.js"></script>
 <style>
 .btn{padding:.5rem .9rem;border-radius:.5rem;font-weight:600}
@@ -50,6 +51,7 @@
       <select id="gen" class="border rounded p-2"><option value="">Boys &amp; Girls</option><option>Boy</option><option>Girl</option></select>
       <select id="conf" class="border rounded p-2"><option value="">Both conferences</option><option value="East">Eastern Conference</option><option value="West">Western Conference</option></select>
       <input id="q" class="border rounded p-2 flex-1" placeholder="Search name">
+      <button id="pdfBtn" type="button" class="border rounded p-2 px-3 bg-gray-800 text-white font-semibold">Download PDF</button>
     </div>
     <p id="hint" class="text-xs text-gray-500 mb-2"></p>
     <div id="list"></div>
@@ -61,6 +63,7 @@ const CFG=window.APP_CONFIG;
 $('club').textContent=CFG.CLUB_NAME;
 let sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // avoid cross-tab navigator.locks deadlock when multiple app pages are open at once
 let allResults=[], seasonBest=[], meets=[], mode='season';
+let lastGroups=[];
 DIVISIONS.forEach(d=>$('div').add(new Option(d.name,d.name)));
 
 window.mountLoginWidget(sb, $('loginWidget'), {hint:"Sign in with the email you registered with."});
@@ -127,6 +130,7 @@ function render(){
   const cap = mode==='records' ? 1 : (mode==='season' ? 50 : null);
   const groups=rankResults(rs,bestPerAthlete||isMeetRecord,conf||null,cap);
 
+  lastGroups=groups;
   $('hint').textContent =
     mode==='records' ? 'The single best mark ever recorded per event, division, and gender — the club record book.' :
     mode==='season' ? 'Best mark per athlete, top 50 per event/division/gender.' :
@@ -137,9 +141,18 @@ function render(){
     <div class="font-bold flex items-center gap-2">${mode==='records'?'<span class=\"rec-medal\">🏅</span>':''}${gp.division} ${gp.gender==='Boy'?'Boys':gp.gender==='Girl'?'Girls':gp.gender} — ${gp.event}</div>
     <table class="w-full text-sm mt-1">${gp.rows.map((r,i)=>`<tr class="border-t rec-row">
       <td class="py-1 w-8 text-gray-500">${mode==='records'?'':(r.mark_value!=null?i+1:'')}</td>
-      <td class="py-1">${r.athlete_name}${r.relay_runners?`<div class="text-xs text-gray-500">${r.relay_runners}</div>`:''}</td>
+      <td class="py-1">${r.athlete_name}${r.team_code?` <span class="text-xs text-gray-400">${r.team_code}</span>`:''}${r.relay_runners?`<div class="text-xs text-gray-500">${r.relay_runners}</div>`:''}</td>
       <td class="py-1 font-mono text-right font-semibold">${r.mark}${r.wind?` <span class="text-xs text-gray-400">w${r.wind}</span>`:''}</td>
       <td class="py-1 text-right text-gray-500 text-xs">${(mode==='season'||mode==='records')?`${r.meet_name||''}`:(r.place?`${r.place}${['st','nd','rd'][r.place-1]||'th'} overall`:'')}</td></tr>`).join('')}</table></div>`).join('')
     ||'<p class="text-gray-500">No results yet.</p>';
 }
+$('pdfBtn').onclick=async()=>{
+  if(!lastGroups.length) return alert('Nothing to put in a PDF yet — pick a meet or change the filters first.');
+  const meetName = mode==='meet' ? ($('meet').selectedOptions[0]?.textContent||'Meet') : '';
+  const title = mode==='meet' ? meetName+' - Results' : mode==='records' ? 'All-Time Records' : 'Season Rankings';
+  const bits=[ $('div').value, $('gen').value?($('gen').value==='Boy'?'Boys':'Girls'):'', $('evt').value, $('conf').value?$('conf').value+' Conference':'' ].filter(Boolean);
+  const bytes=await window.resultsPdf(lastGroups,{title, subtitle:bits.length?bits.join('  |  '):'All divisions, boys & girls'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
+  a.download=title.replace(/[^A-Za-z0-9]+/g,'-').replace(/^-|-$/g,'')+'.pdf'; a.click();
+};
 </script></body></html>

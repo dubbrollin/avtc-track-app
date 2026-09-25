@@ -184,35 +184,38 @@
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div><label class="f req">First name</label><input id="cFirst" required></div>
       <div><label class="f req">Last name</label><input id="cLast" required></div>
-      <div><label class="f req">Email (this becomes your sign-in)</label><input type="email" id="cEmail" required></div>
       <div><label class="f req">Phone</label><input id="cPhone" required></div>
       <div><label class="f req">Team</label><select id="cTeam" required></select></div>
-    </div>
-    <div class="mt-3 border-t pt-3">
-      <div id="coachAcctGoogleDone" class="hidden text-sm text-green-700 font-semibold mb-2"></div>
-      <div id="coachAcctFields">
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div><label class="f req">Choose a password</label><input type="password" id="cPass" autocomplete="new-password"></div>
-          <div><label class="f req">Confirm password</label><input type="password" id="cPass2" autocomplete="new-password"></div>
-        </div>
-        <p class="text-xs text-gray-500 mt-1">At least 6 characters. This is your sign-in for the Coach Dashboard. Or skip the password and use Google instead:</p>
-        <button type="button" id="coachGoogleBtn" class="btn bg-white border mt-2">Sign up with Google instead</button>
-        <p class="text-xs text-amber-700 mt-1">Signing up with Google will take you to Google and bring you back to this page — you'll need to re-fill the form below after.</p>
-      </div>
     </div>
   </div>
   <div class="card">
     <h2 class="font-bold text-lg mb-2">What kind of coach are you?</h2>
-    <div class="flex flex-col gap-2 text-sm mb-2">
-      <label class="flex items-center gap-1"><input type="radio" name="cRole" value="head_coach" checked> Head Coach / Team Admin <span class="text-gray-500">— full access to your team's roster, documents, and coach approvals</span></label>
-      <label class="flex items-center gap-1"><input type="radio" name="cRole" value="division_coach"> Division Coach <span class="text-gray-500">— you coach one division/age group; you'll see names, divisions and status for your division only</span></label>
-      <label class="flex items-center gap-1"><input type="radio" name="cRole" value="event_specialist"> Event-Specialist Coach <span class="text-gray-500">— you coach a specific event across the team; you'll see names, divisions and status for the whole team</span></label>
+    <div class="flex flex-col gap-2 text-sm mb-3">
+      <label class="flex items-start gap-2"><input type="radio" name="cRole" value="head_coach" class="mt-1" checked> <span><b>Head Coach / Team Admin</b> <span class="text-gray-500">— full access to your team's roster and documents, and approves other coaches</span></span></label>
+      <label class="flex items-start gap-2"><input type="radio" name="cRole" value="division_coach" class="mt-1"> <span><b>Division Coach</b> <span class="text-gray-500">— you coach one division (boys or girls)</span></span></label>
+      <label class="flex items-start gap-2"><input type="radio" name="cRole" value="event_specialist" class="mt-1"> <span><b>Field Event Coach</b> <span class="text-gray-500">— you coach field events for both boys and girls</span></span></label>
     </div>
-    <div id="cAgeGroupWrap" class="hidden"><label class="f req">Which division or age group do you coach?</label>
-      <select id="cAgeGroup"><option>Sub-Gremlin</option><option>Gremlin</option><option>Bantam</option><option>Juniors</option><option>Youth</option><option>Intermediates</option><option>All ages / whole team</option></select>
+    <div id="cAgeGroupWrap" class="hidden">
+      <label class="f req">Which division(s) do you coach? (check all that apply)</label>
+      <div class="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+        <label class="flex items-center gap-1"><input type="checkbox" name="cDiv" value="Sub-Gremlin"> Sub-Gremlin</label>
+        <label class="flex items-center gap-1"><input type="checkbox" name="cDiv" value="Gremlin"> Gremlin</label>
+        <label class="flex items-center gap-1"><input type="checkbox" name="cDiv" value="Bantam"> Bantam</label>
+        <label class="flex items-center gap-1"><input type="checkbox" name="cDiv" value="Juniors"> Juniors</label>
+        <label class="flex items-center gap-1"><input type="checkbox" name="cDiv" value="Youth"> Youth</label>
+        <label class="flex items-center gap-1"><input type="checkbox" name="cDiv" value="Intermediates"> Intermediates</label>
+      </div>
+      <label class="f req mt-2">Boys, girls, or both? (check all that apply)</label>
+      <div class="flex gap-4 text-sm"><label class="flex items-center gap-1"><input type="checkbox" name="cGender" value="Boys"> Boys</label><label class="flex items-center gap-1"><input type="checkbox" name="cGender" value="Girls"> Girls</label></div>
     </div>
-    <div id="cEventWrap" class="hidden"><label class="f req">Which event(s) do you coach?</label>
-      <select id="cEvent"><option>Sprints (100/200/400)</option><option>Distance (800/1500/3000)</option><option>Hurdles</option><option>High Jump</option><option>Long Jump</option><option>Triple Jump</option><option>Pole Vault</option><option>Shot Put</option><option>Discus</option><option>Javelin</option><option>Hammer Throw</option><option>Relays</option></select>
+    <div id="cEventWrap" class="hidden">
+      <label class="f req">Which field events do you coach? (check all that apply)</label>
+      <div class="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+        <label class="flex items-center gap-1"><input type="checkbox" name="cEvt" value="Long Jump"> Long Jump</label>
+        <label class="flex items-center gap-1"><input type="checkbox" name="cEvt" value="High Jump"> High Jump</label>
+        <label class="flex items-center gap-1"><input type="checkbox" name="cEvt" value="Shot Put"> Shot Put</label>
+        <label class="flex items-center gap-1"><input type="checkbox" name="cEvt" value="Javelin Throw"> Javelin</label>
+      </div>
     </div>
   </div>
   <div class="card">
@@ -228,7 +231,22 @@
     <label class="flex items-center gap-2 text-sm mt-2 req"><input type="checkbox" id="cAgree" required> I agree to the above.</label>
   </div>
   <div class="card">
-    <button type="submit" class="btn bg-blue-600 text-white w-full">Submit coach registration</button>
+    <h2 class="font-bold text-lg mb-1">Last step — create your sign-in</h2>
+    <p class="text-sm text-gray-600 mb-2">Fill in everything above first, then finish with Google or an email and password.</p>
+    <div id="coachAcctGoogleDone" class="hidden text-sm text-green-700 font-semibold mb-2"></div>
+    <div id="coachAcctFields">
+      <button type="button" id="coachGoogleBtn" class="btn bg-white border w-full">Finish with Google</button>
+      <p class="text-xs text-gray-500 mt-1">We'll save your answers, take you to Google, then send you straight to your coach status page.</p>
+      <div class="flex items-center gap-2 my-3 text-xs text-gray-400"><div class="flex-1 border-t"></div>or use a password<div class="flex-1 border-t"></div></div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div><label class="f">Email</label><input type="email" id="cEmail"></div>
+        <div></div>
+        <div><label class="f">Choose a password</label><input type="password" id="cPass" autocomplete="new-password"></div>
+        <div><label class="f">Confirm password</label><input type="password" id="cPass2" autocomplete="new-password"></div>
+      </div>
+      <p class="text-xs text-gray-500 mt-1">At least 6 characters. This is your sign-in for the Coach Dashboard.</p>
+    </div>
+    <button type="submit" id="coachSubmitBtn" class="btn bg-blue-600 text-white w-full mt-3">Submit coach registration</button>
     <p id="coachMsg" class="text-sm mt-2"></p>
   </div>
   </form>
@@ -317,8 +335,8 @@ const sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth
 
 // ---- account creation (password or Google) alongside registration — replaces old magic-link login ----
 let authSession=null;
-sb.auth.getSession().then(({data})=>{ authSession=data.session; reflectAcctState(); });
-sb.auth.onAuthStateChange((_e,s)=>{ authSession=s; reflectAcctState(); });
+sb.auth.getSession().then(({data})=>{ authSession=data.session; reflectAcctState(); setTimeout(()=>window.resumeGoogleCoach&&window.resumeGoogleCoach(),0); });
+sb.auth.onAuthStateChange((_e,s)=>{ authSession=s; reflectAcctState(); setTimeout(()=>window.resumeGoogleCoach&&window.resumeGoogleCoach(),0); });
 function reflectAcctState(){
   const email=authSession?.user?.email||'';
   ['parent','coach'].forEach(prefix=>{
@@ -334,9 +352,55 @@ $('parentGoogleBtn').onclick=async()=>{
   await sb.auth.signInWithOAuth({provider:'google', options:{redirectTo:location.href.split('#')[0]}});
 };
 $('coachGoogleBtn').onclick=async()=>{
-  if(!confirm("This will take you to Google and bring you back here — you'll need to re-fill this form afterward. Continue?")) return;
-  await sb.auth.signInWithOAuth({provider:'google', options:{redirectTo:location.href.split('#')[0]}});
+  // Answers come first: check the whole form, save the answers, THEN go to Google. We finish the registration when Google sends them back.
+  const form=$('coachForm'); const msg=$('coachMsg');
+  // the email/password boxes aren't needed for Google
+  if(!form.reportValidity()) return;
+  try{
+    const d=collectCoach();
+    sessionStorage.setItem('vycCoachPending', JSON.stringify(d));
+  }catch(err){ msg.textContent='Error: '+(err.message||err); msg.className='text-sm mt-2 text-red-600'; return; }
+  await sb.auth.signInWithOAuth({provider:'google', options:{redirectTo:location.href.split('#')[0].split('?')[0]+'?role=coach'}});
 };
+// Reads + checks the coach questions. Throws a plain-English error if something's missing.
+function collectCoach(){
+  const role=document.querySelector('input[name=cRole]:checked').value; // head_coach | division_coach | event_specialist
+  let gender=null, events=null;
+  let divs=null;
+  if(role==='division_coach'){
+    const dv=[...document.querySelectorAll('input[name=cDiv]:checked')].map(x=>x.value); if(!dv.length) throw new Error('Please check at least one division you coach.'); divs=dv.join(', ');
+    const g=[...document.querySelectorAll('input[name=cGender]:checked')].map(x=>x.value); if(!g.length) throw new Error('Please check boys, girls, or both.'); gender=g.join(', ');
+  }
+  if(role==='event_specialist'){
+    const ev=[...document.querySelectorAll('input[name=cEvt]:checked')].map(x=>x.value);
+    if(!ev.length) throw new Error('Please check at least one field event you coach.'); events=ev.join(', ');
+  }
+  if(!$('cTeam').value) throw new Error('Please select a team.');
+  if($('cUsatf').checked && !$('cUsatfDate').value) throw new Error('Please provide your USATF certification date.');
+  return { first:$('cFirst').value.trim(), last:$('cLast').value.trim(), phone:$('cPhone').value.trim(), team:$('cTeam').value, role,
+    division: divs, gender, events,
+    bg: $('cUsatf').checked ? null : ($('cBgDate').value||null), usatf:$('cUsatf').checked, usatfDate:$('cUsatf').checked?($('cUsatfDate').value||null):null };
+}
+async function saveCoachViaLogin(client, d){
+  return client.rpc('submit_coach_profile',{ p_first:d.first, p_last:d.last, p_phone:d.phone, p_team:d.team, p_role:d.role,
+    p_division:d.division, p_gender:d.gender, p_events:d.events, p_bg_date:d.bg, p_usatf:d.usatf, p_usatf_date:d.usatfDate, p_contract:true });
+}
+// When Google sends the person back, finish the registration with the answers we saved.
+let resumed=false;
+window.resumeGoogleCoach=resumeGoogleCoach;
+async function resumeGoogleCoach(){
+  if(resumed||!authSession) return;
+  let d=null; try{ d=JSON.parse(sessionStorage.getItem('vycCoachPending')||'null'); }catch(e){}
+  if(!d) return;
+  resumed=true; sessionStorage.removeItem('vycCoachPending');
+  document.querySelector('#roleTabs .roletab[data-role=coach]').click();
+  const msg=$('coachMsg'); msg.textContent='Finishing your registration…'; msg.className='text-sm mt-2 text-gray-600';
+  const c2=supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth:{ lock:(n,t,f)=>f() } }); // fresh client — the first one can hang after a Google redirect
+  const {error}=await saveCoachViaLogin(c2,d);
+  if(error){ msg.textContent='Could not finish: '+error.message; msg.className='text-sm mt-2 text-red-600'; return; }
+  msg.innerHTML=`Registration submitted, and you're signed in as ${authSession.user.email}. Your team's head coach will review and approve you. <a class="underline" href="coach.html">Check your status</a>`; msg.className='text-sm mt-2 text-green-700 font-semibold';
+}
+if(new URLSearchParams(location.search).get('role')==='coach') document.querySelector('#roleTabs .roletab[data-role=coach]').click();
 // Creates the login account for `email` if the user filled in a password (skipped if they already have a Google session).
 // Never blocks the registration itself — an account-creation problem is reported but the registration has already been saved.
 async function ensureAccount(email, password, msgEl){
@@ -550,32 +614,28 @@ $('coachForm').addEventListener('submit', async(e)=>{
   e.preventDefault();
   const msg=$('coachMsg'); msg.textContent='Submitting…'; msg.className='text-sm mt-2 text-gray-600';
   try{
-    const role=document.querySelector('input[name=cRole]:checked').value; // 'head_coach' | 'division_coach' | 'event_specialist'
-    if($('cUsatf').checked && !$('cUsatfDate').value) throw new Error('Please provide your USATF certification date.');
-    const alreadyGoogle=authSession?.user?.email?.toLowerCase()===$('cEmail').value.trim().toLowerCase();
-    const cp1=$('cPass').value, cp2=$('cPass2').value;
-    if(!alreadyGoogle){
-      if(!cp1||!cp2) throw new Error('Please choose a password, or use "Sign up with Google instead."');
-      if(cp1.length<6) throw new Error('Password must be at least 6 characters.');
-      if(cp1!==cp2) throw new Error('Passwords do not match.');
+    const d=collectCoach();
+    if(authSession){
+      // already signed in (e.g. Google) — save through the signed-in route, no password needed
+      const {error}=await saveCoachViaLogin(sb,d); if(error) throw error;
+      msg.textContent='Coach registration submitted! Your team\'s head coach will review and approve you.'; msg.className='text-sm mt-2 text-green-700 font-semibold';
+      e.target.reset(); bgCheckHint(); return;
     }
+    const email=$('cEmail').value.trim(), cp1=$('cPass').value, cp2=$('cPass2').value;
+    if(!email) throw new Error('Please enter your email, or use "Finish with Google."');
+    if(!cp1||!cp2) throw new Error('Please choose a password, or use "Finish with Google."');
+    if(cp1.length<6) throw new Error('Password must be at least 6 characters.');
+    if(cp1!==cp2) throw new Error('Passwords do not match.');
     const row={
-      season_year:CFG.SEASON_YEAR,
-      first_name:$('cFirst').value.trim(), last_name:$('cLast').value.trim(),
-      email:$('cEmail').value.trim(), phone:$('cPhone').value.trim(), team_code:$('cTeam').value,
-      role_type: role,
-      division_or_age_group: role==='division_coach'?$('cAgeGroup').value:null,
-      event_specialty: role==='event_specialist'?$('cEvent').value:null,
-      background_check_date: $('cUsatf').checked ? null : ($('cBgDate').value||null),
-      usatf_certified: $('cUsatf').checked,
-      usatf_cert_date: $('cUsatf').checked ? ($('cUsatfDate').value||null) : null,
+      season_year:CFG.SEASON_YEAR, first_name:d.first, last_name:d.last, email, phone:d.phone, team_code:d.team,
+      role_type:d.role, division_or_age_group:d.division, coach_gender:d.gender, event_specialty:d.events,
+      background_check_date:d.bg, usatf_certified:d.usatf, usatf_cert_date:d.usatfDate,
       approved:false, contract_signed_at:new Date().toISOString(), contract_version:'VYC-2026'
     };
-    if(!row.team_code) throw new Error('Please select a team.');
     const {error}=await sb.from('coaches').insert(row);
     if(error) throw error;
     msg.textContent='Coach registration submitted! Your club will review and approve access — you will be notified once approved.'; msg.className='text-sm mt-2 text-green-700 font-semibold';
-    await ensureAccount($('cEmail').value.trim(), cp1, msg);
+    await ensureAccount(email, cp1, msg);
     e.target.reset(); bgCheckHint();
   }catch(err){ msg.textContent='Error: '+(err.message||err); msg.className='text-sm mt-2 text-red-600'; }
 });

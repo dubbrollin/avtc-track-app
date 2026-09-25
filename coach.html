@@ -55,7 +55,16 @@
   <!-- APP -->
   <div id="app" class="hidden">
     <div class="card max-w-lg mx-auto" id="notCoachBox" style="display:none">
-      <p class="text-sm text-red-700">We couldn't find an approved coach registration for this email. If you just registered, your club still needs to approve you. <a class="text-blue-600 underline" href="index.html">Register as a coach</a></p>
+      <h2 class="font-bold text-lg mb-1">Finish your coach registration</h2>
+      <p class="text-sm text-gray-700">You're signed in as <b id="ncEmail"></b>, but we don't have your coach details yet. Answer a few quick questions (name, team, division) and your team's head coach can approve you.</p>
+      <a href="index.html?role=coach" class="btn bg-blue-600 text-white mt-3 inline-block">Finish registration</a>
+      <button type="button" class="signout-btn btn bg-gray-200 mt-3 ml-2">Sign out</button>
+    </div>
+    <div class="card max-w-lg mx-auto" id="pendingBox" style="display:none">
+      <h2 class="font-bold text-lg mb-1">Thanks — you're on the list</h2>
+      <p class="text-sm text-gray-700">Your coach registration is waiting for approval from your team's head coach. You'll get into the Coach Dashboard as soon as they approve you.</p>
+      <p id="pendingInfo" class="text-sm text-gray-600 mt-2"></p>
+      <button type="button" class="signout-btn btn bg-gray-200 mt-3">Sign out</button>
     </div>
     <div id="coachApp" style="display:none">
       <div class="card flex flex-wrap items-center gap-2">
@@ -137,14 +146,15 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 // Division Coaches (Event-Specialist Coaches see the whole team, per how that role works).
 function isFullAccess(c){ return !!(c.is_admin || c.role_type==='head_coach' || c.role_type==='head_age_group' || !c.role_type); }
 function roleLabel(c){
-  if(c.role_type==='division_coach') return `${c.division_or_age_group||'Division'} Coach`;
-  if(c.role_type==='event_specialist') return `${c.event_specialty||'Event'} Coach`;
+  if(c.role_type==='division_coach') return `${c.division_or_age_group||'Division'}${c.coach_gender?' '+c.coach_gender:''} Coach`;
+  if(c.role_type==='event_specialist') return `Field Event Coach${c.event_specialty?' ('+c.event_specialty+')':''}`;
   return 'Head Coach';
 }
 
 // ---- auth ----
 window.mountLoginWidget(sb, $('loginWidget'));
 $('logout').onclick=async()=>{await sb.auth.signOut(); location.reload();};
+document.querySelectorAll('.signout-btn').forEach(b=>b.onclick=async()=>{await sb.auth.signOut(); location.reload();});
 sb.auth.onAuthStateChange(async(_e,session)=>{
   user=session?.user||null;
   if(!user) return;
@@ -166,8 +176,18 @@ function bgStatus(c){
 }
 
 async function loadMe(){
+  ['notCoachBox','pendingBox','coachApp'].forEach(id=>$(id).style.display='none');
   const {data,error}=await sb.from('coaches').select('*').eq('email',user.email).eq('approved',true).maybeSingle();
-  if(error || !data){ $('notCoachBox').style.display='block'; $('coachApp').style.display='none'; return; }
+  if(error){ $('ncEmail').textContent=user.email||''; $('notCoachBox').style.display='block'; return; }
+  if(!data){
+    const {data:any}=await sb.from('coaches').select('*').eq('email',user.email).limit(1);
+    if(any && any.length){
+      const t=window.VYC_TEAMS.find(x=>x.code===any[0].team_code);
+      $('pendingInfo').textContent=`Signed in as ${user.email}`+(t?` · ${t.name}`:'')+` · ${roleLabel(any[0])}`;
+      $('pendingBox').style.display='block';
+    } else { $('ncEmail').textContent=user.email||''; $('notCoachBox').style.display='block'; }
+    return;
+  }
   myCoach=data;
   fullAccess=isFullAccess(myCoach);
   $('notCoachBox').style.display='none'; $('coachApp').style.display='block';

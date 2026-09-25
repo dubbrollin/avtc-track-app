@@ -8,7 +8,7 @@ window.markToValue = function(mark, isTime, measure){
     const p=s.split(':').map(Number); if(p.some(isNaN)) return null;
     return p.reduce((a,b)=>a*60+b,0);
   }
-  const ft=s.match(/^(\d+)'\s*(\d+(?:\.\d+)?)?/); // English 12'10.25
+  const ft=s.match(/^(\d+)['\-]\s*(\d+(?:\.\d+)?)?/); // English feet-inches: 12'10.25 or Hy-Tek's 12-10.25
   if(ft||measure==='E'){ if(!ft) return null; return +(((+ft[1])*12+(+(ft[2]||0)))*0.0254).toFixed(3); }
   const n=parseFloat(s.replace(/m$/i,'')); return isNaN(n)?null:n;
 };
@@ -30,7 +30,7 @@ window.parseHytekResults = function(text, cfg, regs, meetEvents, all){
       const timeLike=f[1]==='T'||f[1]==='TM';
       const reg=byKey[nk(f[22],f[23])]; if(!reg) unmatched.add(`${f[23]} ${f[22]}`);
       out.push({ registration_id:reg?.id||null, athlete_name:`${f[23]} ${f[22]}`, gender:f[25]==='F'?'Girl':'Boy',
-        division:reg?.division||divFromName(f[8]), event_code:f[4], event_name:evName(f[4],false), is_relay:false,
+        division:divFromName(f[8])||reg?.division||divFromDob(f[26]), team_code:(f[27]||'').toUpperCase()||null, event_code:f[4], event_name:evName(f[4],false), is_relay:false,
         round:f[9]||'F', mark:f[10], mark_value:markToValue(f[10],timeLike,f[11]), is_time:timeLike,
         place:parseInt(f[13])||null, wind:f[12]||null, source:'hytek' });
     }
@@ -38,7 +38,7 @@ window.parseHytekResults = function(text, cfg, regs, meetEvents, all){
       if(!all && f[12].toUpperCase()!==code){ skipped++; continue; }
       const runners=[]; for(let i=18;i+1<f.length;i+=9){ if(f[i]) runners.push(`${f[i+1]} ${f[i]}`); }
       const g=f[5]==='F'?'Girl':f[5]==='M'?'Boy':'Mixed';
-      out.push({ registration_id:null, athlete_name:f[1]||`${cfg.CLUB_NAME} relay`, gender:g, division:divFromName(f[8]),
+      out.push({ registration_id:null, athlete_name:f[1]||`${cfg.CLUB_NAME} relay`, gender:g, division:divFromName(f[8]), team_code:(f[12]||'').toUpperCase()||null,
         event_code:f[4], event_name:evName(f[4],true), is_relay:true, relay_runners:runners.join(', '),
         round:f[9]||'F', mark:f[10], mark_value:markToValue(f[10],true,'M'), is_time:true,
         place:parseInt(f[13])||null, source:'hytek' });
@@ -46,7 +46,22 @@ window.parseHytekResults = function(text, cfg, regs, meetEvents, all){
   }
   return {rows:out, skippedOtherTeams:skipped, unmatched:[...unmatched], header};
   function nk(l,f){ return (l+'|'+f).toLowerCase().replace(/[^a-z|]/g,''); }
-  function divFromName(n){ n=(n||'').toLowerCase(); const d=(window.DIVISIONS||[]).find(d=>n.includes(d.name.toLowerCase())); return d?d.name:null; }
+  // Hy-Tek writes division names its own way ("Sub Gremlin", "Junior", "15-18", "ALL") — map them to ours.
+  function divFromName(n){
+    n=(n||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+    if(n.includes('subgremlin')) return 'Sub-Gremlin';
+    if(n.includes('gremlin')) return 'Gremlin';
+    if(n.includes('bantam')) return 'Bantam';
+    if(n.includes('junior')) return 'Juniors';
+    if(n.includes('youth')) return 'Youth';
+    if(n.includes('1518')||n.includes('intermediate')) return 'Intermediates';
+    return null; // "ALL" etc. — caller falls back to the athlete's age
+  }
+  // Age on Dec 31 of the meet's year, from date of birth "MM/DD/YYYY"
+  function divFromDob(dob){
+    const y=parseInt((dob||'').slice(-4),10), my=parseInt(((header&&header.start)||'').slice(-4),10);
+    if(!y||!my) return null; const age=my-y; return (window.divisionFor&&window.divisionFor(age))||null;
+  }
 };
 
 // ---- Hy-Tek "Team Manager interchange" (.tcl) parser — the REAL format this club's software exports (fixed-width
@@ -126,7 +141,8 @@ window.rankResults = function(rows, bestPerAthlete, conference, capAt){
   }
   const divOrder=(window.DIVISIONS||[]).map(d=>d.name);
   return Object.values(groups).map(g=>{
-    let rs=g.rows.filter(r=>r.mark_value!=null).sort((a,b)=>g.is_time?a.mark_value-b.mark_value:b.mark_value-a.mark_value);
+    const fin=r=>(r.round==='F'?0:1); // in a single meet, finalists rank ahead of athletes who only ran the prelims
+    let rs=g.rows.filter(r=>r.mark_value!=null).sort((a,b)=>(bestPerAthlete?0:(fin(a)-fin(b)))||(g.is_time?a.mark_value-b.mark_value:b.mark_value-a.mark_value));
     if(bestPerAthlete){ const seen=new Set(); rs=rs.filter(r=>{ const id=r.registration_id||r.athlete_name; if(seen.has(id)) return false; seen.add(id); return true; }); }
     if(cap) rs=rs.slice(0,cap);
     g.rows=rs.concat(g.rows.filter(r=>r.mark_value==null)); return g;
@@ -141,4 +157,58 @@ window.attachConference = function(rows, regsById){
     const teamCode = reg?.team_code || r.team_code || null;
     return {...r, team_code:teamCode, conference: teamCode ? window.conferenceForTeamCode(teamCode) : null};
   });
+};
+
+// ---- Results PDF: a readable printout of whatever groups the results page is showing ----
+// groups = output of rankResults(); opts = {title, subtitle, showPlaceNumbers}. Works in the browser (window.PDFLib) and Node (pdf-lib) for testing.
+window.resultsPdf = async function(groups, opts){
+  opts = opts || {};
+  const LIB = typeof window !== 'undefined' && window.PDFLib ? window.PDFLib : require('pdf-lib');
+  const { PDFDocument, StandardFonts, rgb } = LIB;
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica), bold = await doc.embedFont(StandardFonts.HelveticaBold), mono = await doc.embedFont(StandardFonts.Courier);
+  const clean = s => String(s ?? '').replace(/[^\x20-\x7E\xA0-\xFF]/g, '?');
+  const W=612, H=792, M=42, navy=rgb(0.08,0.15,0.32), gold=rgb(0.85,0.65,0.13), grey=rgb(0.42,0.45,0.5);
+  const teamName = c => { const t=(window.VYC_TEAMS||[]).find(x=>x.code===c); return t?t.name:(c||''); };
+  let page, y, pageNo=0; const pages=[];
+  const newPage = () => {
+    page = doc.addPage([W,H]); pages.push(page); pageNo++;
+    page.drawRectangle({x:0,y:H-58,width:W,height:58,color:navy});
+    page.drawText(clean(opts.title||'Results'), {x:M,y:H-30,size:16,font:bold,color:rgb(1,1,1)});
+    if(opts.subtitle) page.drawText(clean(opts.subtitle), {x:M,y:H-47,size:9.5,font,color:rgb(0.85,0.88,0.95)});
+    page.drawRectangle({x:0,y:H-61,width:W,height:3,color:gold});
+    y = H-84;
+  };
+  const rowH = 15;
+  const fit = (txt,f,size,max) => { txt=clean(txt); while(txt.length>1 && f.widthOfTextAtSize(txt,size)>max) txt=txt.slice(0,-1); return txt; };
+  newPage();
+  if(!groups.length){ page.drawText('No results to show.', {x:M,y,size:11,font,color:grey}); }
+  for(const g of groups){
+    const label = `${g.division} ${g.gender==='Boy'?'Boys':g.gender==='Girl'?'Girls':g.gender} - ${g.event}`;
+    if(y < 60 + rowH*3) newPage();
+    page.drawRectangle({x:M-4,y:y-5,width:W-2*M+8,height:19,color:rgb(0.92,0.94,0.98)});
+    page.drawText(clean(label), {x:M,y:y,size:11,font:bold,color:navy});
+    y -= 22;
+    let i=0;
+    for(const r of g.rows){
+      const relay = r.relay_runners ? clean(r.relay_runners) : '';
+      const need = rowH + (relay?10:0);
+      if(y < 46 + need){ newPage(); page.drawText(clean(label)+' (cont.)', {x:M,y,size:10,font:bold,color:navy}); y -= 20; }
+      const place = r.mark_value!=null ? i+1 : '';
+      page.drawText(String(place), {x:M,y,size:9.5,font,color:grey});
+      page.drawText(fit(r.athlete_name,font,9.5,190), {x:M+28,y,size:9.5,font:bold,color:rgb(0.1,0.1,0.1)});
+      page.drawText(fit(teamName(r.team_code),font,9,150), {x:M+240,y,size:9,font,color:grey});
+      const mk = clean(r.mark) + (r.wind?` (w ${clean(r.wind)})`:'');
+      page.drawText(mk, {x:W-M-mono.widthOfTextAtSize(mk,9.5),y,size:9.5,font:mono,color:rgb(0.1,0.1,0.1)});
+      y -= rowH-3;
+      if(relay){ page.drawText(fit(relay,font,7.5,W-2*M-40), {x:M+28,y,size:7.5,font,color:grey}); y -= 10; }
+      y -= 3; i++;
+    }
+    y -= 10;
+  }
+  pages.forEach((p,n)=>{
+    p.drawText(`Page ${n+1} of ${pages.length}`, {x:W-M-50,y:24,size:8,font,color:grey});
+    p.drawText('Valley Youth Conference Track & Field', {x:M,y:24,size:8,font,color:grey});
+  });
+  return doc.save();
 };

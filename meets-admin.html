@@ -122,9 +122,9 @@ async function resultsPanel(m){
   p.innerHTML=`<div class="border rounded p-3 bg-purple-50">
     <p class="text-sm mb-2"><b>${count||0}</b> results stored for this meet. <a class="underline" href="results.html?meet=${m.id}" target="_blank">View</a></p>
     <p class="text-sm font-semibold">Upload the results file</p>
-    <p class="text-xs text-gray-600 mb-1">Either the semicolon-delimited Meet Manager export, or your Team Manager's own "TCL01-01.tcl" results file (auto-detected). Only ${CFG.TEAM_CODE} athletes are kept from the semicolon format; the .tcl format only ever contains your own team.</p>
+    <p class="text-xs text-gray-600 mb-1">Either the semicolon-delimited Meet Manager export, or your Team Manager's own "TCL01-01.tcl" results file (auto-detected). The semicolon-delimited file keeps every team in the meet, so the results page can show the whole conference. (The .tcl format only ever contains your own team.)</p>
     <input type="file" id="rf-${m.id}" accept=".txt,.csv,.sd3,.tcl,text/plain" class="text-sm">
-    <label class="text-xs ml-2"><input type="checkbox" id="rall-${m.id}"> include other teams (semicolon format only)</label>
+    <label class="text-xs ml-2"><input type="checkbox" id="rall-${m.id}" checked> keep all teams (semicolon format)</label>
     <div id="rprev-${m.id}" class="text-sm mt-2"></div>
     <hr class="my-3">
     <p class="text-sm font-semibold">Add one result by hand</p>
