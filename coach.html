@@ -82,7 +82,7 @@
           <h1 class="text-lg font-bold"><span id="pageTitle">Coach Dashboard</span> <span id="teamLabel" class="text-gray-500 font-normal text-sm"></span></h1>
           <p id="bgStatusLine" class="text-xs mt-1"></p>
         </div>
-        <a id="rosterBtn" href="coach.html?view=roster" class="btn bg-blue-600 text-white hidden">Roster</a>
+        <a id="rosterBtn" href="coach.html?view=roster" class="btn bg-blue-600 text-white hidden">Team admin: roster &amp; intake</a>
         <a id="backBtn" href="coach.html" class="btn bg-blue-600 text-white hidden">← Back to dashboard</a>
         <a href="results.html" class="btn bg-gray-800 text-white">Results &amp; rankings</a>
         <button id="logout" class="btn bg-gray-200">Sign out</button>
@@ -109,8 +109,8 @@
           </div>
       </div></div>
 
-      <!-- DASHBOARD -->
-      <div id="dashView"><div class="max-w-4xl mx-auto">
+      <!-- MEET REGISTRATION (own page) -->
+      <div id="registerView" class="hidden"><div class="max-w-4xl mx-auto">
           <div class="card" id="registerCard">
             <div class="col-head"><h2>Meet Register</h2></div>
             <p class="text-xs text-gray-500 mb-2">Works like Team Manager's Entry by Event: pick a division, click an event, then tick the athletes who will run it.</p>
@@ -133,8 +133,26 @@
             </div>
           </div>
 
+      </div></div>
+
+      <!-- DASHBOARD -->
+      <div id="dashView"><div class="max-w-4xl mx-auto">
           <div class="card">
-            <div class="col-head"><h2>Meet Results</h2></div>
+            <div class="col-head"><h2 class="flex-1">My roster <span id="dashCount" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
+            <div id="dashRoster" class="text-sm"></div>
+          </div>
+
+          <div class="card">
+            <div class="col-head"><h2>Meet registration &amp; results</h2></div>
+            <p class="text-xs text-gray-500 mb-2">Enter your athletes into a meet's events (with each athlete's best times showing), or look up results.</p>
+            <div class="flex flex-wrap gap-2">
+              <a href="coach.html?view=register" class="btn bg-blue-600 text-white inline-block">Meet Registration →</a>
+              <a href="results.html" class="btn bg-gray-800 text-white inline-block">Results &amp; rankings →</a>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="col-head"><h2>Upload meet results</h2></div>
             <p class="text-xs text-gray-500 mb-2">Upload a meet's results (Hy-Tek Meet Manager export or your Team Manager .tcl file), or add one by hand — that happens on the Meet Admin page: find the meet in the list there and click "Results".</p>
             <a href="meets-admin.html" class="btn bg-purple-600 text-white text-sm inline-block">Go to Meet Admin →</a>
           </div>
@@ -213,12 +231,14 @@ async function loadMe(){
   $('rosterNote').classList.toggle('hidden',fullAccess);
   $('coachesCard').style.display=fullAccess?'':'none';
   // Roster lives on its own view (head coaches only) — the everyday dashboard is just Meet Register + Results.
-  const wantRoster = fullAccess && new URLSearchParams(location.search).get('view')==='roster';
-  $('rosterView').classList.toggle('hidden',!wantRoster); $('dashView').classList.toggle('hidden',wantRoster);
-  $('rosterBtn').classList.toggle('hidden',!fullAccess||wantRoster); $('backBtn').classList.toggle('hidden',!wantRoster);
-  $('pageTitle').textContent = wantRoster ? 'Roster & intake' : 'Coach Dashboard';
+  const vw=new URLSearchParams(location.search).get('view');
+  const wantRoster = fullAccess && vw==='roster', wantReg = vw==='register';
+  $('rosterView').classList.toggle('hidden',!wantRoster); $('registerView').classList.toggle('hidden',!wantReg);
+  $('dashView').classList.toggle('hidden',wantRoster||wantReg);
+  $('rosterBtn').classList.toggle('hidden',!fullAccess||wantRoster||wantReg); $('backBtn').classList.toggle('hidden',!(wantRoster||wantReg));
+  $('pageTitle').textContent = wantRoster ? 'Team admin: roster & intake' : wantReg ? 'Meet Registration' : 'Coach Dashboard';
   await load();
-  await loadMeetsForReg();
+  if(wantReg) await loadMeetsForReg();
 }
 
 // ---- data ----
@@ -252,7 +272,17 @@ function pill(r){
   const c={match:'bg-green-100 text-green-800',mismatch:'bg-red-100 text-red-800',pending:'bg-yellow-100 text-yellow-800',unreadable:'bg-orange-100 text-orange-800',error:'bg-red-100 text-red-800'}[s];
   return `<span class="pill ${c}">ID: ${s}</span>`;
 }
+function renderDashRoster(){
+  const el=$('dashRoster'); if(!el) return;
+  $('dashCount').textContent=`(${rows.length})`;
+  if(!rows.length){ el.innerHTML='<p class="text-gray-500">No athletes on your roster yet. Share the registration link with parents.</p>'; return; }
+  const order=(window.DIVISIONS||[]).map(d=>d.name);
+  const by={}; rows.forEach(r=>(by[r.division]=by[r.division]||[]).push(r));
+  el.innerHTML=Object.keys(by).sort((x,y)=>order.indexOf(x)-order.indexOf(y)).map(d=>`<div class="mb-2"><div class="text-xs font-bold uppercase text-gray-500">${esc(d)} (${by[d].length})</div><div class="flex flex-wrap gap-x-4 gap-y-0.5">`+
+    by[d].sort((p,q)=>(p.last_name+p.first_name).localeCompare(q.last_name+q.first_name)).map(r=>`<span>${esc(r.last_name)}, ${esc(r.first_name)} <span class="text-gray-400 text-xs">${r.gender==='Girl'?'F':'M'}${r.status==='verified'?'':' · '+esc(r.status)}</span></span>`).join('')+`</div></div>`).join('');
+}
 function render(){
+  renderDashRoster();
   const f=$('filter').value; const shown=rows.filter(r=>!f||r.status===f);
   $('count').textContent=`(${shown.length})`;
   if(!shown.length){ $('list').innerHTML='<div class="card text-gray-500 text-sm">No registrations yet for your team. Share the registration link with parents.</div>'; return; }
@@ -382,7 +412,7 @@ $('exportCsv').onclick=()=>{
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download=`registrations_${myCoach.team_code}_${CFG.SEASON_YEAR}.csv`; a.click();
 };
 
-// ---- Meet Register, embedded (race-first: pick a meet, division, gender, race, then check off athletes) ----
+// ---- Meet Register (own page) (race-first: pick a meet, division, gender, race, then check off athletes) ----
 let regMeets=[], regEvents=[], regEntries=[], regDiv=null, regGender='Boy', regEventId=null;
 async function loadMeetsForReg(){
   const {data}=await sb.from('meets').select('*').neq('status','archived').order('meet_date');
@@ -406,7 +436,7 @@ async function loadRegMeet(){
   renderReg();
 }
 // ---- Team Manager "Entry by Event" style register ----
-let regSeeds=null, regRelay=null, regRelayNew={}, regOnlyEntered=false;
+let regBests={}, regSeeds=null, regRelay=null, regRelayNew={}, regOnlyEntered=false;
 const genCode=g=>g==='Girl'?'F':g==='Boy'?'M':'X';
 const genWord=g=>g==='Girl'?'Female':g==='Boy'?'Male':'Mixed';
 const divAbbr=d=>({'ALL':'ALL','Sub-Gremlin':'SG','Gremlin':'G','Bantam':'BN','Juniors':'MI','Youth':'YH','Intermediates':'IY'})[d]||d;
@@ -416,9 +446,12 @@ const evSort=(x,y)=>((x.event_number??9999)-(y.event_number??9999))||x.name.loca
 async function loadRegSeeds(){
   regSeeds={};
   const ids=rows.filter(r=>r.status==='verified').map(r=>r.id); if(!ids.length) return;
-  const {data}=await sb.from('season_best').select('registration_id,event_code,mark,mark_value,is_time').in('registration_id',ids);
+  const {data}=await sb.from('season_best').select('registration_id,event_code,event_name,is_relay,mark,mark_value,is_time').in('registration_id',ids);
+  regBests={};
+  (data||[]).forEach(x=>{ if(x.is_relay) return; const L=(regBests[x.registration_id]=regBests[x.registration_id]||{}), c=L[x.event_code]; if(!c||(x.is_time?x.mark_value<c.mark_value:x.mark_value>c.mark_value)) L[x.event_code]=x; });
   (data||[]).forEach(x=>{ const k=x.registration_id+'|'+x.event_code, cur=regSeeds[k]; if(!cur||(x.is_time?x.mark_value<cur.mark_value:x.mark_value>cur.mark_value)) regSeeds[k]=x; });
 }
+function allBests(a){ const L=regBests[a.id]; if(!L) return '<span class="text-gray-300">no results yet</span>'; return Object.values(L).sort((p,q)=>String(p.event_name).localeCompare(String(q.event_name),undefined,{numeric:true})).map(x=>`<span class="whitespace-nowrap">${esc(x.event_name)}: <b class="font-mono">${esc(x.mark)}</b></span>`).join(' · '); }
 function bestMark(a,ev){ const code=ev.is_relay?(RELAY_LEG[ev.code]||ev.code):ev.code; const s=regSeeds&&regSeeds[a.id+'|'+code]; return s?{mark:s.mark,value:s.mark_value,time:s.is_time}:null; }
 // Age-group rule: an athlete competes ONLY in their own age group, by age on December 31 (no competing up or down).
 function evAgeRange(ev){ if(ev.division==='ALL') return [5,18]; const d=(window.DIVISIONS||[]).find(x=>x.name===ev.division); return d?[d.min,d.max]:[-1,-1]; }
@@ -464,10 +497,10 @@ function renderAthletePanel(ev,m){
       <label class="flex items-center gap-1"><input type="checkbox" id="regOnlyEntered" ${regOnlyEntered?'checked':''}> Only athletes already entered</label>
       ${open?'':'<span class="text-red-600">Entries are closed for this meet.</span>'}
     </div>`;
-  const body=pool.length?`<table class="athtbl"><thead><tr><th>Entered</th><th>Last name</th><th>First name</th><th>Best</th><th title="Age on December 31">Age (12/31)</th><th>Gen</th>${wide?'<th>Div</th>':''}</tr></thead><tbody>`+pool.map(a=>{
+  const body=pool.length?`<table class="athtbl"><thead><tr><th>Entered</th><th>Last name</th><th>First name</th><th>Best (this event)</th><th title="Age on December 31">Age (12/31)</th><th>Gen</th>${wide?'<th>Div</th>':''}<th>All best times</th></tr></thead><tbody>`+pool.map(a=>{
       const en=enOf(a), err=en?null:checkLimits(a.division,myEventsOf(a),{relay:false}), b=bestMark(a,ev);
       return `<tr class="${en?'entered':''}"><td><input type="checkbox" data-a="${a.id}" data-e="${ev.id}" ${en?'checked':''} ${(!open)||(err&&!en)?'disabled':''} title="${err?esc(err):''}"></td>
-        <td>${esc(a.last_name)}</td><td>${esc(a.first_name)}</td><td class="font-mono">${b?esc(b.mark):'NT'}</td><td>${a.age_on_dec31??''}</td><td>${a.gender==='Girl'?'F':'M'}</td>${wide?`<td>${divAbbr(a.division)}</td>`:''}</tr>`; }).join('')+`</tbody></table>`
+        <td>${esc(a.last_name)}</td><td>${esc(a.first_name)}</td><td class="font-mono">${b?esc(b.mark):'NT'}</td><td>${a.age_on_dec31??''}</td><td>${a.gender==='Girl'?'F':'M'}</td>${wide?`<td>${divAbbr(a.division)}</td>`:''}<td class="text-xs">${allBests(a)}</td></tr>`; }).join('')+`</tbody></table>`
     : '<p class="text-sm text-gray-500 py-2">No eligible athletes for this event.</p>';
   $('regAthletes').innerHTML=head+body;
   document.querySelectorAll('#regAthletes input[type=checkbox][data-a]').forEach(cb=>cb.onchange=toggleReg);
@@ -506,8 +539,8 @@ function renderRelayPanel(ev,m){
       <button type="button" id="rlBest" class="btn bg-gray-200" ${open&&regRelay?'':'disabled'}>Find Best Relay</button>
       ${open?'':'<span class="text-red-600">Entries are closed for this meet.</span>'}
     </div>`;
-  const left=`<div><div class="text-xs font-semibold mb-1">Eligible athletes — click Add to put them on Relay ${regRelay||'…'}</div><table class="athtbl"><thead><tr><th></th><th>Last name</th><th>First name</th><th>Best</th><th title="Age on December 31">Age (12/31)</th></tr></thead><tbody>`+
-    pool.map(a=>{ const b=bestMark(a,ev), where=inRelay[a.id]; return `<tr class="${where?'entered':''}"><td>${where?`<span class="text-xs font-bold">${where}</span>`:`<button type="button" data-add="${a.id}" class="btn bg-gray-200 text-xs" ${open&&regRelay?'':'disabled'}>Add</button>`}</td><td>${esc(a.last_name)}</td><td>${esc(a.first_name)}</td><td class="font-mono">${b?esc(b.mark):'NT'}</td><td>${a.age_on_dec31??''}</td></tr>`; }).join('')+`</tbody></table></div>`;
+  const left=`<div><div class="text-xs font-semibold mb-1">Eligible athletes — click Add to put them on Relay ${regRelay||'…'}</div><table class="athtbl"><thead><tr><th></th><th>Last name</th><th>First name</th><th>Best (leg)</th><th title="Age on December 31">Age (12/31)</th><th>All best times</th></tr></thead><tbody>`+
+    pool.map(a=>{ const b=bestMark(a,ev), where=inRelay[a.id]; return `<tr class="${where?'entered':''}"><td>${where?`<span class="text-xs font-bold">${where}</span>`:`<button type="button" data-add="${a.id}" class="btn bg-gray-200 text-xs" ${open&&regRelay?'':'disabled'}>Add</button>`}</td><td>${esc(a.last_name)}</td><td>${esc(a.first_name)}</td><td class="font-mono">${b?esc(b.mark):'NT'}</td><td>${a.age_on_dec31??''}</td><td class="text-xs">${allBests(a)}</td></tr>`; }).join('')+`</tbody></table></div>`;
   const right=`<div><div class="text-xs font-semibold mb-1">${regRelay?`Relay ${regRelay} runners`:'Click New Relay to start'}</div><div class="border rounded">`+
     slots.map((en,i)=>{ const a=en&&rows.find(r=>r.id===en.registration_id); return `<div class="relaySlot"><span class="w-12 text-xs text-gray-500">${i<4?'Leg '+(i+1):'Alt '+(i-3)}</span><span class="flex-1">${a?esc(a.last_name+', '+a.first_name):'<span class="text-gray-300">—</span>'}</span>${a&&open?`<button type="button" data-rm="${en.id}" class="text-red-600 text-xs">✕</button>`:''}</div>`; }).join('')+`</div></div>`;
   $('regAthletes').innerHTML=head+`<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${left}${right}</div>`;
