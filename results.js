@@ -30,7 +30,7 @@ window.parseHytekResults = function(text, cfg, regs, meetEvents, all){
       const timeLike=f[1]==='T'||f[1]==='TM';
       const reg=byKey[nk(f[22],f[23])]; if(!reg) unmatched.add(`${f[23]} ${f[22]}`);
       out.push({ registration_id:reg?.id||null, athlete_name:`${f[23]} ${f[22]}`, gender:f[25]==='F'?'Girl':'Boy',
-        division:divFromName(f[8])||reg?.division||divFromDob(f[26]), team_code:(f[27]||'').toUpperCase()||null, event_code:f[4], event_name:evName(f[4],false), is_relay:false,
+        division:divFromName(f[8])||reg?.division||divFromDob(f[26]), team_code:normTeamCode(f[27])||null, event_code:f[4], event_name:evName(f[4],false), is_relay:false,
         round:f[9]||'F', mark:f[10], mark_value:markToValue(f[10],timeLike,f[11]), is_time:timeLike,
         place:parseInt(f[14])||null, overall_place:parseInt(f[13])||null, heat:parseInt(f[15])||null, wind:f[12]||null, source:'hytek' });
     }
@@ -38,7 +38,7 @@ window.parseHytekResults = function(text, cfg, regs, meetEvents, all){
       if(!all && f[12].toUpperCase()!==code){ skipped++; continue; }
       const runners=[]; for(let i=18;i+1<f.length;i+=9){ if(f[i]) runners.push(`${f[i+1]} ${f[i]}`); }
       const g=f[5]==='F'?'Girl':f[5]==='M'?'Boy':'Mixed';
-      out.push({ registration_id:null, athlete_name:f[1]||`${cfg.CLUB_NAME} relay`, gender:g, division:divFromName(f[8]), team_code:(f[12]||'').toUpperCase()||null,
+      out.push({ registration_id:null, athlete_name:f[1]||`${cfg.CLUB_NAME} relay`, gender:g, division:divFromName(f[8]), team_code:normTeamCode(f[12])||null,
         event_code:f[4], event_name:evName(f[4],true), is_relay:true, relay_runners:runners.join(', '),
         round:f[9]||'F', mark:f[10], mark_value:markToValue(f[10],true,'M'), is_time:true,
         place:parseInt(f[14])||null, overall_place:parseInt(f[13])||null, heat:parseInt(f[15])||null, source:'hytek' });

@@ -20,7 +20,11 @@ window.VYC_TEAMS = [
   {code:"SCW",  name:"Santa Clarita Warriors", conference:"West"}
 ];
 // Backward-compatible plain-name list, kept in case anything still expects window.TEAMS.
+// Some Hy-Tek files use a different code for the same team (e.g. RUSH for San Fernando Valley Rush = SFR); map them to the official code.
+window.TEAM_CODE_ALIASES = { RUSH:'SFR' };
+window.normTeamCode = function(code){ const c=String(code||'').trim().toUpperCase(); return window.TEAM_CODE_ALIASES[c]||c; };
 window.conferenceForTeamCode = function(code){
+  code = window.normTeamCode(code);
   const t = window.VYC_TEAMS.find(t=>t.code===code);
   return t ? t.conference : null;
 };
