@@ -59,6 +59,37 @@ $('create').onclick=async()=>{
   if(e2) return alert(e2.message);
   $('mName').value=$('mLoc').value=''; load();
 };
+// ---- Team Manager "Entry Events" report (CSV export) -> meet events, keeping Team Manager's own event numbers ----
+function csvRows(text){
+  const rows=[]; let row=[], cur='', q=false;
+  for(let i=0;i<text.length;i++){ const ch=text[i];
+    if(q){ if(ch==='"'){ if(text[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=ch; }
+    else if(ch==='"') q=true; else if(ch===','){ row.push(cur); cur=''; }
+    else if(ch==='\n'){ row.push(cur); rows.push(row); row=[]; cur=''; } else if(ch!=='\r') cur+=ch; }
+  if(cur||row.length){ row.push(cur); rows.push(row); } return rows;
+}
+function parseTmEvents(text){
+  const events=[], skipped=[], seen={};
+  for(const r of csvRows(text)){
+    const f = r.length>=21 ? r.slice(12) : r.length>=9 ? r : null; if(!f) continue;
+    const num=parseInt(String(f[0]).trim(),10); if(!num) continue;
+    const g=String(f[2]).trim().toLowerCase(), d=String(f[3]).trim().toLowerCase();
+    const gender=/^(girls|female)/.test(g)?'Girl':/^(boys|male)/.test(g)?'Boy':/^mixed/.test(g)?'Mixed':null;
+    const division=d==='all'?'ALL':d.startsWith('sub')?'Sub-Gremlin':d.startsWith('grem')?'Gremlin':d.startsWith('bant')?'Bantam':d.startsWith('jun')?'Juniors':d.startsWith('you')?'Youth':d.startsWith('inter')?'Intermediates':null;
+    const dist=String(f[4]).trim(), kind=String(f[5]).trim(), note=String(f[6]).trim()||null;
+    if(!gender||!division||!kind){ skipped.push('#'+num); continue; }
+    const relay=/relay/i.test(kind), field=!dist&&!relay;
+    let code;
+    if(relay) code=({'4x100m':'400','4x400m':'1600','4x800m':'3200'})[dist.toLowerCase()]||dist;
+    else if(field) code=({'high jump':'HJ','long jump':'LJ','shot put':'SP','javelin':'JT','javelin throw':'JT'})[kind.toLowerCase()]||kind;
+    else if(/hurdle/i.test(kind)) code=dist.replace(/m$/i,'')+'H';
+    else code=dist.replace(/m$/i,'');
+    const key=[code,division,gender,relay].join('|'); if(seen[key]) code=code+'#'+num; seen[key]=1;
+    events.push({event_number:num, code, name:(dist?dist+' ':'')+kind, division, gender, is_relay:relay, is_field:field, note});
+  }
+  events.sort((a,b)=>a.event_number-b.event_number);
+  return {events,skipped};
+}
 // Fills a meet with the standard event list (every division, boys and girls) — the same list Team Manager uses.
 async function buildEvents(meetId){
   const rows=[];
@@ -75,7 +106,8 @@ async function load(){
       <div class="font-bold flex-1">${m.name} <span class="font-normal text-gray-500">${fmtDate(m.meet_date)} · ${m.status}</span></div>
       <button class="btn bg-gray-200 text-sm" data-act="toggle" data-id="${m.id}">${m.status==='open'?'Close entries':'Reopen'}</button>
       <button class="btn bg-gray-200 text-sm" data-act="events" data-id="${m.id}">Events offered</button>
-      <button class="btn bg-blue-600 text-white text-sm" data-act="rebuild" data-id="${m.id}">Build events</button>
+      <button class="btn bg-blue-600 text-white text-sm" data-act="import" data-id="${m.id}">Import events from Team Manager</button>
+      <button class="btn bg-gray-200 text-sm" data-act="rebuild" data-id="${m.id}">Build standard events</button>
       <button class="btn bg-green-600 text-white text-sm" data-act="export" data-id="${m.id}">Hy-Tek entries</button>
       <button class="btn bg-gray-200 text-sm" data-act="summary" data-id="${m.id}">Entry list</button>
       <button class="btn bg-purple-600 text-white text-sm" data-act="results" data-id="${m.id}">Results</button>
@@ -99,6 +131,31 @@ async function act(a,id){
       if(!confirm('Remove this event from the meet?')) { cb.checked=true; return; }
       await sb.from('meet_events').delete().eq('id',cb.dataset.ev);
     });
+  }
+  if(a==='import'){
+    $('panel-'+id).innerHTML=`<div class="border rounded p-3 bg-blue-50 text-sm">
+      <p class="font-semibold mb-1">Use the meet's real events, exactly as Team Manager has them</p>
+      <p class="text-xs text-gray-600 mb-2">In Team Manager: Meets → pick the meet → Events → "Entry Events" → Print → export as <b>Separated Values (CSV)</b>. Then choose that file here. The meet's event numbers, ages and mixed events come across as they are.</p>
+      <input type="file" id="tmf-${id}" accept=".csv,.txt,text/csv,text/plain">
+      <div id="tmp-${id}" class="mt-2"></div></div>`;
+    $('tmf-'+id).onchange=async e=>{
+      const f=e.target.files[0]; if(!f) return; const pv=$('tmp-'+id);
+      const parsed=parseTmEvents(await f.text());
+      if(!parsed.events.length) return pv.innerHTML='<span class="text-red-600">No events found in that file. Make sure it is the "Entry Events" list exported as CSV.</span>';
+      pv.innerHTML=`Found <b>${parsed.events.length}</b> events (numbers ${parsed.events[0].event_number}–${parsed.events[parsed.events.length-1].event_number})`+(parsed.skipped.length?`<br><span class="text-orange-700">Skipped ${parsed.skipped.length} row(s) I couldn't read: ${parsed.skipped.slice(0,5).join(', ')}</span>`:'')+`<br><button id="tmgo-${id}" class="btn bg-purple-600 text-white text-sm mt-2">Use these events for this meet</button>`;
+      $('tmgo-'+id).onclick=async()=>{
+        const [{count:nEn},{count:nEv}]=await Promise.all([
+          sb.from('entries').select('*',{count:'exact',head:true}).eq('meet_id',id),
+          sb.from('meet_events').select('*',{count:'exact',head:true}).eq('meet_id',id)]);
+        if(nEn>0) return alert(`This meet already has ${nEn} athlete entries, so its events can't be replaced without losing them.`);
+        if(nEv && !confirm(`Replace this meet's ${nEv} current events with these ${parsed.events.length}? (No athletes are entered yet, so nothing is lost.)`)) return;
+        if(nEv){ const {error}=await sb.from('meet_events').delete().eq('meet_id',id); if(error) return alert(error.message); }
+        const {error}=await sb.from('meet_events').insert(parsed.events.map(x=>({...x,meet_id:id})));
+        if(error) return alert(error.message);
+        pv.innerHTML=`Saved ${parsed.events.length} events.`; setTimeout(load,1200);
+      };
+    };
+    return;
   }
   if(a==='rebuild'){
     const [{count:nEv},{count:nEn}]=await Promise.all([
@@ -203,13 +260,13 @@ function hytekEntries(rows,cfg){
   const code=c(cfg.TEAM_CODE||'UNA',4).toUpperCase(), team=c(cfg.CLUB_NAME||'Unattached',30);
   const ath=r=>[c(r.last_name,20),c(r.first_name,20),'',r.gender==='Girl'?'F':'M',fmtDate(r.dob),code,team,String(r.age_on_dec31??''),''];
   const out=[];
-  rows.filter(x=>!x.e.is_relay).forEach(x=>out.push(['D',...ath(x.r),x.e.code,c(x.mark,11),'M','','','','','','',''].join(';')));
-  const relays={}; rows.filter(x=>x.e.is_relay).forEach(x=>(relays[`${x.e.code}|${x.e.division}|${x.e.gender}`]??=[]).push(x.r));
+  rows.filter(x=>!x.e.is_relay).forEach(x=>out.push(['D',...ath(x.r),x.e.event_number||x.e.code,c(x.mark,11),'M','','','','','','',''].join(';')));
+  const relays={}; rows.filter(x=>x.e.is_relay).forEach(x=>(relays[`${x.e.event_number||x.e.code}|${x.e.division}|${x.e.gender}`]??=[]).push(x.r));
   for(const [k,list] of Object.entries(relays)){
-    const [evCode,div,g]=k.split('|'); const age=DIVISIONS.find(d=>d.name===div)?.max??'';
+    const [evCode,div,g]=k.split('|'); const age=div==='ALL'?18:(DIVISIONS.find(d=>d.name===div)?.max??'');
     for(let i=0,L=0;i<list.length;i+=8,L++){
       const runners=list.slice(i,i+8).flatMap(r=>[c(r.last_name,20),c(r.first_name,20),'',r.gender==='Girl'?'F':'M',fmtDate(r.dob),String(r.age_on_dec31??''),'','']);
-      out.push(['Q',code,team,String.fromCharCode(65+L),g==='Girl'?'F':'M',String(age),evCode,'','M','','','','','','',...runners].join(';'));
+      out.push(['Q',code,team,String.fromCharCode(65+L),g==='Girl'?'F':g==='Boy'?'M':'X',String(age),evCode,'','M','','','','','','',...runners].join(';'));
     }
   }
   return out.join('\r\n')+'\r\n';

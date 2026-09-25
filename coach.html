@@ -402,11 +402,13 @@ function renderReg(){
   $('regDiv').onchange=()=>{ regDiv=$('regDiv').value; regEventId=null; renderReg(); };
   document.querySelectorAll('.regGenBtn').forEach(b=>b.classList.toggle('active',b.dataset.g===regGender));
 
-  const opts=regEvents.filter(v=>v.division===regDiv&&v.gender===regGender).sort((x,y)=>x.name.localeCompare(y.name));
+  // Same as Team Manager: the meet's own numbered events for this division/gender, PLUS its 'ALL divisions' and 'Mixed' events
+  const opts=regEvents.filter(v=>(v.division===regDiv||v.division==='ALL')&&(v.gender===regGender||v.gender==='Mixed')).sort((x,y)=>((x.event_number??9999)-(y.event_number??9999))||x.name.localeCompare(y.name));
   if(regEventId && !opts.some(o=>o.id===regEventId)) regEventId=null;
   $('regRaceButtons').innerHTML = opts.length ? opts.map(v=>{
     const count=regEntries.filter(x=>x.meet_event_id===v.id).length;
-    return `<button type="button" data-ev="${v.id}" class="raceBtn ${v.id===regEventId?'active':''}">${v.name}${v.is_relay?' 🔗':''} <span class="opacity-60">(${count})</span></button>`;
+    const tag=(v.division==='ALL'||v.gender==='Mixed')?' <span class="opacity-60">(mixed/all ages)</span>':'';
+    return `<button type="button" data-ev="${v.id}" class="raceBtn ${v.id===regEventId?'active':''}">${v.event_number?`<b>#${v.event_number}</b> `:''}${v.name}${v.note?` <span class="opacity-60">${esc(v.note)}</span>`:''}${v.is_relay?' 🔗':''}${tag} <span class="opacity-60">(${count})</span></button>`;
   }).join('') : '<p class="text-sm text-gray-500">No events offered for this division/gender at this meet.</p>';
   document.querySelectorAll('#regRaceButtons [data-ev]').forEach(b=>b.onclick=()=>{ regEventId=b.dataset.ev; renderReg(); });
 
@@ -414,7 +416,8 @@ function renderReg(){
   if(!regEventId){ box.innerHTML='<p class="text-sm text-gray-500 p-2">Pick a race above to see your eligible athletes.</p>'; return; }
   const ev=regEvents.find(v=>v.id===regEventId);
   const open=regMeetOpen(m);
-  const pool=verified.filter(a=>a.division===regDiv&&a.gender===regGender);
+  const wide=(ev.division==='ALL'||ev.gender==='Mixed'); // mixed / all-ages events list every eligible athlete, like Team Manager does
+  const pool=verified.filter(a=>(ev.division==='ALL'||a.division===ev.division)&&(ev.gender==='Mixed'||a.gender===ev.gender));
   box.innerHTML = pool.length ? pool.map(a=>{
     const mine=regEntries.filter(x=>x.registration_id===a.id);
     const myEvs=mine.map(x=>regEvents.find(v=>v.id===x.meet_event_id)).filter(Boolean).map(v=>({relay:v.is_relay}));
@@ -423,7 +426,7 @@ function renderReg(){
     const err=en?null:checkLimits(a.division,myEvs,{relay:ev.is_relay});
     return `<label class="flex items-center gap-2 py-1.5 border-t ${err&&!en?'opacity-40':''}">
       <input type="checkbox" data-a="${a.id}" data-e="${regEventId}" ${en?'checked':''} ${(!open)||(err&&!en)?'disabled':''}>
-      <span class="flex-1">${esc(a.first_name)} ${esc(a.last_name)} <span class="text-xs text-gray-500">(${mine.length}/${rule.max} events)</span></span></label>`;
+      <span class="flex-1">${esc(a.first_name)} ${esc(a.last_name)} ${wide?`<span class="text-xs text-gray-500">${esc(a.division)} ${a.gender==='Girl'?'Girls':'Boys'}</span> `:''}<span class="text-xs text-gray-500">(${mine.length}/${rule.max} events)</span></span></label>`;
   }).join('') : '<p class="text-sm text-gray-500 py-2">No verified athletes in this division/gender.</p>';
   document.querySelectorAll('#regAthletes input[type=checkbox]').forEach(cb=>cb.onchange=toggleReg);
 }

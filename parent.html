@@ -148,7 +148,7 @@ function render(){
   $('athletes').innerHTML=athletes.map(a=>{
     const mine=entries.filter(x=>x.registration_id===a.id);
     const myEvs=mine.map(x=>events.find(v=>v.id===x.meet_event_id)).filter(Boolean).map(v=>({relay:v.is_relay}));
-    const opts=events.filter(v=>v.division===a.division&&v.gender===a.gender);
+    const opts=events.filter(v=>(v.division===a.division||v.division==='ALL')&&(v.gender===a.gender||v.gender==='Mixed')).sort((x,y)=>((x.event_number??9999)-(y.event_number??9999))||x.name.localeCompare(y.name));
     const rule=ENTRY_RULES[a.division];
     return `<div class="bg-white rounded-xl border p-3 mb-3">
       <div class="font-bold">${esc(a.first_name)} ${esc(a.last_name)} <span class="text-sm font-normal text-gray-500">${esc(a.division)} · ${esc(a.gender)}</span></div>
@@ -159,7 +159,7 @@ function render(){
         const seed=!en||v.is_relay?'':en.seed_source==='result'?`<span class="text-xs text-green-700 ml-auto">seed ${esc(en.seed_mark)} <span class="text-gray-400">(from results)</span></span>`:en.seed_mark?`<span class="text-xs text-gray-600 ml-auto">seed ${esc(en.seed_mark)}</span>`:'';
         return `<label class="flex items-center gap-2 py-1 ${err&&!en?'opacity-40':''}">
           <input type="checkbox" data-a="${a.id}" data-e="${v.id}" ${en?'checked':''} ${(!open)||(err&&!en)?'disabled':''}>
-          <span>${esc(v.name)}${v.is_relay?' <span class="text-xs bg-yellow-100 px-1 rounded">relay</span>':''}</span>${seed}</label>`;
+          <span>${v.event_number?`<b>#${v.event_number}</b> `:''}${esc(v.name)}${v.note?` <span class="text-xs text-gray-500">${esc(v.note)}</span>`:''}${(v.division==='ALL'||v.gender==='Mixed')?' <span class="text-xs text-gray-500">(mixed/all ages)</span>':''}${v.is_relay?' <span class="text-xs bg-yellow-100 px-1 rounded">relay</span>':''}</span>${seed}</label>`;
       }).join(''):'<p class="text-sm text-gray-500">No events offered for this division at this meet.</p>'}
     </div>`;
   }).join('');
