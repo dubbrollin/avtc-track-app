@@ -547,7 +547,7 @@ function renderRelayPanel(ev,m){
   $('rlNew').onclick=()=>{ const used=new Set(letters); let L='A'; while(used.has(L)) L=String.fromCharCode(L.charCodeAt(0)+1); (regRelayNew[ev.id]??=[]).push(L); regRelay=L; renderReg(); };
   document.querySelectorAll('[data-rl]').forEach(b=>b.onclick=()=>{ regRelay=b.dataset.rl; renderReg(); });
   document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>addRunner(ev,b.dataset.add,slots));
-  document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=async()=>{ const {error}=await sb.from('entries').delete().eq('id',b.dataset.rm); if(error) alert(error.message); await loadRegMeet(); });
+  document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=async()=>{ const {error}=await sb.from('entries').delete().eq('id',b.dataset.rm); if(error) alert(error.message); await loadRegMeet(); await compactRelay(ev,regRelay); });
   $('rlClear').onclick=async()=>{ const ids=slots.filter(Boolean).map(x=>x.id); if(ids.length){ if(!confirm(`Remove all runners from Relay ${regRelay}?`)) return; const {error}=await sb.from('entries').delete().in('id',ids); if(error) alert(error.message); } await loadRegMeet(); };
   $('rlBest').onclick=async()=>{
     const free=[1,2,3,4].filter(n=>!slots[n-1]); if(!free.length) return alert(`Relay ${regRelay} already has four runners.`);
@@ -555,6 +555,15 @@ function renderRelayPanel(ev,m){
     let i=0; for(const leg of free){ const c=cand[i++]; if(!c) break; await addRunner(ev,c.a.id,slots,leg,true); }
     await loadRegMeet();
   };
+}
+// A relay never has an alternate without all four runners: when someone is removed, everyone after them moves up one spot
+// (so the first alternate becomes the missing runner) and legs stay 1,2,3,4 then alternates 5,6,7,8 with no gaps.
+async function compactRelay(ev,letter){
+  const mine=new Set(rows.map(r=>r.id));
+  const list=regEntries.filter(x=>x.meet_event_id===ev.id&&(x.relay_team||'A')===letter&&mine.has(x.registration_id)).sort((p,q)=>(p.leg??99)-(q.leg??99));
+  let changed=false;
+  for(let i=0;i<list.length;i++){ if(list[i].leg!==i+1){ const {error}=await sb.from('entries').update({leg:i+1}).eq('id',list[i].id); if(error){ alert(error.message); break; } changed=true; } }
+  if(changed) await loadRegMeet();
 }
 async function addRunner(ev,aId,slots,legOverride,quiet){
   const m=curRegMeet(); const leg=legOverride||([1,2,3,4,5,6,7,8].find(n=>!slots[n-1]));
