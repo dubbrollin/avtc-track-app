@@ -4,20 +4,20 @@
 window.VYC_TEAMS = [
   {code:"AVTC", name:"Antelope Valley Track Club", conference:"East"},
   {code:"BV",   name:"Burbank Vikings", conference:"East"},
-  {code:"CAL",  name:"Calabasas", conference:"West"},
-  {code:"WVE",  name:"Eagles (WVE)", conference:"East"},
+  {code:"CAL",  name:"Calabasas Cheetahs", conference:"West"},
+  {code:"WVE",  name:"West Valley Eagles", conference:"East"},
   {code:"FP",   name:"Flying Phoenix", conference:"East"},
   {code:"LRR",  name:"Lancaster Runnin Rebels", conference:"West"},
   {code:"L5",   name:"Lane 5", conference:"West"},
   {code:"LAF",  name:"Los Angeles Falcons", conference:"West"},
   {code:"NPTC", name:"Northridge Pacers", conference:"East"},
   {code:"PB",   name:"Palmdale Bullets", conference:"East"},
-  {code:"SFR",  name:"Rush", conference:"West"},
-  {code:"SCTC", name:"Storm", conference:"West"},
-  {code:"TT",   name:"Thimsha", conference:"East"},
+  {code:"SFR",  name:"San Fernando Valley Rush", conference:"West"},
+  {code:"SCTC", name:"Santa Clarita Storm", conference:"West"},
+  {code:"TT",   name:"Thimsha Tigers", conference:"East"},
   {code:"VRTC", name:"Valley Raiders", conference:"West"},
   {code:"VC",   name:"Village Christian Schools", conference:"East"},
-  {code:"SCW",  name:"Warriors", conference:"East"}
+  {code:"SCW",  name:"Santa Clarita Warriors", conference:"West"}
 ];
 // Backward-compatible plain-name list, kept in case anything still expects window.TEAMS.
 window.conferenceForTeamCode = function(code){
