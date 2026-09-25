@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="theme.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="config.js"></script><script src="shared.js"></script><script src="events.js"></script><script src="results.js"></script>
+<script src="config.js"></script><script src="shared.js"></script><script src="events.js"></script><script src="results.js"></script><script src="league-records.js"></script>
 <style>
 .btn{padding:.5rem .9rem;border-radius:.5rem;font-weight:600}
 .seg{padding:.5rem .9rem;font-size:.875rem;cursor:pointer;background:#fff}
@@ -58,7 +58,7 @@
       <select id="evt" class="border rounded p-2"><option value="">All events</option></select>
       <select id="div" class="border rounded p-2"><option value="">All divisions</option></select>
       <select id="gen" class="border rounded p-2"><option value="">Boys &amp; Girls</option><option>Boy</option><option>Girl</option></select>
-      <select id="conf" class="border rounded p-2"><option value="">Both conferences</option><option value="East">Eastern Conference</option><option value="West">Western Conference</option></select>
+      <select id="conf" class="border rounded p-2"><option value="">Both leagues</option><option value="East">Eastern League</option><option value="West">Western League</option></select>
       <input id="q" class="border rounded p-2 flex-1" placeholder="Search name">
       <label id="qOnlyWrap" class="text-xs text-gray-700 flex items-center gap-1"><input type="checkbox" id="qOnly"> only athletes who met the qualifying standard</label>
       <button id="pdfBtn" type="button" class="border rounded p-2 px-3 bg-gray-800 text-white font-semibold">Download PDF</button>
@@ -148,7 +148,7 @@ function render(){
   const groups=rankResults(rs,bestPerAthlete||isMeetRecord,conf||null, mode==='season'?null:cap);
   // Season rankings keep the top-50 club cap, but the qualifier count is taken from the FULL ranked list, and "only qualified" shows every qualifier at its true rank.
   groups.forEach(g=>{
-    const f=g.rows[0]; g.std=f?stdFor(f):null; g.rec=f?recFor(f):null;
+    const f=g.rows[0]; g.std=f?stdFor(f):null; g.rec=f?recFor(f):null; g.lrecs=f?leagueRecs(f):[];
     const ranked=g.rows.filter(r=>r.mark_value!=null), rest=g.rows.filter(r=>r.mark_value==null);
     ranked.forEach((r,i)=>{ r._rank=i+1; r.q=isQ(r,g.std); });
     g.qCount=ranked.filter(r=>r.q).length; g.total=ranked.length;
@@ -187,9 +187,12 @@ function stdFor(r){ if(r.is_relay||r.mark_value==null) return null; const a=DIV_
 function recFor(r){ const a=DIV_AGES[r.division]; if(!a) return null; return recs.find(x=>x.gender===r.gender&&x.event_code===r.event_code&&!!x.is_relay===!!r.is_relay&&x.age_low===a[0]&&x.age_high===a[1])||null; }
 const better=(isTime,a,b)=>isTime?a<b:a>b;
 const isQ=(r,std)=>!!std&&!r.is_relay&&r.mark_value!=null&&(r.mark_value===std.mark_value||better(r.is_time,r.mark_value,std.mark_value));
+function leagueRecs(f){ const a=DIV_AGES[f.division]; if(!a) return [];
+  return [['East','Eastern'],['West','Western']].map(([k,nm])=>{ const x=((window.LEAGUE_RECORDS||{})[k]||[]).find(x=>x.gender===f.gender&&x.event_code===f.event_code&&!!x.is_relay===!!f.is_relay&&x.age_low===a[0]&&x.age_high===a[1]); return x?{nm,rec:x}:null; }).filter(Boolean); }
+const lrecTxt=(x)=>`${x.rec.mark_text||''} ${x.rec.holder}${x.rec.team?`, ${x.rec.team}`:''}${x.rec.rec_year?` (${x.rec.rec_year})`:''}`;
 function recLine(rec){ return rec?`Conference record: ${rec.mark_text||''} ${rec.is_relay?(rec.relay_names||rec.holder):rec.holder}${rec.team?`, ${rec.team}`:''}${rec.rec_year?` (${rec.rec_year})`:''}`:''; }
-function refText(f){ return [ f.std?`Qualifying standard: ${fmtStd(f.std,f)}`:'', recLine(f.rec) ].filter(Boolean).join('   |   '); }
-function refHtml(f){ return [ f.std?`Qualifying standard: <b>${fmtStd(f.std,f)}</b>`:'', f.rec?`Conference record: <b>${f.rec.mark_text||''}</b> ${f.rec.is_relay?(f.rec.relay_names||f.rec.holder):f.rec.holder}${f.rec.team?`, ${f.rec.team}`:''}${f.rec.rec_year?` (${f.rec.rec_year})`:''}`:'' ].filter(Boolean).join(' &nbsp;·&nbsp; '); }
+function refText(f){ return [ f.std?`Qualifying standard: ${fmtStd(f.std,f)}`:'', recLine(f.rec), ...(f.lrecs||[]).map(x=>`${x.nm} League record: ${lrecTxt(x)}`) ].filter(Boolean).join('   |   '); }
+function refHtml(f){ return [ f.std?`Qualifying standard: <b>${fmtStd(f.std,f)}</b>`:'', f.rec?`Conference record: <b>${f.rec.mark_text||''}</b> ${f.rec.is_relay?(f.rec.relay_names||f.rec.holder):f.rec.holder}${f.rec.team?`, ${f.rec.team}`:''}${f.rec.rec_year?` (${f.rec.rec_year})`:''}`:'', ...(f.lrecs||[]).map(x=>`${x.nm} League record: <b>${x.rec.mark_text||''}</b> ${x.rec.holder}${x.rec.team?`, ${x.rec.team}`:''}${x.rec.rec_year?` (${x.rec.rec_year})`:''}`) ].filter(Boolean).join(' &nbsp;·&nbsp; '); }
 const fmtStd=(s,r)=>r.is_time?fmtTimeVal(s.mark_value):fmtFieldVal(s.mark_value);
 function fmtTimeVal(sec){ if(sec>=60){ const m=Math.floor(sec/60); return m+':'+(sec-m*60).toFixed(2).padStart(5,'0'); } return sec.toFixed(2); }
 function fmtFieldVal(m){ const inch=m/0.0254; const ft=Math.floor(inch/12+1e-9); const i=inch-ft*12; return ft+"-"+(Math.round(i*4)/4).toFixed(2).replace(/\.00$/,'').padStart(2,'0'); }
@@ -202,7 +205,7 @@ function heatBlocks(rows,meet){
   const html=list.map(g=>{
     const f=g[0], label=`${f.division} ${f.gender==='Boy'?'Boys':f.gender==='Girl'?'Girls':f.gender} — ${f.event_name}`;
     const std=stdFor(f), rec=recFor(f);
-    const ref=refHtml({...f,std,rec});
+    const lrecs=leagueRecs(f); const ref=refHtml({...f,std,rec,lrecs});
     const rounds=[...new Set(g.map(r=>r.round||'F'))].sort((a,b)=>(a==='P'?0:1)-(b==='P'?0:1));
     const body=rounds.map(rd=>{
       const rr=g.filter(r=>(r.round||'F')===rd); const heats=[...new Set(rr.map(r=>r.heat||0))].sort((a,b)=>a-b); const nHeats=heats.filter(h=>h).length;
@@ -210,7 +213,7 @@ function heatBlocks(rows,meet){
         const hr=rr.filter(r=>(r.heat||0)===h).sort((a,b)=>((a.place>0?a.place:9999)-(b.place>0?b.place:9999))||String(a.athlete_name).localeCompare(String(b.athlete_name)));
         hr.forEach(r=>{ r.q=isQ(r,std); });
         const title=`${rd==='P'?'Prelims':'Finals'}${h?` — Heat ${h}${nHeats>1?' of '+nHeats:''}`:''}`;
-        pdfGroups.push({division:f.division,gender:f.gender,event:`${f.event_name} — ${title}`,rows:hr,ref:refText({...f,std,rec})});
+        pdfGroups.push({division:f.division,gender:f.gender,event:`${f.event_name} — ${title}`,rows:hr,ref:refText({...f,std,rec,lrecs})});
         return `<div class="heatblk"><div class="heathead">${title}</div><table class="w-full text-sm">${hr.map(r=>{
           const badges=[]; r.q=isQ(r,std); if(r.q) badges.push('<span class="bdg bq" title="Met the qualifying standard">Q</span>');
           if(meet&&meet.is_championship&&rec&&r.mark_value!=null&&better(r.is_time,r.mark_value,rec.mark_value)) badges.push('<span class="bdg bcr" title="New conference record — conference records can only be broken at conference championship meets">CR</span>');
@@ -253,7 +256,7 @@ $('pdfBtn').onclick=async()=>{
   if(!lastGroups.length) return alert('Nothing to put in a PDF yet — pick a meet or change the filters first.');
   const meetName = mode==='meet' ? ($('meet').selectedOptions[0]?.textContent||'Meet') : '';
   const title = mode==='meet' ? meetName+' - Results' : mode==='records' ? 'All-Time Records' : 'Season Rankings';
-  const bits=[ $('div').value, $('gen').value?($('gen').value==='Boy'?'Boys':'Girls'):'', $('evt').value, $('conf').value?$('conf').value+' Conference':'' ].filter(Boolean);
+  const bits=[ $('div').value, $('gen').value?($('gen').value==='Boy'?'Boys':'Girls'):'', $('evt').value, $('conf').value?$('conf').value+'ern League':'' ].filter(Boolean);
   const bytes=await window.resultsPdf(lastGroups,{title, subtitle:bits.length?bits.join('  |  '):'All divisions, boys & girls'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
   a.download=title.replace(/[^A-Za-z0-9]+/g,'-').replace(/^-|-$/g,'')+'.pdf'; a.click();
