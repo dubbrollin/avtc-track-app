@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="theme.css">
-<script src="config.js"></script>
+<script src="config.js"></script><script src="shared.js"></script>
 <style>
   body{background:#f3f4f6}
   .card{background:#fff;border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
@@ -58,10 +58,15 @@
   </div>
 
   <div class="card mt-4 text-sm text-gray-600">
-    <p><b>Eastern Conference:</b> Antelope Valley Track Club, Burbank Vikings, Flying Phoenix, Northridge Pacers, Palmdale Bullets, Thimsha Tigers, Village Christian Schools, West Valley Eagles.</p>
-    <p class="mt-1"><b>Western Conference:</b> Calabasas Cheetahs, Lancaster Runnin Rebels, Lane 5, Los Angeles Falcons, North Valley Golden Bears, San Fernando Valley Rush, Santa Clarita Storm, Santa Clarita Warriors, Valley Raiders.</p>
+    <p id="eastList"><b>Eastern Conference:</b> Antelope Valley Track Club, Burbank Vikings, Flying Phoenix, Northridge Pacers, Palmdale Bullets, Thimsha Tigers, Village Christian Schools, West Valley Eagles.</p>
+    <p class="mt-1" id="westList"><b>Western Conference:</b> Calabasas Cheetahs, Lancaster Runnin Rebels, Lane 5, Los Angeles Falcons, North Valley Golden Bears, San Fernando Valley Rush, Santa Clarita Storm, Santa Clarita Warriors, Valley Raiders.</p>
     <p class="mt-2 text-xs text-gray-400">Conference alignment current as of the 2027 season per club records — not yet reflected on valleyconference.org.</p>
   </div>
 </div>
+<script>
+function drawTeams(){ const act=window.VYC_TEAMS.filter(t=>t.active!==false); const list=c=>act.filter(t=>t.conference===c).map(t=>t.name).join(', ')+'.';
+  document.getElementById('eastList').innerHTML='<b>Eastern Conference:</b> '+list('East'); document.getElementById('westList').innerHTML='<b>Western Conference:</b> '+list('West'); }
+if(window.leagueReady) window.leagueReady.then(drawTeams);
+</script>
 </body>
 </html>

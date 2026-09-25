@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Site Admin</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="shared.js"></script>
+<script src="events.js"></script>
+<style>
+  body{background:#f3f4f6}
+  .card{background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .btn{padding:.45rem .8rem;border-radius:.5rem;font-weight:600;font-size:13px;background:#e5e7eb}
+  .btn.pri{background:var(--brand);color:#fff}
+  .btn.grn{background:#16a34a;color:#fff}
+  .btn.red{background:#dc2626;color:#fff}
+  .btn.lite{background:#f3f4f6}
+  .tab{padding:.55rem 1rem;font-size:.9rem;cursor:pointer;background:#fff;border:0;font-weight:600}
+  .tab.active{background:var(--brand);color:#fff}
+  input,select,textarea{padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;background:#fff}
+  table.t{width:100%;font-size:13px;border-collapse:collapse}
+  table.t th{background:#f3f4f6;text-align:left;font-size:11px;padding:6px;color:#374151;position:sticky;top:0;z-index:1}
+  table.t td{padding:5px 6px;border-top:1px solid #f3f4f6;vertical-align:middle}
+  .scroll{max-height:68vh;overflow:auto;border:1px solid #e5e7eb;border-radius:8px}
+  .pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px}
+  .ok{background:#dcfce7;color:#166534}.warn{background:#fef3c7;color:#92400e}.bad{background:#fee2e2;color:#991b1b}.gray{background:#e5e7eb;color:#374151}
+  #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;z-index:60;display:none;max-width:90vw}
+  #modal{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50;display:none;align-items:flex-start;justify-content:center;overflow:auto;padding:20px}
+  #modal .box{background:#fff;border-radius:12px;padding:16px;max-width:760px;width:100%}
+  .grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
+  .grid2 label{font-size:11px;font-weight:700;color:#374151;display:block}
+  .grid2 input,.grid2 select{width:100%}
+  .hide{display:none!important}
+</style>
+</head>
+<body class="text-gray-900"><header class="topnav"><div class="topnav-inner">
+  <a class="brand" href="home.html">VYC <b>Track &amp; Field</b></a>
+  <nav>
+    <a href="home.html">Home</a>
+    <a href="index.html">Register</a>
+    <a href="coach.html">Coach Dashboard</a>
+    <a href="parent.html">Parent Dashboard</a>
+    <a href="meets-admin.html">Meet Admin</a>
+    <a href="results.html">Results</a>
+    <a href="admin.html">Site Admin</a>
+  </nav>
+</div></header>
+<div class="max-w-6xl mx-auto p-4">
+  <h1 class="text-2xl font-bold mb-1">Site Admin</h1>
+  <p class="text-sm text-gray-600 mb-3">Change anything here — people, athletes, meets, records and league setup. Only site admins can open this page, and the database enforces it.</p>
+
+  <div id="login" class="card"><div id="loginWidget"></div></div>
+  <div id="denied" class="card hide"><p class="font-semibold">This page is for site admins only.</p><p class="text-sm text-gray-600" id="deniedWho"></p></div>
+
+  <div id="app" class="hide">
+    <div class="flex flex-wrap rounded-lg overflow-hidden border text-sm mb-3 w-fit">
+      <button class="tab active" data-tab="people">People &amp; Access <span id="pendBadge" class="pill warn hide"></span></button>
+      <button class="tab" data-tab="athletes">Athletes</button>
+      <button class="tab" data-tab="meets">Meets &amp; Results</button>
+      <button class="tab" data-tab="records">Records &amp; Standards</button>
+      <button class="tab" data-tab="league">League Setup</button>
+    </div>
+    <div id="pane"></div>
+  </div>
+</div>
+<div id="modal"><div class="box" id="modalBox"></div></div>
+<div id="toast"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const CFG=window.APP_CONFIG;
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let sb=supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{auth:{lock:(n,t,fn)=>fn()}});
+let me=null, tab='people', teams=[];
+const DIVS=(window.DIVISIONS||[]).map(d=>d.name);
+const AGES={'Sub-Gremlin':[5,6],'Gremlin':[7,8],'Bantam':[9,10],'Juniors':[11,12],'Youth':[13,14],'Intermediates':[15,18]};
+const FIELD_CODES=['HJ','LJ','SP','JT','TJ','PV','DT'];
+
+function toast(m,bad){ const t=$('toast'); t.textContent=m; t.style.background=bad?'#991b1b':'#111827'; t.style.display='block'; clearTimeout(toast.h); toast.h=setTimeout(()=>t.style.display='none',bad?6000:2500); }
+function openModal(html){ $('modalBox').innerHTML=html; $('modal').style.display='flex'; }
+function closeModal(){ $('modal').style.display='none'; }
+$('modal').addEventListener('mousedown',e=>{ if(e.target===$('modal')) closeModal(); });
+async function pageAll(mk){ const all=[]; for(let f=0;;f+=1000){ const {data,error}=await mk().range(f,f+999); if(error) throw error; all.push(...(data||[])); if(!data||data.length<1000) break; } return all; }
+async function run(p,okMsg){ const {error}=await p; if(error){ toast(error.message,true); return false; } if(okMsg) toast(okMsg); return true; }
+const teamName=c=>{ const t=teams.find(x=>x.code===c); return t?t.name:(c||'—'); };
+const teamOpts=(v,blank)=>(blank?'<option value="">'+blank+'</option>':'')+teams.map(t=>`<option value="${esc(t.code)}" ${t.code===v?'selected':''}>${esc(t.name)} (${esc(t.code)})</option>`).join('');
+const opts=(list,v,blank)=>(blank?'<option value="">'+blank+'</option>':'')+list.map(x=>{ const [val,lab]=Array.isArray(x)?x:[x,x]; return `<option value="${esc(val)}" ${String(val)===String(v??'')?'selected':''}>${esc(lab)}</option>`; }).join('');
+const ROLES=[['head_coach','Head Coach'],['division_coach','Division Coach'],['event_specialist','Field Event Coach']];
+const roleLabel=r=>(ROLES.find(x=>x[0]===r)||[0,r==='head_age_group'||!r?'Head Coach':r])[1];
+
+// ---- mark parsing/formatting (times in seconds, field marks in metres) ----
+function parseMark(text,isTime){
+  const s=String(text||'').trim(); if(!s) return null;
+  if(isTime){ const p=s.split(':').map(Number); if(p.some(isNaN)) return null; return +p.reduce((a,b)=>a*60+b,0).toFixed(3); }
+  const ft=s.match(/^(\d+)\s*['\-]\s*(\d+(?:\.\d+)?)?$/); if(ft) return +(((+ft[1])*12+(+(ft[2]||0)))*0.0254).toFixed(4);
+  const n=parseFloat(s); return isNaN(n)?null:n;
+}
+function fmtMark(v,isTime){ if(v==null) return ''; if(isTime){ if(v>=60){ const m=Math.floor(v/60); return m+':'+(v-m*60).toFixed(2).padStart(5,'0'); } return (+v).toFixed(2); }
+  const inch=v/0.0254, ft=Math.floor(inch/12+1e-9), i=inch-ft*12; const r=Math.round(i*4)/4; return ft+'-'+(r%1?r.toFixed(2):String(r|0).padStart(2,'0')); }
+
+// ---- auth ----
+window.mountLoginWidget(sb,$('loginWidget'),{hint:'Sign in with your site-admin account.'});
+sb.auth.onAuthStateChange(async(_e,s)=>{
+  if(!s||window.__authDone===s.user.id) return; window.__authDone=s.user.id;
+  sb=supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{auth:{lock:(n,t,fn)=>fn()}}); // fresh client after sign-in redirect
+  $('login').classList.add('hide');
+  const {data}=await sb.from('coaches').select('*').eq('email',s.user.email).eq('approved',true).maybeSingle();
+  if(!data||!data.is_admin){ try{localStorage.setItem('vyc_admin','0')}catch(e){} $('deniedWho').textContent='Signed in as '+s.user.email+'. Ask an existing site admin to give you access.'; $('denied').classList.remove('hide'); return; }
+  try{localStorage.setItem('vyc_admin','1')}catch(e){}
+  me=data; $('app').classList.remove('hide');
+  await loadTeams(); show('people');
+});
+async function loadTeams(){ const {data}=await sb.from('league_teams').select('*').order('sort_order').order('name'); teams=data||[]; }
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>show(b.dataset.tab));
+function show(t){ tab=t; document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===t)); ({people:paintPeople,athletes:paintAthletes,meets:paintMeets,records:paintRecords,league:paintLeague})[t](); }
+
+/* ============================ PEOPLE & ACCESS ============================ */
+let coaches=[];
+async function paintPeople(){
+  $('pane').innerHTML='<p class="text-sm text-gray-500">Loading…</p>';
+  try{ coaches=await pageAll(()=>sb.from('coaches').select('*').order('registered_at',{ascending:false})); }catch(e){ $('pane').innerHTML='<p class="text-red-700">'+esc(e.message)+'</p>'; return; }
+  const pend=coaches.filter(c=>!c.approved).length; $('pendBadge').textContent=pend+' pending'; $('pendBadge').classList.toggle('hide',!pend);
+  $('pane').innerHTML=`<div class="card">
+    <div class="flex flex-wrap gap-2 mb-2">
+      <select id="pTeam">${teamOpts('', 'All teams')}</select>
+      <select id="pStat"><option value="">All</option><option value="pending">Waiting for approval</option><option value="approved">Approved</option><option value="admin">Site admins</option></select>
+      <input id="pQ" class="flex-1" placeholder="Search name or email">
+      <span class="text-xs text-gray-500 self-center" id="pCount"></span>
+    </div>
+    <div class="scroll"><table class="t"><thead><tr><th>Coach</th><th>Team</th><th>Role</th><th>Division</th><th>Status</th><th>Actions</th></tr></thead><tbody id="pBody"></tbody></table></div>
+    <p class="text-xs text-gray-500 mt-2">Parents don't have accounts to manage here — they show up through their athletes (Athletes tab).</p></div>`;
+  ['pTeam','pStat'].forEach(i=>$(i).onchange=drawPeople); $('pQ').oninput=drawPeople; drawPeople();
+}
+function drawPeople(){
+  const t=$('pTeam').value, s=$('pStat').value, q=$('pQ').value.toLowerCase();
+  const rows=coaches.filter(c=>(!t||c.team_code===t)&&(!s||(s==='pending'?!c.approved:s==='approved'?c.approved:c.is_admin))&&(!q||((c.first_name||'')+' '+(c.last_name||'')+' '+(c.name||'')+' '+c.email).toLowerCase().includes(q)))
+    .sort((a,b)=>(a.approved===b.approved?0:a.approved?1:-1)); // pending first
+  $('pCount').textContent=rows.length+' of '+coaches.length;
+  $('pBody').innerHTML=rows.map(c=>`<tr data-id="${c.id}">
+    <td><div class="font-semibold">${esc((c.first_name||c.name||'')+' '+(c.last_name||''))}</div><div class="text-xs text-gray-500">${esc(c.email)}${c.phone?' · '+esc(c.phone):''}</div></td>
+    <td><select data-f="team_code">${teamOpts(c.team_code,'(none)')}</select></td>
+    <td><select data-f="role_type">${opts(ROLES,(c.role_type==='head_age_group'||!c.role_type)?'head_coach':c.role_type)}</select></td>
+    <td><input data-f="division_or_age_group" value="${esc(c.division_or_age_group||'')}" style="width:9rem" placeholder="e.g. Bantam"></td>
+    <td><span class="pill ${c.approved?'ok':'warn'}">${c.approved?'Approved':'Pending'}</span> ${c.is_admin?'<span class="pill bad">Site admin</span>':''}</td>
+    <td class="whitespace-nowrap">${c.approved?'<button class="btn lite" data-act="revoke">Revoke</button>':'<button class="btn grn" data-act="approve">Approve</button>'}
+      <button class="btn lite" data-act="admin">${c.is_admin?'Remove admin':'Make site admin'}</button>
+      <button class="btn red" data-act="del">Delete</button></td></tr>`).join('')||'<tr><td colspan="6" class="text-gray-500 p-3">No coaches match.</td></tr>';
+}
+document.addEventListener('change',async e=>{
+  const el=e.target; const tr=el.closest('#pBody tr'); if(!tr||!el.dataset.f) return;
+  const id=tr.dataset.id, c=coaches.find(x=>String(x.id)===id); let v=el.value; if(v==='') v=null;
+  const patch={[el.dataset.f]:v}; if(await run(sb.from('coaches').update(patch).eq('id',id),'Saved')) Object.assign(c,patch);
+});
+document.addEventListener('click',async e=>{
+  const b=e.target.closest('#pBody button'); if(!b) return; const id=b.closest('tr').dataset.id, c=coaches.find(x=>String(x.id)===id); const act=b.dataset.act;
+  const nm=(c.first_name||c.name||c.email);
+  if(act==='approve'||act==='revoke'){ if(act==='revoke'&&!confirm(`Revoke access for ${nm}? They will lose the Coach Dashboard until approved again.`)) return;
+    if(await run(sb.from('coaches').update({approved:act==='approve'}).eq('id',id),act==='approve'?'Approved':'Access revoked')){ c.approved=act==='approve'; paintPeople(); } }
+  if(act==='admin'){ if(c.email.toLowerCase()===me.email.toLowerCase()&&c.is_admin){ toast("You can't remove your own admin access — ask another site admin.",true); return; }
+    if(!confirm(c.is_admin?`Remove site-admin access from ${nm}?`:`Make ${nm} a SITE ADMIN? They will be able to see and change everything on every team.`)) return;
+    const patch={is_admin:!c.is_admin}; if(!c.is_admin) patch.approved=true; if(await run(sb.from('coaches').update(patch).eq('id',id),'Saved')){ Object.assign(c,patch); paintPeople(); } }
+  if(act==='del'){ if(c.email.toLowerCase()===me.email.toLowerCase()){ toast("You can't delete yourself.",true); return; }
+    if(!confirm(`Permanently delete the coach record for ${nm} (${c.email})? This can't be undone. (To just remove access, use Revoke.)`)) return;
+    if(await run(sb.from('coaches').delete().eq('id',id),'Deleted')){ coaches=coaches.filter(x=>x!==c); paintPeople(); } }
+});
+
+/* ================================ ATHLETES ================================ */
+let aRows=[], aFrom=0, aTotal=0;
+const A_FIELDS=[['first_name','First name'],['last_name','Last name'],['gender','Gender','sel',['Boy','Girl']],['dob','Date of birth','date'],['division','Division','sel',DIVS],['team_code','Team','team'],['status','Status','sel',['submitted','verified','rejected']],['sport','Sport'],['age_on_dec31','Age on Dec 31','num'],['parent1_name','Parent 1'],['parent1_relationship','Parent 1 relationship'],['parent2_name','Parent 2'],['phone','Phone'],['email','Email'],['address','Address'],['city','City'],['zip','ZIP'],['emergency_name','Emergency contact'],['emergency_phone','Emergency phone'],['coach_note','Coach note']];
+function paintAthletes(){
+  $('pane').innerHTML=`<div class="card">
+    <div class="flex flex-wrap gap-2 mb-2">
+      <select id="aTeam">${teamOpts('','All teams')}</select>
+      <select id="aStat"><option value="">Any status</option><option>submitted</option><option>verified</option><option>rejected</option></select>
+      <select id="aDiv">${opts(DIVS,'','All divisions')}</select>
+      <input id="aQ" class="flex-1" placeholder="Search last or first name">
+      <button class="btn pri" id="aGo">Search</button>
+    </div>
+    <p class="text-xs text-gray-500 mb-2" id="aInfo"></p>
+    <div class="scroll"><table class="t"><thead><tr><th>Athlete</th><th>Team</th><th>Division</th><th>Status</th><th>Actions</th></tr></thead><tbody id="aBody"></tbody></table></div>
+    <div class="mt-2"><button class="btn lite hide" id="aMore">Load more</button></div>
+  </div>
+  <div class="card border border-red-200"><h3 class="font-bold text-red-800 mb-1">Test data cleanup</h3>
+    <p class="text-sm text-gray-600 mb-2">Removes the last-season roster that was loaded for testing (every athlete tagged ROSTER-2026), plus their meet entries. Real registrations are not touched.</p>
+    <button class="btn red" id="aWipe">Delete test roster athletes…</button></div>`;
+  $('aGo').onclick=()=>aLoad(true); $('aQ').onkeydown=e=>{ if(e.key==='Enter') aLoad(true); }; ['aTeam','aStat','aDiv'].forEach(i=>$(i).onchange=()=>aLoad(true)); $('aMore').onclick=()=>aLoad(false); $('aWipe').onclick=wipeTest;
+  aLoad(true);
+}
+async function aLoad(reset){
+  if(reset){ aRows=[]; aFrom=0; }
+  let q=sb.from('registrations').select('id,first_name,last_name,gender,division,team_code,status,dob,age_on_dec31,contract_version,created_at',{count:'exact'}).order('last_name').order('first_name').range(aFrom,aFrom+99);
+  const t=$('aTeam').value, s=$('aStat').value, d=$('aDiv').value, qq=$('aQ').value.trim();
+  if(t) q=q.eq('team_code',t); if(s) q=q.eq('status',s); if(d) q=q.eq('division',d);
+  if(qq) q=q.or(`last_name.ilike.%${qq.replace(/[%,()]/g,'')}%,first_name.ilike.%${qq.replace(/[%,()]/g,'')}%`);
+  const {data,error,count}=await q; if(error){ toast(error.message,true); return; }
+  aRows=aRows.concat(data||[]); aFrom=aRows.length; aTotal=count||0;
+  $('aInfo').textContent=`Showing ${aRows.length} of ${aTotal} athletes`; $('aMore').classList.toggle('hide',aRows.length>=aTotal);
+  $('aBody').innerHTML=aRows.map(r=>`<tr data-id="${r.id}"><td><b>${esc(r.last_name)}</b>, ${esc(r.first_name)} <span class="text-xs text-gray-500">${r.gender==='Girl'?'F':'M'}${r.dob?' · '+esc(r.dob):''}</span></td><td>${esc(teamName(r.team_code))}</td><td>${esc(r.division||'')}</td>
+    <td><span class="pill ${r.status==='verified'?'ok':r.status==='rejected'?'bad':'warn'}">${esc(r.status||'')}</span></td>
+    <td class="whitespace-nowrap"><button class="btn lite" data-act="edit">Edit</button> <button class="btn red" data-act="del">Delete</button></td></tr>`).join('')||'<tr><td colspan="5" class="p-3 text-gray-500">No athletes match.</td></tr>';
+}
+document.addEventListener('click',async e=>{
+  const b=e.target.closest('#aBody button'); if(!b) return; const id=b.closest('tr').dataset.id; const r=aRows.find(x=>x.id===id);
+  if(b.dataset.act==='edit') return editAthlete(id);
+  if(!confirm(`Delete ${r.first_name} ${r.last_name} permanently, including their meet entries? Their past results stay but are unlinked. This can't be undone.`)) return;
+  if(await deleteAthletes([id])){ toast('Deleted'); aRows=aRows.filter(x=>x.id!==id); aTotal--; aLoad(true); }
+});
+async function deleteAthletes(ids){
+  for(let i=0;i<ids.length;i+=100){ const chunk=ids.slice(i,i+100);
+    if(!await run(sb.from('entries').delete().in('registration_id',chunk))) return false;
+    if(!await run(sb.from('results').update({registration_id:null}).in('registration_id',chunk))) return false;
+    if(!await run(sb.from('registrations').delete().in('id',chunk))) return false; }
+  return true;
+}
+async function wipeTest(){
+  const {count}=await sb.from('registrations').select('id',{count:'exact',head:true}).eq('contract_version','ROSTER-2026');
+  if(!count){ toast('No test roster athletes found.'); return; }
+  const typed=prompt(`This will permanently delete ${count} test roster athletes and their entries.\nType DELETE to confirm.`); if(typed!=='DELETE') return;
+  const ids=(await pageAll(()=>sb.from('registrations').select('id').eq('contract_version','ROSTER-2026'))).map(x=>x.id);
+  toast('Deleting…'); if(await deleteAthletes(ids)){ toast(`Deleted ${ids.length} test athletes`); aLoad(true); }
+}
+async function editAthlete(id){
+  const {data:r,error}=await sb.from('registrations').select('*').eq('id',id).single(); if(error){ toast(error.message,true); return; }
+  const inputs=A_FIELDS.filter(f=>f[0] in r||true).map(([k,lab,kind,list])=>{
+    const v=r[k]??''; let el;
+    if(kind==='sel') el=`<select data-k="${k}">${opts(list,v,'')}</select>`;
+    else if(kind==='team') el=`<select data-k="${k}">${teamOpts(v,'(none)')}</select>`;
+    else el=`<input data-k="${k}" type="${kind==='date'?'date':kind==='num'?'number':'text'}" value="${esc(v)}">`;
+    return `<div><label>${lab}</label>${el}</div>`; }).join('');
+  openModal(`<h3 class="font-bold text-lg mb-2">Edit ${esc(r.first_name)} ${esc(r.last_name)}</h3><div class="grid2" id="aForm">${inputs}</div>
+    <p class="text-xs text-gray-500 mt-2">Changing the date of birth does not change the division automatically — set the division yourself if it should move.</p>
+    <div class="mt-3 flex gap-2"><button class="btn pri" id="aSave">Save changes</button><button class="btn lite" onclick="closeModal()">Cancel</button></div>`);
+  $('aSave').onclick=async()=>{ const patch={}; document.querySelectorAll('#aForm [data-k]').forEach(el=>{ const k=el.dataset.k; let v=el.value; if(v==='') v=null; else if(el.type==='number') v=+v; if(String(v??'')!==String(r[k]??'')) patch[k]=v; });
+    if(!Object.keys(patch).length){ closeModal(); return; } if(await run(sb.from('registrations').update(patch).eq('id',id),'Saved')){ closeModal(); aLoad(true); } };
+}
+
+/* ============================ MEETS & RESULTS ============================ */
+async function paintMeets(){
+  $('pane').innerHTML='<p class="text-sm text-gray-500">Loading…</p>';
+  const {data:meets,error}=await sb.from('meets').select('*').order('meet_date',{ascending:false}); if(error){ $('pane').innerHTML='<p class="text-red-700">'+esc(error.message)+'</p>'; return; }
+  const counts={}; for(const m of meets){ const {count}=await sb.from('results').select('id',{count:'exact',head:true}).eq('meet_id',m.id); counts[m.id]=count||0; }
+  $('pane').innerHTML=`<div class="card"><p class="text-sm text-gray-600 mb-2">Rename or reschedule a meet, mark it a conference championship, or remove a meet / its results. To add a meet or upload results use <a class="underline" href="meets-admin.html">Meet Admin</a>.</p>
+   <div class="scroll"><table class="t"><thead><tr><th>Meet</th><th>Date</th><th>Location</th><th>Status</th><th>Entries close</th><th>Champ.</th><th>Results</th><th></th></tr></thead><tbody>
+   ${meets.map(m=>`<tr data-id="${m.id}"><td><input data-f="name" value="${esc(m.name)}" style="width:15rem"></td><td><input type="date" data-f="meet_date" value="${esc(m.meet_date||'')}"></td><td><input data-f="location" value="${esc(m.location||'')}" style="width:9rem"></td>
+    <td><select data-f="status">${opts(['open','closed','archived'],m.status)}</select></td><td><input type="date" data-f="entries_close" value="${esc((m.entries_close||'').slice(0,10))}"></td>
+    <td><input type="checkbox" data-f="is_championship" ${m.is_championship?'checked':''}></td><td>${counts[m.id]}</td>
+    <td class="whitespace-nowrap"><button class="btn pri" data-act="save">Save</button> <button class="btn lite" data-act="delres">Delete results</button> <button class="btn red" data-act="delmeet">Delete meet</button></td></tr>`).join('')||'<tr><td colspan="8" class="p-3 text-gray-500">No meets yet.</td></tr>'}
+   </tbody></table></div></div>`;
+}
+document.addEventListener('click',async e=>{
+  const b=e.target.closest('#pane tr[data-id] button[data-act]'); if(!b||tab!=='meets') return; const tr=b.closest('tr'), id=tr.dataset.id, act=b.dataset.act, name=tr.querySelector('[data-f=name]').value;
+  if(act==='save'){ const patch={}; tr.querySelectorAll('[data-f]').forEach(el=>{ const k=el.dataset.f; patch[k]=el.type==='checkbox'?el.checked:(el.value===''?null:el.value); }); await run(sb.from('meets').update(patch).eq('id',id),'Saved'); }
+  if(act==='delres'){ if(!confirm(`Delete ALL results for "${name}"? This can't be undone.`)) return; if(await run(sb.from('results').delete().eq('meet_id',id),'Results deleted')) paintMeets(); }
+  if(act==='delmeet'){ if(prompt(`Delete the meet "${name}" AND all its events, entries and results?\nType DELETE to confirm.`)!=='DELETE') return;
+    for(const t of ['results','entries','meet_events']) if(!await run(sb.from(t).delete().eq('meet_id',id))) return;
+    if(await run(sb.from('meets').delete().eq('id',id),'Meet deleted')) paintMeets(); }
+});
+
+/* =========================== RECORDS & STANDARDS =========================== */
+let recSub='conference', recRows=[];
+const REC_SUBS=[['conference','IEC Conference records'],['east','Eastern League records'],['west','Western League records'],['standards','Qualifying standards']];
+async function paintRecords(){
+  $('pane').innerHTML=`<div class="flex flex-wrap rounded-lg overflow-hidden border text-sm mb-3 w-fit">${REC_SUBS.map(([k,l])=>`<button class="tab ${k===recSub?'active':''}" data-sub="${k}">${l}</button>`).join('')}</div><div id="recPane"><p class="text-sm text-gray-500">Loading…</p></div>`;
+  document.querySelectorAll('[data-sub]').forEach(b=>b.onclick=()=>{ recSub=b.dataset.sub; paintRecords(); });
+  const std=recSub==='standards';
+  try{ recRows=await pageAll(()=>{ let q=sb.from(std?'qualifying_standards':'conference_records').select('*'); if(!std) q=q.eq('scope',recSub); return q.order('event_code').order('gender').order('age_low').order('id'); }); }catch(e){ $('recPane').innerHTML='<p class="text-red-700">'+esc(e.message)+'</p>'; return; }
+  const ageOpts=v=>Object.entries(AGES).map(([n,[lo,hi]])=>`<option value="${lo}-${hi}" ${v===lo+'-'+hi?'selected':''}>${n} (${lo}–${hi})</option>`).join('')+`<option value="0-99" ${v==='0-99'?'selected':''}>Open (0–99)</option>`;
+  const evs=[...new Map((window.STANDARD_EVENTS||[]).map(e=>[e.code+(e.relay?'R':''),e])).values()];
+  const evOpts=(c,rel)=>evs.map(e=>`<option value="${e.code}|${e.relay?1:0}" ${e.code===c&&!!e.relay===!!rel?'selected':''}>${esc(e.name)}</option>`).join('');
+  const row=r=>{ const isTime=r.is_time??!FIELD_CODES.includes(r.event_code); return `<tr data-id="${r.id??''}"><td><select data-f="gender"><option ${r.gender==='Boy'?'selected':''}>Boy</option><option ${r.gender==='Girl'?'selected':''}>Girl</option></select></td>
+    <td><select data-f="age">${ageOpts(r.age_low+'-'+r.age_high)}</select></td><td><select data-f="event">${evOpts(r.event_code,r.is_relay)}</select></td>
+    <td><input data-f="mark" value="${esc(std?fmtMark(r.mark_value,isTime):(r.mark_text||''))}" style="width:6rem" class="font-mono"></td>
+    ${std?`<td><input data-f="note" value="${esc(r.note||'')}" style="width:8rem"></td>`:`<td><input data-f="holder" value="${esc(r.holder||'')}" style="width:9rem"></td><td><input data-f="team" value="${esc(r.team||'')}" style="width:8rem"></td><td><input data-f="rec_year" type="number" value="${esc(r.rec_year||'')}" style="width:5rem"></td><td><input data-f="relay_names" value="${esc(r.relay_names||'')}" style="width:9rem" placeholder="relay names"></td>`}
+    <td class="whitespace-nowrap"><button class="btn pri" data-act="save">Save</button> <button class="btn red" data-act="del">Delete</button></td></tr>`; };
+  $('recPane').innerHTML=`<div class="card"><p class="text-sm text-gray-600 mb-2">${std?'The mark a child must reach to qualify. Times like 12.50 or 1:19.14; field marks like 12-10.50 (feet-inches).':'The championship record book. Times like 12.50 or 1:19.14; field marks like 12-10.50 (feet-inches).'} <b>${recRows.length}</b> rows.</p>
+    <div class="flex gap-2 mb-2"><button class="btn grn" id="recAdd">+ Add ${std?'standard':'record'}</button></div>
+    <div class="scroll"><table class="t"><thead><tr><th>Gender</th><th>Division</th><th>Event</th><th>Mark</th>${std?'<th>Note</th>':'<th>Holder</th><th>Team</th><th>Year</th><th>Relay names</th>'}<th></th></tr></thead><tbody id="recBody">${recRows.map(row).join('')}</tbody></table></div></div>`;
+  $('recAdd').onclick=()=>{ const tb=$('recBody'); const t=document.createElement('tbody'); t.innerHTML=row({gender:'Boy',age_low:9,age_high:10,event_code:'100',is_relay:false}); const tr=t.firstChild; tb.prepend(tr); tr.scrollIntoView({block:'center'}); };
+}
+document.addEventListener('click',async e=>{
+  const b=e.target.closest('#recBody button'); if(!b) return; const tr=b.closest('tr'), id=tr.dataset.id, std=recSub==='standards', table=std?'qualifying_standards':'conference_records';
+  if(b.dataset.act==='del'){ if(!id){ tr.remove(); return; } if(!confirm('Delete this row permanently?')) return; if(await run(sb.from(table).delete().eq('id',id),'Deleted')) tr.remove(); return; }
+  const g=k=>tr.querySelector(`[data-f=${k}]`)?.value??''; const [lo,hi]=g('age').split('-').map(Number); const [code,rel]=g('event').split('|'); const isRelay=rel==='1';
+  const isTime=isRelay||!FIELD_CODES.includes(code); const mv=parseMark(g('mark'),isTime);
+  if(mv==null){ toast("Couldn't read that mark — use 12.50, 1:19.14 or 12-10.50.",true); return; }
+  const patch={gender:g('gender'),age_low:lo,age_high:hi,event_code:code,is_relay:isRelay,is_time:isTime,mark_value:mv};
+  if(std) patch.note=g('note')||null; else Object.assign(patch,{mark_text:g('mark'),holder:g('holder')||null,team:g('team')||null,rec_year:g('rec_year')?+g('rec_year'):null,relay_names:g('relay_names')||null,scope:recSub});
+  const {data,error}=id?await sb.from(table).update(patch).eq('id',id).select('id'):await sb.from(table).insert(patch).select('id');
+  if(error){ toast(error.message,true); return; } toast('Saved'); if(!id&&data&&data[0]) tr.dataset.id=data[0].id;
+});
+
+/* ================================ LEAGUE SETUP ================================ */
+async function paintLeague(){
+  await loadTeams(); const {data:st}=await sb.from('app_settings').select('*'); const S=Object.fromEntries((st||[]).map(x=>[x.key,x.value]));
+  $('pane').innerHTML=`<div class="card"><h3 class="font-bold mb-2">Teams</h3>
+    <p class="text-xs text-gray-500 mb-2">Full team name, Eastern or Western League, and whether the team is active. The team code (the short Hy-Tek code) can't be changed once created — add a new team instead. Changes show across the app the next time a page loads.</p>
+    <div class="scroll"><table class="t"><thead><tr><th>Code</th><th>Team name</th><th>League</th><th>Active</th><th>Order</th><th></th></tr></thead><tbody id="tBody">
+    ${teams.map(t=>`<tr data-code="${esc(t.code)}"><td class="font-mono font-bold">${esc(t.code)}</td><td><input data-f="name" value="${esc(t.name)}" style="width:17rem"></td><td><select data-f="conference"><option value="East" ${t.conference==='East'?'selected':''}>Eastern</option><option value="West" ${t.conference==='West'?'selected':''}>Western</option></select></td>
+      <td><input type="checkbox" data-f="active" ${t.active?'checked':''}></td><td><input type="number" data-f="sort_order" value="${t.sort_order}" style="width:4.5rem"></td>
+      <td class="whitespace-nowrap"><button class="btn pri" data-act="save">Save</button> <button class="btn red" data-act="del">Delete</button></td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="mt-3 flex flex-wrap gap-2 items-end"><div><label class="text-xs font-bold">New code</label><br><input id="nCode" style="width:6rem" placeholder="e.g. ABC"></div><div><label class="text-xs font-bold">Team name</label><br><input id="nName" style="width:16rem"></div>
+      <div><label class="text-xs font-bold">League</label><br><select id="nConf"><option value="East">Eastern</option><option value="West">Western</option></select></div><button class="btn grn" id="nAdd">+ Add team</button></div></div>
+   <div class="card"><h3 class="font-bold mb-2">Season</h3><div class="flex flex-wrap gap-2 items-end"><div><label class="text-xs font-bold">Season year</label><br><input id="sYear" type="number" value="${esc(S.season_year||CFG.SEASON_YEAR)}" style="width:7rem"></div><button class="btn pri" id="sSave">Save</button></div>
+     <p class="text-xs text-gray-500 mt-2">Used for background-check expiry and similar year math.</p></div>
+   <div class="card"><h3 class="font-bold mb-1">Event list</h3><p class="text-sm text-gray-600">The standard event list (which events each division runs) still lives in the app's code, copied from Team Manager. To change it, tell Claude — it isn't editable here yet.</p></div>`;
+  $('nAdd').onclick=async()=>{ const code=$('nCode').value.trim().toUpperCase(), name=$('nName').value.trim(); if(!code||!name){ toast('Enter a code and a name.',true); return; }
+    if(await run(sb.from('league_teams').insert({code,name,conference:$('nConf').value,active:true,sort_order:100}),'Team added')) paintLeague(); };
+  $('sSave').onclick=()=>run(sb.from('app_settings').upsert({key:'season_year',value:String($('sYear').value)}),'Saved');
+}
+document.addEventListener('click',async e=>{
+  const b=e.target.closest('#tBody button'); if(!b) return; const tr=b.closest('tr'), code=tr.dataset.code;
+  if(b.dataset.act==='save'){ const patch={}; tr.querySelectorAll('[data-f]').forEach(el=>{ const k=el.dataset.f; patch[k]=el.type==='checkbox'?el.checked:el.type==='number'?+el.value:el.value; }); await run(sb.from('league_teams').update(patch).eq('code',code),'Saved'); }
+  if(b.dataset.act==='del'){ if(!confirm(`Delete team ${code} from the list? Athletes, coaches and results keep their team code, but the team will no longer appear in dropdowns. (To hide a team instead, untick Active.)`)) return; if(await run(sb.from('league_teams').delete().eq('code',code),'Team deleted')) paintLeague(); }
+});
+</script>
+</body>
+</html>

@@ -103,6 +103,7 @@ sb.auth.onAuthStateChange(async(_e,s)=>{ if(!s||window.__authDone===s.user.id) r
 async function pageAll(mk){ const all=[]; for(let f=0;;f+=1000){ const {data,error}=await mk().range(f,f+999); if(error){ console.error(error); break; } all.push(...(data||[])); if(!data||data.length<1000) break; } return all; }
 let stds=[], recs=[];
 async function loadAll(){
+  if(window.leagueReady) await window.leagueReady;
   // The server returns at most 1,000 rows per request and a league season has thousands of results, so page through everything.
   const [rr,sb2,ss,rc]=await Promise.all([
     pageAll(()=>sb.from('results').select('*, meets(name,meet_date)').order('id')),
@@ -110,7 +111,9 @@ async function loadAll(){
     pageAll(()=>sb.from('qualifying_standards').select('*').order('id')),
     pageAll(()=>sb.from('conference_records').select('*').order('id'))
   ]);
-  stds=ss; recs=rc;
+  stds=ss; recs=rc.filter(r=>!r.scope||r.scope==='conference');
+  const lgE=rc.filter(r=>r.scope==='east'), lgW=rc.filter(r=>r.scope==='west');
+  if(lgE.length||lgW.length) window.LEAGUE_RECORDS={East:lgE,West:lgW}; // edited on the Site Admin page; falls back to league-records.js if none saved
   const missing=[...new Set([...rr,...sb2].filter(r=>!r.team_code && r.registration_id).map(r=>r.registration_id))];
   let regsById={};
   const chunks=[]; for(let i=0;i<missing.length;i+=150) chunks.push(missing.slice(i,i+150));

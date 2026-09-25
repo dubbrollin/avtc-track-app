@@ -424,8 +424,13 @@ document.querySelectorAll('#roleTabs .roletab').forEach(t=>t.onclick=()=>{
 function fillTeams(sel){
   sel.innerHTML='<option value="">Select…</option>'+window.VYC_TEAMS.map(t=>`<option value="${t.code}">${t.name} (${t.conference})</option>`).join('');
 }
-fillTeams($('teamCode')); fillTeams($('cTeam'));
-window.VYC_TEAMS.forEach(t=>{ const o=document.createElement('option'); o.value=t.code; o.textContent=`${t.name} (${t.conference})`; $('vHomeTeam').appendChild(o); });
+function fillAllTeams(){
+  const act=window.VYC_TEAMS.filter(t=>t.active!==false); const keep=[$('teamCode').value,$('cTeam').value,$('vHomeTeam').value];
+  const lab=t=>`<option value="${t.code}">${t.name} (${t.conference==='West'?'Western':'Eastern'})</option>`;
+  [$('teamCode'),$('cTeam'),$('vHomeTeam')].forEach(sel=>{ sel.innerHTML='<option value="">Select…</option>'+act.map(lab).join(''); });
+  $('teamCode').value=keep[0]||''; $('cTeam').value=keep[1]||''; $('vHomeTeam').value=keep[2]||'';
+}
+fillAllTeams(); if(window.leagueReady) window.leagueReady.then(fillAllTeams);
 
 // ---- signature widget (draw or type cursive) ----
 function makeSig(container){

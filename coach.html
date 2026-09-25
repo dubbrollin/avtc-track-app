@@ -217,6 +217,7 @@ function bgStatus(c){
 }
 
 async function loadMe(){
+  if(window.leagueReady) await window.leagueReady;
   ['notCoachBox','pendingBox','coachApp'].forEach(id=>$(id).style.display='none');
   const {data,error}=await sb.from('coaches').select('*').eq('email',user.email).eq('approved',true).maybeSingle();
   if(error){ $('ncEmail').textContent=user.email||''; $('notCoachBox').style.display='block'; return; }
@@ -230,6 +231,7 @@ async function loadMe(){
     return;
   }
   myCoach=data;
+  try{ localStorage.setItem('vyc_admin', myCoach.is_admin?'1':'0'); }catch(e){}
   fullAccess=isFullAccess(myCoach);
   $('notCoachBox').style.display='none'; $('coachApp').style.display='block';
   const team=window.VYC_TEAMS.find(t=>t.code===myCoach.team_code);

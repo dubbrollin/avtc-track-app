@@ -143,3 +143,23 @@ window.mountLoginWidget = function(sb, container, opts){
     if (error) setMsg(error.message);
   };
 };
+
+// ---- Live team list & season year (edited on the Site Admin page). The teams above are the fallback; this replaces them in place. ----
+window.leagueReady = (async function(){
+  try{
+    const C=window.APP_CONFIG; if(!C||!C.SUPABASE_URL) return;
+    const h={apikey:C.SUPABASE_ANON_KEY,Authorization:'Bearer '+C.SUPABASE_ANON_KEY};
+    const [t,st]=await Promise.all([
+      fetch(C.SUPABASE_URL+'/rest/v1/league_teams?select=*&order=sort_order,name',{headers:h}).then(r=>r.ok?r.json():null),
+      fetch(C.SUPABASE_URL+'/rest/v1/app_settings?select=*',{headers:h}).then(r=>r.ok?r.json():null)]);
+    if(Array.isArray(t)&&t.length){
+      window.VYC_TEAMS.splice(0,window.VYC_TEAMS.length,...t.map(x=>({code:x.code,name:x.name,conference:x.conference,active:x.active!==false})));
+      window.TEAMS.splice(0,window.TEAMS.length,...window.VYC_TEAMS.filter(x=>x.active).map(x=>x.name));
+    }
+    if(Array.isArray(st)){ const y=st.find(x=>x.key==='season_year'); if(y&&+y.value) C.SEASON_YEAR=+y.value; }
+  }catch(e){}
+})();
+// ---- "Site Admin" link in the top menu, only for signed-in site admins (flag is set by admin.html / coach.html) ----
+document.addEventListener('DOMContentLoaded',function(){ try{
+  if(localStorage.getItem('vyc_admin')==='1'){ const nav=document.querySelector('.topnav nav'); if(nav&&!nav.querySelector('a[href="admin.html"]')){ const a=document.createElement('a'); a.href='admin.html'; a.textContent='Site Admin'; nav.appendChild(a); } }
+}catch(e){} });
