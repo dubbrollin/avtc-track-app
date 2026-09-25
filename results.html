@@ -18,6 +18,11 @@
   details.meetwin{background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.08);margin-bottom:12px;padding:10px 14px}
   details.meetwin>summary{cursor:pointer;padding:6px 0;list-style:revert}
   details.meetwin .meetbody{max-height:65vh;overflow-y:auto;margin-top:8px;padding:8px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb}
+  .heatblk{margin:8px 0 6px}
+  .heathead{font-size:12px;font-weight:700;color:#1d4ed8;background:#eff6ff;border-radius:6px;padding:3px 8px;margin-bottom:2px}
+  .bdg{display:inline-block;font-size:10px;font-weight:800;border-radius:4px;padding:0 5px;margin-left:4px;vertical-align:middle}
+  .bq{background:#dcfce7;color:#166534}
+  .bcr{background:#fef3c7;color:#92400e}
 </style>
 </head><body class="bg-gray-50 text-gray-900"><header class="topnav"><div class="topnav-inner">
   <a class="brand" href="home.html">VYC <b>Track &amp; Field</b></a>
@@ -82,7 +87,7 @@ function setMode(m){
 }
 
 sb.auth.onAuthStateChange(async(_e,s)=>{ if(!s||window.__authDone===s.user.id) return; window.__authDone=s.user.id; sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } } /* rebuild: original client can wedge after an OAuth redirect */); $('login').classList.add('hidden'); $('app').classList.remove('hidden');
-  const {data:m}=await sb.from('meets').select('id,name,meet_date').order('meet_date',{ascending:false});
+  const {data:m}=await sb.from('meets').select('id,name,meet_date,is_championship').order('meet_date',{ascending:false});
   meets=m||[];
   $('meet').innerHTML='<option value="">All meets — each in its own window</option>'+meets.map(m=>`<option value="${m.id}">${m.name} — ${fmtDate(m.meet_date)}</option>`).join('');
   const want=new URLSearchParams(location.search).get('meet'); if(want){ $('meet').value=want; mode='meet'; }
@@ -92,12 +97,16 @@ sb.auth.onAuthStateChange(async(_e,s)=>{ if(!s||window.__authDone===s.user.id) r
 });
 
 async function pageAll(mk){ const all=[]; for(let f=0;;f+=1000){ const {data,error}=await mk().range(f,f+999); if(error){ console.error(error); break; } all.push(...(data||[])); if(!data||data.length<1000) break; } return all; }
+let stds=[], recs=[];
 async function loadAll(){
   // The server returns at most 1,000 rows per request and a league season has thousands of results, so page through everything.
-  const [rr,sb2]=await Promise.all([
+  const [rr,sb2,ss,rc]=await Promise.all([
     pageAll(()=>sb.from('results').select('*, meets(name,meet_date)').order('id')),
-    pageAll(()=>sb.from('season_best').select('*').order('id'))
+    pageAll(()=>sb.from('season_best').select('*').order('id')),
+    pageAll(()=>sb.from('qualifying_standards').select('*').order('id')),
+    pageAll(()=>sb.from('conference_records').select('*').order('id'))
   ]);
+  stds=ss; recs=rc;
   const missing=[...new Set([...rr,...sb2].filter(r=>!r.team_code && r.registration_id).map(r=>r.registration_id))];
   let regsById={};
   const chunks=[]; for(let i=0;i<missing.length;i+=150) chunks.push(missing.slice(i,i+150));
@@ -129,9 +138,9 @@ function render(){
   let rs=baseRows().filter(r=>(!d||r.division===d)&&(!g||r.gender===g)&&(!ev||r.event_name===ev)&&(!q||(r.athlete_name+' '+(r.relay_runners||'')).toLowerCase().includes(q)));
   const bestPerAthlete = mode!=='meet';
   const isMeetRecord = mode==='meet' && $('meetRecord').checked;
-  if(mode==='meet' && !isMeetRecord) rs=rs.filter(r=>r.round==='F'||!rs.some(o=>o!==r&&o.athlete_name===r.athlete_name&&o.event_code===r.event_code&&o.round==='F'));
   const cap = mode==='records' ? 1 : (mode==='season' ? 50 : null);
   if(mode==='meet' && !$('meet').value){ renderAllMeets(d,g,ev,q,conf); return; }
+  if(mode==='meet' && !isMeetRecord){ renderSingleMeet(conf?rs.filter(r=>r.conference===conf):rs); return; }
   const groups=rankResults(rs,bestPerAthlete||isMeetRecord,conf||null,cap);
 
   lastGroups=groups;
@@ -150,32 +159,64 @@ function render(){
       <td class="py-1 text-right text-gray-500 text-xs">${(mode==='season'||mode==='records')?`${r.meet_name||''}`:(r.place?`${r.place}${['st','nd','rd'][r.place-1]||'th'} overall`:'')}</td></tr>`).join('')}</table></div>`).join('')
     ||'<p class="text-gray-500">No results yet.</p>';
 }
-// "All meets" view: every meet that has results gets its own window (a collapsible box with its own scroll). Anyone signed in — any coach or parent, any team — sees all of them.
+// ---------- Meet results, always sectioned by HEAT (like Meet Manager's results): division/gender/event -> round -> heat, places are within the heat ----------
+const DIV_AGES={'Sub-Gremlin':[5,6],'Gremlin':[7,8],'Bantam':[9,10],'Juniors':[11,12],'Youth':[13,14],'Intermediates':[15,18]};
+function stdFor(r){ if(r.is_relay||r.mark_value==null) return null; const a=DIV_AGES[r.division]; if(!a) return null; const [lo,hi]=r.division==='Intermediates'?[0,99]:a; // Team Manager's standards use "Open" (0-99) for the oldest division
+  return stds.find(s=>s.gender===r.gender&&s.event_code===r.event_code&&!s.is_relay&&s.age_low===lo&&s.age_high===hi)||null; }
+function recFor(r){ const a=DIV_AGES[r.division]; if(!a) return null; return recs.find(x=>x.gender===r.gender&&x.event_code===r.event_code&&!!x.is_relay===!!r.is_relay&&x.age_low===a[0]&&x.age_high===a[1])||null; }
+const better=(isTime,a,b)=>isTime?a<b:a>b;
+const fmtStd=(s,r)=>r.is_time?fmtTimeVal(s.mark_value):fmtFieldVal(s.mark_value);
+function fmtTimeVal(sec){ if(sec>=60){ const m=Math.floor(sec/60); return m+':'+(sec-m*60).toFixed(2).padStart(5,'0'); } return sec.toFixed(2); }
+function fmtFieldVal(m){ const inch=m/0.0254; const ft=Math.floor(inch/12+1e-9); const i=inch-ft*12; return ft+"-"+(Math.round(i*4)/4).toFixed(2).replace(/\.00$/,'').padStart(2,'0'); }
+function heatBlocks(rows,meet){
+  const evOrder=(window.STANDARD_EVENTS||[]).map(e=>e.name), divOrder=DIVISIONS.map(d=>d.name);
+  const groups={}; rows.forEach(r=>{ (groups[[r.division,r.gender,r.event_name].join('|')]??=[]).push(r); });
+  const list=Object.values(groups).sort((A,B)=>{ const a=A[0],b=B[0]; const ea=evOrder.indexOf(a.event_name), eb=evOrder.indexOf(b.event_name);
+    return ((ea<0?999:ea)-(eb<0?999:eb))||(divOrder.indexOf(a.division)-divOrder.indexOf(b.division))||String(a.gender).localeCompare(String(b.gender)); });
+  const pdfGroups=[];
+  const html=list.map(g=>{
+    const f=g[0], label=`${f.division} ${f.gender==='Boy'?'Boys':f.gender==='Girl'?'Girls':f.gender} — ${f.event_name}`;
+    const std=stdFor(f), rec=recFor(f);
+    const ref=[ std?`Qualifying standard: <b>${fmtStd(std,f)}</b>`:'', rec?`Conference record: <b>${rec.mark_text||''}</b> ${rec.is_relay?(rec.relay_names||rec.holder):rec.holder}${rec.team?`, ${rec.team}`:''}${rec.rec_year?` (${rec.rec_year})`:''}`:'' ].filter(Boolean).join(' &nbsp;·&nbsp; ');
+    const rounds=[...new Set(g.map(r=>r.round||'F'))].sort((a,b)=>(a==='P'?0:1)-(b==='P'?0:1));
+    const body=rounds.map(rd=>{
+      const rr=g.filter(r=>(r.round||'F')===rd); const heats=[...new Set(rr.map(r=>r.heat||0))].sort((a,b)=>a-b); const nHeats=heats.filter(h=>h).length;
+      return heats.map(h=>{
+        const hr=rr.filter(r=>(r.heat||0)===h).sort((a,b)=>((a.place>0?a.place:9999)-(b.place>0?b.place:9999))||String(a.athlete_name).localeCompare(String(b.athlete_name)));
+        const title=`${rd==='P'?'Prelims':'Finals'}${h?` — Heat ${h}${nHeats>1?' of '+nHeats:''}`:''}`;
+        pdfGroups.push({division:f.division,gender:f.gender,event:`${f.event_name} — ${title}`,rows:hr});
+        return `<div class="heatblk"><div class="heathead">${title}</div><table class="w-full text-sm">${hr.map(r=>{
+          const badges=[]; if(std&&r.mark_value!=null&&!r.is_relay&&better(r.is_time,r.mark_value,std.mark_value)||(std&&r.mark_value!=null&&!r.is_relay&&r.mark_value===std.mark_value)) badges.push('<span class="bdg bq" title="Met the qualifying standard">Q</span>');
+          if(meet&&meet.is_championship&&rec&&r.mark_value!=null&&better(r.is_time,r.mark_value,rec.mark_value)) badges.push('<span class="bdg bcr" title="New conference record — conference records can only be broken at conference championship meets">CR</span>');
+          return `<tr class="border-t"><td class="py-1 w-8 text-gray-500">${r.place>0?r.place:''}</td><td class="py-1">${r.athlete_name}${r.team_code?` <span class="text-xs text-gray-400">${r.team_code}</span>`:''}${r.relay_runners?`<div class="text-xs text-gray-500">${r.relay_runners}</div>`:''}</td><td class="py-1 font-mono text-right font-semibold">${r.mark}${r.wind?` <span class="text-xs text-gray-400">w${r.wind}</span>`:''} ${badges.join(' ')}</td></tr>`; }).join('')}</table></div>`;
+      }).join('');
+    }).join('');
+    return `<div class="bg-white rounded-xl shadow p-3 mb-3"><div class="font-bold">${label}</div>${ref?`<div class="text-xs text-gray-500 mt-0.5">${ref}</div>`:''}${body}</div>`;
+  }).join('');
+  return {html,pdfGroups};
+}
+function renderSingleMeet(rs){
+  const m=meets.find(x=>x.id===$('meet').value);
+  const {html,pdfGroups}=heatBlocks(rs,m); lastGroups=pdfGroups;
+  $('hint').textContent='Results by heat — places are within each heat. "Q" = met the qualifying standard'+(m&&m.is_championship?'; "CR" = new conference record (this is a conference championship meet).':'. Conference records can only be broken at conference championship meets.');
+  $('list').innerHTML=html||'<p class="text-gray-500">No results match these filters.</p>';
+}
+// "All meets" view: every meet that has results gets its own window (collapsible, own scroll). Any signed-in coach or parent, any team, sees all of them.
 const openMeets=new Set();
 function meetRows(m,d,g,ev,q){
-  let rs=allResults.filter(r=>r.meet_id===m.id&&(!d||r.division===d)&&(!g||r.gender===g)&&(!ev||r.event_name===ev)&&(!q||(r.athlete_name+' '+(r.relay_runners||'')).toLowerCase().includes(q)));
-  return rs.filter(r=>r.round==='F'||!rs.some(o=>o!==r&&o.athlete_name===r.athlete_name&&o.event_code===r.event_code&&o.round==='F'));
-}
-function groupsHtml(groups){
-  return groups.map(gp=>`<div class="bg-white rounded-xl shadow p-3 mb-3">
-    <div class="font-bold">${gp.division} ${gp.gender==='Boy'?'Boys':gp.gender==='Girl'?'Girls':gp.gender} — ${gp.event}</div>
-    <table class="w-full text-sm mt-1">${gp.rows.map((r,i)=>`<tr class="border-t rec-row">
-      <td class="py-1 w-8 text-gray-500">${r.mark_value!=null?i+1:''}</td>
-      <td class="py-1">${r.athlete_name}${r.team_code?` <span class="text-xs text-gray-400">${r.team_code}</span>`:''}${r.relay_runners?`<div class="text-xs text-gray-500">${r.relay_runners}</div>`:''}</td>
-      <td class="py-1 font-mono text-right font-semibold">${r.mark}${r.wind?` <span class="text-xs text-gray-400">w${r.wind}</span>`:''}</td>
-      <td class="py-1 text-right text-gray-500 text-xs">${r.place?`${r.place}${['st','nd','rd'][r.place-1]||'th'} overall`:''}</td></tr>`).join('')}</table></div>`).join('');
+  return allResults.filter(r=>r.meet_id===m.id&&(!d||r.division===d)&&(!g||r.gender===g)&&(!ev||r.event_name===ev)&&(!q||(r.athlete_name+' '+(r.relay_runners||'')).toLowerCase().includes(q)));
 }
 function fillMeetWindow(det,d,g,ev,q,conf){
   const m=meets.find(x=>x.id===det.dataset.m); const box=det.querySelector('.meetbody'); if(!m||!box) return;
-  const groups=rankResults(meetRows(m,d,g,ev,q),false,conf||null,null);
-  box.innerHTML=groupsHtml(groups)||'<p class="text-gray-500 p-2">No results match these filters.</p>';
+  const rows=meetRows(m,d,g,ev,q).filter(r=>!conf||r.conference===conf);
+  box.innerHTML=heatBlocks(rows,m).html||'<p class="text-gray-500 p-2">No results match these filters.</p>';
 }
 function renderAllMeets(d,g,ev,q,conf){
   lastGroups=[];
-  $('hint').textContent='Every meet, each in its own window — open one to see its full results. Filters above apply to all of them.';
+  $('hint').textContent='Every meet, each in its own window — open one to see its results by heat. Filters above apply to all of them.';
   const withResults=meets.filter(m=>allResults.some(r=>r.meet_id===m.id));
   if(!withResults.length){ $('list').innerHTML='<p class="text-gray-500">No results have been uploaded for any meet yet.</p>'; return; }
-  $('list').innerHTML=withResults.map(m=>{ const n=meetRows(m,d,g,ev,q).length; return `<details class="meetwin" data-m="${m.id}" ${openMeets.has(m.id)?'open':''}><summary><span class="font-bold">${m.name}</span> <span class="text-gray-500 text-sm">— ${fmtDate(m.meet_date)} · ${n} results</span></summary><div class="meetbody"></div></details>`; }).join('');
+  $('list').innerHTML=withResults.map(m=>{ const n=meetRows(m,d,g,ev,q).filter(r=>!conf||r.conference===conf).length; return `<details class="meetwin" data-m="${m.id}" ${openMeets.has(m.id)?'open':''}><summary><span class="font-bold">${m.name}</span> ${m.is_championship?'<span class="bdg bcr">Conference Championship</span>':''} <span class="text-gray-500 text-sm">— ${fmtDate(m.meet_date)} · ${n} results</span></summary><div class="meetbody"></div></details>`; }).join('');
   document.querySelectorAll('#list details.meetwin').forEach(det=>{
     if(det.open) fillMeetWindow(det,d,g,ev,q,conf);
     det.addEventListener('toggle',()=>{ if(det.open){ openMeets.add(det.dataset.m); fillMeetWindow(det,d,g,ev,q,conf); } else openMeets.delete(det.dataset.m); });

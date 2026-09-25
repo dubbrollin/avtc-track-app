@@ -32,7 +32,7 @@ window.parseHytekResults = function(text, cfg, regs, meetEvents, all){
       out.push({ registration_id:reg?.id||null, athlete_name:`${f[23]} ${f[22]}`, gender:f[25]==='F'?'Girl':'Boy',
         division:divFromName(f[8])||reg?.division||divFromDob(f[26]), team_code:(f[27]||'').toUpperCase()||null, event_code:f[4], event_name:evName(f[4],false), is_relay:false,
         round:f[9]||'F', mark:f[10], mark_value:markToValue(f[10],timeLike,f[11]), is_time:timeLike,
-        place:parseInt(f[13])||null, wind:f[12]||null, source:'hytek' });
+        place:parseInt(f[13])||null, overall_place:parseInt(f[14])||null, heat:parseInt(f[15])||null, wind:f[12]||null, source:'hytek' });
     }
     if(f[0]==='R'){
       if(!all && f[12].toUpperCase()!==code){ skipped++; continue; }
@@ -41,7 +41,7 @@ window.parseHytekResults = function(text, cfg, regs, meetEvents, all){
       out.push({ registration_id:null, athlete_name:f[1]||`${cfg.CLUB_NAME} relay`, gender:g, division:divFromName(f[8]), team_code:(f[12]||'').toUpperCase()||null,
         event_code:f[4], event_name:evName(f[4],true), is_relay:true, relay_runners:runners.join(', '),
         round:f[9]||'F', mark:f[10], mark_value:markToValue(f[10],true,'M'), is_time:true,
-        place:parseInt(f[13])||null, source:'hytek' });
+        place:parseInt(f[13])||null, overall_place:parseInt(f[14])||null, heat:parseInt(f[15])||null, source:'hytek' });
     }
   }
   return {rows:out, skippedOtherTeams:skipped, unmatched:[...unmatched], header};

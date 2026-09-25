@@ -111,6 +111,7 @@ async function load(){
       <button class="btn bg-green-600 text-white text-sm" data-act="export" data-id="${m.id}">Hy-Tek entries</button>
       <button class="btn bg-gray-200 text-sm" data-act="summary" data-id="${m.id}">Entry list</button>
       <button class="btn bg-purple-600 text-white text-sm" data-act="results" data-id="${m.id}">Results</button>
+      <button class="btn ${m.is_championship?'bg-amber-500 text-white':'bg-gray-200'} text-sm" data-act="champ" data-id="${m.id}">${m.is_championship?'Conference Championship: YES':'Conference Championship?'}</button>
       <button class="btn bg-red-100 text-red-700 text-sm" data-act="archive" data-id="${m.id}">Archive</button>
     </div>
     <div id="panel-${m.id}" class="mt-3"></div></div>`).join('')||'<p class="text-gray-500">No meets yet.</p>';
@@ -120,6 +121,7 @@ async function load(){
 async function act(a,id){
   const m=meets.find(x=>x.id===id);
   if(a==='toggle'){ await sb.from('meets').update({status:m.status==='open'?'closed':'open'}).eq('id',id); return load(); }
+  if(a==='champ'){ await sb.from('meets').update({is_championship:!m.is_championship}).eq('id',id); return load(); }
   if(a==='archive'){ if(!confirm(`Archive "${m.name}"? Entries are kept but parents won't see it.`)) return; await sb.from('meets').update({status:'archived'}).eq('id',id); return load(); }
   if(a==='events'){
     const {data:evs}=await sb.from('meet_events').select('*').eq('meet_id',id).order('division').order('gender').order('name');
