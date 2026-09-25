@@ -48,7 +48,7 @@ const CFG=window.APP_CONFIG;
 let sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // avoid cross-tab navigator.locks deadlock when multiple app pages are open at once
 let meets=[];
 window.mountLoginWidget(sb, $('loginWidget'), {hint:"Coach sign-in."});
-sb.auth.onAuthStateChange(async(_e,s)=>{ if(!s) return; sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } } /* rebuild: original client can wedge after an OAuth redirect */); $('login').classList.add('hidden'); $('app').classList.remove('hidden'); load(); });
+sb.auth.onAuthStateChange(async(_e,s)=>{ if(!s||window.__authDone===s.user.id) return; window.__authDone=s.user.id; sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } } /* rebuild: original client can wedge after an OAuth redirect */); $('login').classList.add('hidden'); $('app').classList.remove('hidden'); load(); });
 
 $('create').onclick=async()=>{
   const name=$('mName').value.trim(), date=$('mDate').value, close=$('mClose').value;

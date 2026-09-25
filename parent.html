@@ -72,7 +72,7 @@ let me=null, myRegs=[], meets=[], athletes=[], events=[], entries=[];
 window.mountLoginWidget(sb, $('loginWidget'), {hint:"Sign in with the email you used to register your athlete."});
 $('logout').onclick=()=>sb.auth.signOut().then(()=>location.reload());
 sb.auth.onAuthStateChange(async(_e,session)=>{
-  if(!session) return; me=session.user.email;
+  if(!session||window.__authDone===session.user.id) return; window.__authDone=session.user.id; me=session.user.email;
   sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // rebuild client: the original can wedge after an OAuth redirect, hanging every later query forever
   $('login').classList.add('hidden'); $('app').classList.remove('hidden');
   await loadMyAthletes();

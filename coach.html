@@ -158,6 +158,7 @@ document.querySelectorAll('.signout-btn').forEach(b=>b.onclick=async()=>{await s
 sb.auth.onAuthStateChange(async(_e,session)=>{
   user=session?.user||null;
   if(!user) return;
+  if(window.__authDone===user.id) return; window.__authDone=user.id; // sign-in events repeat (token refresh, our own rebuilt client) — set up once per person or the page redraws forever
   sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // rebuild client: the original can wedge after an OAuth redirect, hanging every later query forever
   $('login').classList.add('hidden'); $('app').classList.remove('hidden');
   await loadMe();
