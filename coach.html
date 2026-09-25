@@ -20,6 +20,7 @@
   @media(min-width:900px){ .dash2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)} }
   .rosterScroll{max-height:52vh;overflow-y:auto;padding-right:6px;border:1px solid #e5e7eb;border-radius:8px;padding:8px}
   @media(min-width:900px){ .rosterScroll{max-height:calc(100vh - 250px);min-height:260px} }
+  .sexhead{font-size:12px;font-weight:700;color:#1d4ed8;margin:6px 0 2px}
   .rosterNames{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:2px 12px;margin-bottom:8px}
   .rosterScroll .divhead{position:sticky;top:-8px;background:#fff;padding:4px 0;z-index:1;border-bottom:1px solid #f3f4f6;margin-bottom:2px}
   body{background:#f3f4f6}
@@ -286,10 +287,17 @@ function renderDashRoster(){
   const el=$('dashRoster'); if(!el) return;
   $('dashCount').textContent=`(${rows.length})`;
   if(!rows.length){ el.innerHTML='<p class="text-gray-500">No athletes on your roster yet. Share the registration link with parents.</p>'; return; }
+  // Division first (youngest to oldest), then Boys and Girls inside each division — every coach sees it this way; the database already limits
+  // Division/Event coaches to their own division and sex, a Head Coach sees the whole team.
   const order=(window.DIVISIONS||[]).map(d=>d.name);
-  const by={}; rows.forEach(r=>(by[r.division]=by[r.division]||[]).push(r));
-  el.innerHTML=Object.keys(by).sort((x,y)=>order.indexOf(x)-order.indexOf(y)).map(d=>`<div class="mb-2"><div class="text-xs font-bold uppercase text-gray-500 divhead">${esc(d)} (${by[d].length})</div><div class="rosterNames">`+
-    by[d].sort((p,q)=>(p.last_name+p.first_name).localeCompare(q.last_name+q.first_name)).map(r=>`<span>${esc(r.last_name)}, ${esc(r.first_name)} <span class="text-gray-400 text-xs">${r.gender==='Girl'?'F':'M'}${r.status==='verified'?'':' · '+esc(r.status)}</span></span>`).join('')+`</div></div>`).join('');
+  const by={}; rows.forEach(r=>{ ((by[r.division]??={})[r.gender]??=[]).push(r); });
+  const nm=r=>`<span>${esc(r.last_name)}, ${esc(r.first_name)}${r.status==='verified'?'':` <span class="text-gray-400 text-xs">· ${esc(r.status)}</span>`}</span>`;
+  const sortN=(p,q)=>(p.last_name+p.first_name).localeCompare(q.last_name+q.first_name);
+  el.innerHTML=Object.keys(by).sort((x,y)=>order.indexOf(x)-order.indexOf(y)).map(d=>{
+    const total=(by[d].Boy||[]).length+(by[d].Girl||[]).length;
+    const sex=(g,label)=>by[d][g]&&by[d][g].length?`<div class="sexhead">${label} (${by[d][g].length})</div><div class="rosterNames">${by[d][g].sort(sortN).map(nm).join('')}</div>`:'';
+    return `<div class="mb-3"><div class="text-xs font-bold uppercase text-gray-500 divhead">${esc(d)} (${total})</div>${sex('Boy','Boys')}${sex('Girl','Girls')}</div>`;
+  }).join('');
 }
 function render(){
   renderDashRoster();

@@ -15,6 +15,9 @@
 .seg.active{background:var(--brand);color:#fff}
 .rec-row td{padding-top:.35rem;padding-bottom:.35rem}
 .rec-medal{display:inline-block;width:1.5rem;text-align:center}
+  details.meetwin{background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.08);margin-bottom:12px;padding:10px 14px}
+  details.meetwin>summary{cursor:pointer;padding:6px 0;list-style:revert}
+  details.meetwin .meetbody{max-height:65vh;overflow-y:auto;margin-top:8px;padding:8px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb}
 </style>
 </head><body class="bg-gray-50 text-gray-900"><header class="topnav"><div class="topnav-inner">
   <a class="brand" href="home.html">VYC <b>Track &amp; Field</b></a>
@@ -81,32 +84,34 @@ function setMode(m){
 sb.auth.onAuthStateChange(async(_e,s)=>{ if(!s||window.__authDone===s.user.id) return; window.__authDone=s.user.id; sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } } /* rebuild: original client can wedge after an OAuth redirect */); $('login').classList.add('hidden'); $('app').classList.remove('hidden');
   const {data:m}=await sb.from('meets').select('id,name,meet_date').order('meet_date',{ascending:false});
   meets=m||[];
-  $('meet').innerHTML=meets.map(m=>`<option value="${m.id}">${m.name} — ${fmtDate(m.meet_date)}</option>`).join('')||'<option value="">No meets yet</option>';
+  $('meet').innerHTML='<option value="">All meets — each in its own window</option>'+meets.map(m=>`<option value="${m.id}">${m.name} — ${fmtDate(m.meet_date)}</option>`).join('');
   const want=new URLSearchParams(location.search).get('meet'); if(want){ $('meet').value=want; mode='meet'; }
   await loadAll();
   setMode(mode);
   ['meet','meetRecord','evt','div','gen','conf'].forEach(i=>$(i).onchange=render); $('q').oninput=render;
 });
 
+async function pageAll(mk){ const all=[]; for(let f=0;;f+=1000){ const {data,error}=await mk().range(f,f+999); if(error){ console.error(error); break; } all.push(...(data||[])); if(!data||data.length<1000) break; } return all; }
 async function loadAll(){
-  const [{data:rr},{data:sb2}]=await Promise.all([
-    sb.from('results').select('*, meets(name,meet_date)'),
-    sb.from('season_best').select('*')
+  // The server returns at most 1,000 rows per request and a league season has thousands of results, so page through everything.
+  const [rr,sb2]=await Promise.all([
+    pageAll(()=>sb.from('results').select('*, meets(name,meet_date)').order('id')),
+    pageAll(()=>sb.from('season_best').select('*').order('id'))
   ]);
-  const missing=[...new Set([...(rr||[]),...(sb2||[])].filter(r=>!r.team_code && r.registration_id).map(r=>r.registration_id))];
+  const missing=[...new Set([...rr,...sb2].filter(r=>!r.team_code && r.registration_id).map(r=>r.registration_id))];
   let regsById={};
-  if(missing.length){
-    const {data:regs}=await sb.from('registrations').select('id,team_code').in('id',missing);
+  for(let i=0;i<missing.length;i+=100){
+    const {data:regs}=await sb.from('registrations').select('id,team_code').in('id',missing.slice(i,i+100));
     (regs||[]).forEach(r=>regsById[r.id]=r);
   }
-  allResults=attachConference((rr||[]).map(r=>({...r,meet_name:r.meets?.name,meet_date:r.meets?.meet_date})),regsById);
-  seasonBest=attachConference(sb2||[],regsById);
+  allResults=attachConference(rr.map(r=>({...r,meet_name:r.meets?.name,meet_date:r.meets?.meet_date})),regsById);
+  seasonBest=attachConference(sb2,regsById);
 }
 
 // Rows for the currently selected mode, before the division/gender/event/conference/search filters.
 function baseRows(){
   if(mode==='season'||mode==='records') return seasonBest;
-  const m=meets.find(x=>x.id===$('meet').value); if(!m) return [];
+  const m=meets.find(x=>x.id===$('meet').value); if(!m) return allResults;
   if($('meetRecord').checked) return allResults.filter(r=>r.meet_name===m.name);
   return allResults.filter(r=>r.meet_id===m.id);
 }
@@ -128,6 +133,7 @@ function render(){
   const isMeetRecord = mode==='meet' && $('meetRecord').checked;
   if(mode==='meet' && !isMeetRecord) rs=rs.filter(r=>r.round==='F'||!rs.some(o=>o!==r&&o.athlete_name===r.athlete_name&&o.event_code===r.event_code&&o.round==='F'));
   const cap = mode==='records' ? 1 : (mode==='season' ? 50 : null);
+  if(mode==='meet' && !$('meet').value){ renderAllMeets(d,g,ev,q,conf); return; }
   const groups=rankResults(rs,bestPerAthlete||isMeetRecord,conf||null,cap);
 
   lastGroups=groups;
@@ -146,7 +152,39 @@ function render(){
       <td class="py-1 text-right text-gray-500 text-xs">${(mode==='season'||mode==='records')?`${r.meet_name||''}`:(r.place?`${r.place}${['st','nd','rd'][r.place-1]||'th'} overall`:'')}</td></tr>`).join('')}</table></div>`).join('')
     ||'<p class="text-gray-500">No results yet.</p>';
 }
+// "All meets" view: every meet that has results gets its own window (a collapsible box with its own scroll). Anyone signed in — any coach or parent, any team — sees all of them.
+const openMeets=new Set();
+function meetRows(m,d,g,ev,q){
+  let rs=allResults.filter(r=>r.meet_id===m.id&&(!d||r.division===d)&&(!g||r.gender===g)&&(!ev||r.event_name===ev)&&(!q||(r.athlete_name+' '+(r.relay_runners||'')).toLowerCase().includes(q)));
+  return rs.filter(r=>r.round==='F'||!rs.some(o=>o!==r&&o.athlete_name===r.athlete_name&&o.event_code===r.event_code&&o.round==='F'));
+}
+function groupsHtml(groups){
+  return groups.map(gp=>`<div class="bg-white rounded-xl shadow p-3 mb-3">
+    <div class="font-bold">${gp.division} ${gp.gender==='Boy'?'Boys':gp.gender==='Girl'?'Girls':gp.gender} — ${gp.event}</div>
+    <table class="w-full text-sm mt-1">${gp.rows.map((r,i)=>`<tr class="border-t rec-row">
+      <td class="py-1 w-8 text-gray-500">${r.mark_value!=null?i+1:''}</td>
+      <td class="py-1">${r.athlete_name}${r.team_code?` <span class="text-xs text-gray-400">${r.team_code}</span>`:''}${r.relay_runners?`<div class="text-xs text-gray-500">${r.relay_runners}</div>`:''}</td>
+      <td class="py-1 font-mono text-right font-semibold">${r.mark}${r.wind?` <span class="text-xs text-gray-400">w${r.wind}</span>`:''}</td>
+      <td class="py-1 text-right text-gray-500 text-xs">${r.place?`${r.place}${['st','nd','rd'][r.place-1]||'th'} overall`:''}</td></tr>`).join('')}</table></div>`).join('');
+}
+function fillMeetWindow(det,d,g,ev,q,conf){
+  const m=meets.find(x=>x.id===det.dataset.m); const box=det.querySelector('.meetbody'); if(!m||!box) return;
+  const groups=rankResults(meetRows(m,d,g,ev,q),false,conf||null,null);
+  box.innerHTML=groupsHtml(groups)||'<p class="text-gray-500 p-2">No results match these filters.</p>';
+}
+function renderAllMeets(d,g,ev,q,conf){
+  lastGroups=[];
+  $('hint').textContent='Every meet, each in its own window — open one to see its full results. Filters above apply to all of them.';
+  const withResults=meets.filter(m=>allResults.some(r=>r.meet_id===m.id));
+  if(!withResults.length){ $('list').innerHTML='<p class="text-gray-500">No results have been uploaded for any meet yet.</p>'; return; }
+  $('list').innerHTML=withResults.map(m=>{ const n=meetRows(m,d,g,ev,q).length; return `<details class="meetwin" data-m="${m.id}" ${openMeets.has(m.id)?'open':''}><summary><span class="font-bold">${m.name}</span> <span class="text-gray-500 text-sm">— ${fmtDate(m.meet_date)} · ${n} results</span></summary><div class="meetbody"></div></details>`; }).join('');
+  document.querySelectorAll('#list details.meetwin').forEach(det=>{
+    if(det.open) fillMeetWindow(det,d,g,ev,q,conf);
+    det.addEventListener('toggle',()=>{ if(det.open){ openMeets.add(det.dataset.m); fillMeetWindow(det,d,g,ev,q,conf); } else openMeets.delete(det.dataset.m); });
+  });
+}
 $('pdfBtn').onclick=async()=>{
+  if(mode==='meet' && !$('meet').value) return alert('Pick one meet from the meet list first — the PDF is made one meet at a time.');
   if(!lastGroups.length) return alert('Nothing to put in a PDF yet — pick a meet or change the filters first.');
   const meetName = mode==='meet' ? ($('meet').selectedOptions[0]?.textContent||'Meet') : '';
   const title = mode==='meet' ? meetName+' - Results' : mode==='records' ? 'All-Time Records' : 'Season Rankings';

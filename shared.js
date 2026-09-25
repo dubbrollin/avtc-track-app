@@ -2,24 +2,28 @@
 // The 16 real Valley Youth Conference (VYC) member teams, with their Hy-Tek team codes.
 // Pulled from the league's own roster (tcl01-01.tcl) and results (reslt002.csv) exports.
 window.VYC_TEAMS = [
-  {code:"AVTC", name:"Antelope Valley Track Club"},
-  {code:"BV",   name:"Burbank Vikings"},
-  {code:"CAL",  name:"Calabasas"},
-  {code:"WVE",  name:"Eagles (WVE)"},
-  {code:"FP",   name:"Flying Phoenix"},
-  {code:"LRR",  name:"Lancaster Runnin Rebels"},
-  {code:"L5",   name:"Lane 5"},
-  {code:"LAF",  name:"Los Angeles Falcons"},
-  {code:"NPTC", name:"Northridge Pacers"},
-  {code:"PB",   name:"Palmdale Bullets"},
-  {code:"SFR",  name:"Rush"},
-  {code:"SCTC", name:"Storm"},
-  {code:"TT",   name:"Thimsha"},
-  {code:"VRTC", name:"Valley Raiders"},
-  {code:"VC",   name:"Village Christian Schools"},
-  {code:"SCW",  name:"Warriors"}
+  {code:"AVTC", name:"Antelope Valley Track Club", conference:"East"},
+  {code:"BV",   name:"Burbank Vikings", conference:"East"},
+  {code:"CAL",  name:"Calabasas", conference:"West"},
+  {code:"WVE",  name:"Eagles (WVE)", conference:"East"},
+  {code:"FP",   name:"Flying Phoenix", conference:"East"},
+  {code:"LRR",  name:"Lancaster Runnin Rebels", conference:"West"},
+  {code:"L5",   name:"Lane 5", conference:"West"},
+  {code:"LAF",  name:"Los Angeles Falcons", conference:"West"},
+  {code:"NPTC", name:"Northridge Pacers", conference:"East"},
+  {code:"PB",   name:"Palmdale Bullets", conference:"East"},
+  {code:"SFR",  name:"Rush", conference:"West"},
+  {code:"SCTC", name:"Storm", conference:"West"},
+  {code:"TT",   name:"Thimsha", conference:"East"},
+  {code:"VRTC", name:"Valley Raiders", conference:"West"},
+  {code:"VC",   name:"Village Christian Schools", conference:"East"},
+  {code:"SCW",  name:"Warriors", conference:"East"}
 ];
 // Backward-compatible plain-name list, kept in case anything still expects window.TEAMS.
+window.conferenceForTeamCode = function(code){
+  const t = window.VYC_TEAMS.find(t=>t.code===code);
+  return t ? t.conference : null;
+};
 window.TEAMS = window.VYC_TEAMS.map(t=>t.name);
 window.DIVISIONS = [
   {name:"Sub-Gremlin", min:5, max:6},{name:"Gremlin", min:7, max:8},{name:"Bantam", min:9, max:10},
