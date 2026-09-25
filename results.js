@@ -189,16 +189,17 @@ window.resultsPdf = async function(groups, opts){
     page.drawRectangle({x:M-4,y:y-5,width:W-2*M+8,height:19,color:rgb(0.92,0.94,0.98)});
     page.drawText(clean(label), {x:M,y:y,size:11,font:bold,color:navy});
     y -= 22;
+    if(g.ref){ page.drawText(clean(g.ref), {x:M,y:y+4,size:8,font,color:grey}); y -= 12; }
     let i=0;
     for(const r of g.rows){
       const relay = r.relay_runners ? clean(r.relay_runners) : '';
       const need = rowH + (relay?10:0);
       if(y < 46 + need){ newPage(); page.drawText(clean(label)+' (cont.)', {x:M,y,size:10,font:bold,color:navy}); y -= 20; }
-      const place = r.mark_value!=null ? i+1 : '';
+      const place = r.mark_value!=null ? (r._rank||i+1) : '';
       page.drawText(String(place), {x:M,y,size:9.5,font,color:grey});
       page.drawText(fit(r.athlete_name,font,9.5,190), {x:M+28,y,size:9.5,font:bold,color:rgb(0.1,0.1,0.1)});
       page.drawText(fit(teamName(r.team_code),font,9,150), {x:M+240,y,size:9,font,color:grey});
-      const mk = clean(r.mark) + (r.wind?` (w ${clean(r.wind)})`:'');
+      const mk = clean(r.mark) + (r.wind?` (w ${clean(r.wind)})`:'') + (r.q?'  Q':'');
       page.drawText(mk, {x:W-M-mono.widthOfTextAtSize(mk,9.5),y,size:9.5,font:mono,color:rgb(0.1,0.1,0.1)});
       y -= rowH-3;
       if(relay){ page.drawText(fit(relay,font,7.5,W-2*M-40), {x:M+28,y,size:7.5,font,color:grey}); y -= 10; }

@@ -40,6 +40,16 @@ window.divisionFor = function(age){
   const d = window.DIVISIONS.find(d=>age>=d.min && age<=d.max);
   return d ? d.name : null;
 };
+// ---- Qualifying standards lookup (Team Manager's standards use ages 0-99 for the oldest division) ----
+window.STD = {
+  AGES:{'Gremlin':[7,8],'Bantam':[9,10],'Juniors':[11,12],'Youth':[13,14],'Intermediates':[0,99]},
+  find(stds,r){ if(!r||r.is_relay||r.mark_value==null) return null; const a=this.AGES[r.division]; if(!a) return null;
+    return (stds||[]).find(s=>s.gender===r.gender&&s.event_code===r.event_code&&!s.is_relay&&s.age_low===a[0]&&s.age_high===a[1])||null; },
+  met(r,s){ return !!s&&r.mark_value!=null&&(r.mark_value===s.mark_value||(r.is_time?r.mark_value<s.mark_value:r.mark_value>s.mark_value)); },
+  fmt(s,r){ const v=s.mark_value;
+    if(r.is_time){ if(v>=60){ const m=Math.floor(v/60); return m+':'+(v-m*60).toFixed(2).padStart(5,'0'); } return v.toFixed(2); }
+    const inch=v/0.0254, ft=Math.floor(inch/12+1e-9), i=inch-ft*12; return ft+'-'+(Math.round(i*4)/4).toFixed(2).replace(/\.00$/,'').padStart(2,'0'); }
+};
 window.fmtDate = function(iso){
   if(!iso) return "";
   const [y,m,d] = iso.slice(0,10).split("-");

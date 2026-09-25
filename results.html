@@ -23,6 +23,7 @@
   .bdg{display:inline-block;font-size:10px;font-weight:800;border-radius:4px;padding:0 5px;margin-left:4px;vertical-align:middle}
   .bq{background:#dcfce7;color:#166534}
   .bcr{background:#fef3c7;color:#92400e}
+  .stdline td{font-size:11px;color:#166534;background:#f0fdf4;padding:2px 6px;border-top:2px dashed #86efac;font-weight:600}
 </style>
 </head><body class="bg-gray-50 text-gray-900"><header class="topnav"><div class="topnav-inner">
   <a class="brand" href="home.html">VYC <b>Track &amp; Field</b></a>
@@ -59,6 +60,7 @@
       <select id="gen" class="border rounded p-2"><option value="">Boys &amp; Girls</option><option>Boy</option><option>Girl</option></select>
       <select id="conf" class="border rounded p-2"><option value="">Both conferences</option><option value="East">Eastern Conference</option><option value="West">Western Conference</option></select>
       <input id="q" class="border rounded p-2 flex-1" placeholder="Search name">
+      <label id="qOnlyWrap" class="text-xs text-gray-700 flex items-center gap-1"><input type="checkbox" id="qOnly"> only athletes who met the qualifying standard</label>
       <button id="pdfBtn" type="button" class="border rounded p-2 px-3 bg-gray-800 text-white font-semibold">Download PDF</button>
     </div>
     <p id="hint" class="text-xs text-gray-500 mb-2"></p>
@@ -83,6 +85,7 @@ function setMode(m){
   mode=m;
   ['modeSeason','modeMeet','modeRecords'].forEach(id=>$(id).classList.toggle('active', id==='mode'+m[0].toUpperCase()+m.slice(1)));
   $('meetPicker').classList.toggle('hidden', mode!=='meet');
+  $('qOnlyWrap').classList.toggle('hidden', mode!=='season');
   render();
 }
 
@@ -93,7 +96,7 @@ sb.auth.onAuthStateChange(async(_e,s)=>{ if(!s||window.__authDone===s.user.id) r
   const want=new URLSearchParams(location.search).get('meet'); if(want){ $('meet').value=want; mode='meet'; }
   await loadAll();
   setMode(mode);
-  ['meet','meetRecord','evt','div','gen','conf'].forEach(i=>$(i).onchange=render); $('q').oninput=render;
+  ['meet','meetRecord','evt','div','gen','conf','qOnly'].forEach(i=>$(i).onchange=render); $('q').oninput=render;
 });
 
 async function pageAll(mk){ const all=[]; for(let f=0;;f+=1000){ const {data,error}=await mk().range(f,f+999); if(error){ console.error(error); break; } all.push(...(data||[])); if(!data||data.length<1000) break; } return all; }
@@ -141,23 +144,41 @@ function render(){
   const cap = mode==='records' ? 1 : (mode==='season' ? 50 : null);
   if(mode==='meet' && !$('meet').value){ renderAllMeets(d,g,ev,q,conf); return; }
   if(mode==='meet' && !isMeetRecord){ renderSingleMeet(conf?rs.filter(r=>r.conference===conf):rs); return; }
-  const groups=rankResults(rs,bestPerAthlete||isMeetRecord,conf||null,cap);
-
-  lastGroups=groups;
+  const qOnly = mode==='season' && $('qOnly').checked;
+  const groups=rankResults(rs,bestPerAthlete||isMeetRecord,conf||null, mode==='season'?null:cap);
+  // Season rankings keep the top-50 club cap, but the qualifier count is taken from the FULL ranked list, and "only qualified" shows every qualifier at its true rank.
+  groups.forEach(g=>{
+    const f=g.rows[0]; g.std=f?stdFor(f):null; g.rec=f?recFor(f):null;
+    const ranked=g.rows.filter(r=>r.mark_value!=null), rest=g.rows.filter(r=>r.mark_value==null);
+    ranked.forEach((r,i)=>{ r._rank=i+1; r.q=isQ(r,g.std); });
+    g.qCount=ranked.filter(r=>r.q).length; g.total=ranked.length;
+    let show=ranked; if(mode==='season'&&!qOnly) show=ranked.slice(0,50); if(qOnly) show=ranked.filter(r=>r.q);
+    g.rows=show.concat(qOnly?[]:rest); g.ref=refText(g);
+  });
+  const shown=qOnly?groups.filter(g=>g.rows.length):groups;
+  lastGroups=shown;
   $('hint').textContent =
-    mode==='records' ? 'The single best mark ever recorded per event, division, and gender — the club record book.' :
-    mode==='season' ? 'Best mark per athlete, top 50 per event/division/gender.' :
+    mode==='records' ? 'The single best mark ever recorded per event, division, and gender — the club record book. "Q" = met the qualifying standard.' :
+    mode==='season' ? (qOnly?'Only athletes who met the qualifying standard, at their true season rank.':'Best mark per athlete, top 50 per event/division/gender. "Q" = met the qualifying standard; the green line marks where the standard cuts off.') :
     isMeetRecord ? 'Best mark ever posted at this meet (any year it has been run).' :
     'Full results for this meet.';
 
-  $('list').innerHTML=groups.map(gp=>`<div class="bg-white rounded-xl shadow p-3 mb-3">
-    <div class="font-bold flex items-center gap-2">${mode==='records'?'<span class=\"rec-medal\">🏅</span>':''}${gp.division} ${gp.gender==='Boy'?'Boys':gp.gender==='Girl'?'Girls':gp.gender} — ${gp.event}</div>
-    <table class="w-full text-sm mt-1">${gp.rows.map((r,i)=>`<tr class="border-t rec-row">
-      <td class="py-1 w-8 text-gray-500">${mode==='records'?'':(r.mark_value!=null?i+1:'')}</td>
+  $('list').innerHTML=shown.map(gp=>{
+    let lineDone=false;
+    const rowsHtml=gp.rows.map(r=>{
+      let sep='';
+      if(mode==='season'&&!qOnly&&gp.std&&gp.qCount>0&&r.mark_value!=null&&!r.q&&!lineDone){ lineDone=true; sep=`<tr class="stdline"><td colspan="4">Qualifying standard ${fmtStd(gp.std,gp)} — everyone above this line met it</td></tr>`; }
+      return sep+`<tr class="border-t rec-row">
+      <td class="py-1 w-8 text-gray-500">${mode==='records'?'':(r.mark_value!=null?r._rank:'')}</td>
       <td class="py-1">${r.athlete_name}${r.team_code?` <span class="text-xs text-gray-400">${r.team_code}</span>`:''}${r.relay_runners?`<div class="text-xs text-gray-500">${r.relay_runners}</div>`:''}</td>
-      <td class="py-1 font-mono text-right font-semibold">${r.mark}${r.wind?` <span class="text-xs text-gray-400">w${r.wind}</span>`:''}</td>
-      <td class="py-1 text-right text-gray-500 text-xs">${(mode==='season'||mode==='records')?`${r.meet_name||''}`:((r.overall_place||r.place)?`${r.overall_place||r.place}${['st','nd','rd'][(r.overall_place||r.place)-1]||'th'} overall`:'')}</td></tr>`).join('')}</table></div>`).join('')
-    ||'<p class="text-gray-500">No results yet.</p>';
+      <td class="py-1 font-mono text-right font-semibold">${r.mark}${r.wind?` <span class="text-xs text-gray-400">w${r.wind}</span>`:''}${r.q?' <span class="bdg bq" title="Met the qualifying standard">Q</span>':''}</td>
+      <td class="py-1 text-right text-gray-500 text-xs">${(mode==='season'||mode==='records')?`${r.meet_name||''}`:((r.overall_place||r.place)?`${r.overall_place||r.place}${['st','nd','rd'][(r.overall_place||r.place)-1]||'th'} overall`:'')}</td></tr>`; }).join('');
+    const ref=refHtml(gp);
+    return `<div class="bg-white rounded-xl shadow p-3 mb-3">
+    <div class="font-bold flex items-center gap-2">${mode==='records'?'<span class=\"rec-medal\">🏅</span>':''}${gp.division} ${gp.gender==='Boy'?'Boys':gp.gender==='Girl'?'Girls':gp.gender} — ${gp.event}</div>
+    ${ref?`<div class="text-xs text-gray-500 mt-0.5">${ref}${gp.std&&mode!=='records'?` &nbsp;·&nbsp; <b class="text-green-700">${gp.qCount} of ${gp.total} met the standard</b>`:''}</div>`:''}
+    <table class="w-full text-sm mt-1">${rowsHtml}</table></div>`; }).join('')
+    ||'<p class="text-gray-500">'+(qOnly?'No athletes have met the standard for these filters yet.':'No results yet.')+'</p>';
 }
 // ---------- Meet results, always sectioned by HEAT (like Meet Manager's results): division/gender/event -> round -> heat, places are within the heat ----------
 const DIV_AGES={'Sub-Gremlin':[5,6],'Gremlin':[7,8],'Bantam':[9,10],'Juniors':[11,12],'Youth':[13,14],'Intermediates':[15,18]};
@@ -165,6 +186,10 @@ function stdFor(r){ if(r.is_relay||r.mark_value==null) return null; const a=DIV_
   return stds.find(s=>s.gender===r.gender&&s.event_code===r.event_code&&!s.is_relay&&s.age_low===lo&&s.age_high===hi)||null; }
 function recFor(r){ const a=DIV_AGES[r.division]; if(!a) return null; return recs.find(x=>x.gender===r.gender&&x.event_code===r.event_code&&!!x.is_relay===!!r.is_relay&&x.age_low===a[0]&&x.age_high===a[1])||null; }
 const better=(isTime,a,b)=>isTime?a<b:a>b;
+const isQ=(r,std)=>!!std&&!r.is_relay&&r.mark_value!=null&&(r.mark_value===std.mark_value||better(r.is_time,r.mark_value,std.mark_value));
+function recLine(rec){ return rec?`Conference record: ${rec.mark_text||''} ${rec.is_relay?(rec.relay_names||rec.holder):rec.holder}${rec.team?`, ${rec.team}`:''}${rec.rec_year?` (${rec.rec_year})`:''}`:''; }
+function refText(f){ return [ f.std?`Qualifying standard: ${fmtStd(f.std,f)}`:'', recLine(f.rec) ].filter(Boolean).join('   |   '); }
+function refHtml(f){ return [ f.std?`Qualifying standard: <b>${fmtStd(f.std,f)}</b>`:'', f.rec?`Conference record: <b>${f.rec.mark_text||''}</b> ${f.rec.is_relay?(f.rec.relay_names||f.rec.holder):f.rec.holder}${f.rec.team?`, ${f.rec.team}`:''}${f.rec.rec_year?` (${f.rec.rec_year})`:''}`:'' ].filter(Boolean).join(' &nbsp;·&nbsp; '); }
 const fmtStd=(s,r)=>r.is_time?fmtTimeVal(s.mark_value):fmtFieldVal(s.mark_value);
 function fmtTimeVal(sec){ if(sec>=60){ const m=Math.floor(sec/60); return m+':'+(sec-m*60).toFixed(2).padStart(5,'0'); } return sec.toFixed(2); }
 function fmtFieldVal(m){ const inch=m/0.0254; const ft=Math.floor(inch/12+1e-9); const i=inch-ft*12; return ft+"-"+(Math.round(i*4)/4).toFixed(2).replace(/\.00$/,'').padStart(2,'0'); }
@@ -177,16 +202,17 @@ function heatBlocks(rows,meet){
   const html=list.map(g=>{
     const f=g[0], label=`${f.division} ${f.gender==='Boy'?'Boys':f.gender==='Girl'?'Girls':f.gender} — ${f.event_name}`;
     const std=stdFor(f), rec=recFor(f);
-    const ref=[ std?`Qualifying standard: <b>${fmtStd(std,f)}</b>`:'', rec?`Conference record: <b>${rec.mark_text||''}</b> ${rec.is_relay?(rec.relay_names||rec.holder):rec.holder}${rec.team?`, ${rec.team}`:''}${rec.rec_year?` (${rec.rec_year})`:''}`:'' ].filter(Boolean).join(' &nbsp;·&nbsp; ');
+    const ref=refHtml({...f,std,rec});
     const rounds=[...new Set(g.map(r=>r.round||'F'))].sort((a,b)=>(a==='P'?0:1)-(b==='P'?0:1));
     const body=rounds.map(rd=>{
       const rr=g.filter(r=>(r.round||'F')===rd); const heats=[...new Set(rr.map(r=>r.heat||0))].sort((a,b)=>a-b); const nHeats=heats.filter(h=>h).length;
       return heats.map(h=>{
         const hr=rr.filter(r=>(r.heat||0)===h).sort((a,b)=>((a.place>0?a.place:9999)-(b.place>0?b.place:9999))||String(a.athlete_name).localeCompare(String(b.athlete_name)));
+        hr.forEach(r=>{ r.q=isQ(r,std); });
         const title=`${rd==='P'?'Prelims':'Finals'}${h?` — Heat ${h}${nHeats>1?' of '+nHeats:''}`:''}`;
-        pdfGroups.push({division:f.division,gender:f.gender,event:`${f.event_name} — ${title}`,rows:hr});
+        pdfGroups.push({division:f.division,gender:f.gender,event:`${f.event_name} — ${title}`,rows:hr,ref:refText({...f,std,rec})});
         return `<div class="heatblk"><div class="heathead">${title}</div><table class="w-full text-sm">${hr.map(r=>{
-          const badges=[]; if(std&&r.mark_value!=null&&!r.is_relay&&better(r.is_time,r.mark_value,std.mark_value)||(std&&r.mark_value!=null&&!r.is_relay&&r.mark_value===std.mark_value)) badges.push('<span class="bdg bq" title="Met the qualifying standard">Q</span>');
+          const badges=[]; r.q=isQ(r,std); if(r.q) badges.push('<span class="bdg bq" title="Met the qualifying standard">Q</span>');
           if(meet&&meet.is_championship&&rec&&r.mark_value!=null&&better(r.is_time,r.mark_value,rec.mark_value)) badges.push('<span class="bdg bcr" title="New conference record — conference records can only be broken at conference championship meets">CR</span>');
           return `<tr class="border-t"><td class="py-1 w-8 text-gray-500">${r.place>0?r.place:''}</td><td class="py-1">${r.athlete_name}${r.team_code?` <span class="text-xs text-gray-400">${r.team_code}</span>`:''}${r.relay_runners?`<div class="text-xs text-gray-500">${r.relay_runners}</div>`:''}</td><td class="py-1 font-mono text-right font-semibold">${r.mark}${r.wind?` <span class="text-xs text-gray-400">w${r.wind}</span>`:''} ${badges.join(' ')}</td></tr>`; }).join('')}</table></div>`;
       }).join('');
