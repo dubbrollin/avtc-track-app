@@ -371,7 +371,9 @@ let regMeets=[], regEvents=[], regEntries=[], regDiv=null, regGender='Boy', regE
 async function loadMeetsForReg(){
   const {data}=await sb.from('meets').select('*').neq('status','archived').order('meet_date');
   regMeets=data||[];
-  $('regMeet').innerHTML=regMeets.map(m=>`<option value="${m.id}">${m.name} — ${fmtDate(m.meet_date)}</option>`).join('')||'<option value="">No meets posted yet</option>';
+  const {data:evc}=await sb.from('meet_events').select('meet_id'); const evCount={}; (evc||[]).forEach(x=>evCount[x.meet_id]=(evCount[x.meet_id]||0)+1);
+  $('regMeet').innerHTML=regMeets.map(m=>`<option value="${m.id}">${m.name} — ${fmtDate(m.meet_date)}${evCount[m.id]?'':' (no events set up yet)'}</option>`).join('')||'<option value="">No meets posted yet</option>';
+  const pick=regMeets.find(m=>evCount[m.id]&&regMeetOpen(m))||regMeets.find(m=>evCount[m.id]); if(pick) $('regMeet').value=pick.id; // start on a meet that has events, not an empty one
   $('regMeet').onchange=loadRegMeet;
   document.querySelectorAll('.regGenBtn').forEach(b=>b.onclick=()=>{ regGender=b.dataset.g; regEventId=null; renderReg(); });
   if(regMeets.length) await loadRegMeet(); else { $('regMeetInfo').textContent=''; $('regBody').innerHTML='<p class="text-sm text-gray-500">No meets posted yet.</p>'; }

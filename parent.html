@@ -121,7 +121,9 @@ async function loadMyResults(){
 async function loadMeets(){
   const {data}=await sb.from('meets').select('*').neq('status','archived').order('meet_date');
   meets=data||[];
-  $('meet').innerHTML=meets.map(m=>`<option value="${m.id}">${m.name} — ${fmtDate(m.meet_date)}</option>`).join('')||'<option value="">No meets posted yet</option>';
+  const {data:evc}=await sb.from('meet_events').select('meet_id'); const evCount={}; (evc||[]).forEach(x=>evCount[x.meet_id]=(evCount[x.meet_id]||0)+1);
+  $('meet').innerHTML=meets.map(m=>`<option value="${m.id}">${m.name} — ${fmtDate(m.meet_date)}${evCount[m.id]?'':' (no events set up yet)'}</option>`).join('')||'<option value="">No meets posted yet</option>';
+  const pick=meets.find(m=>evCount[m.id]&&isOpen(m))||meets.find(m=>evCount[m.id]); if(pick) $('meet').value=pick.id; // start on a meet that has events, not an empty one
   $('meet').onchange=loadMeet; if(meets.length) await loadMeet(); else $('meetInfo').textContent='';
 }
 const cur=()=>meets.find(m=>m.id===$('meet').value);

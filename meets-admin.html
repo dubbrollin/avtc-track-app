@@ -55,13 +55,18 @@ $('create').onclick=async()=>{
   if(!name||!date||!close) return alert('Name, date and entries-close are required.');
   const {data:m,error}=await sb.from('meets').insert({name,meet_date:date,location:$('mLoc').value.trim(),entries_close:new Date(close).toISOString()}).select().single();
   if(error) return alert(error.message);
-  const rows=[];
-  for(const d of DIVISIONS) for(const g of ['Boy','Girl'])
-    for(const e of eventsFor(d.name,g)) rows.push({meet_id:m.id,code:e.code,name:e.name,division:d.name,gender:g,is_relay:!!e.relay,is_field:!!e.field});
-  const {error:e2}=await sb.from('meet_events').insert(rows);
+  const e2=await buildEvents(m.id);
   if(e2) return alert(e2.message);
   $('mName').value=$('mLoc').value=''; load();
 };
+// Fills a meet with the standard event list (every division, boys and girls) — the same list Team Manager uses.
+async function buildEvents(meetId){
+  const rows=[];
+  for(const d of DIVISIONS) for(const g of ['Boy','Girl'])
+    for(const e of eventsFor(d.name,g)) rows.push({meet_id:meetId,code:e.code,name:e.name,division:d.name,gender:g,is_relay:!!e.relay,is_field:!!e.field});
+  const {error}=await sb.from('meet_events').insert(rows);
+  return error;
+}
 
 async function load(){
   const {data}=await sb.from('meets').select('*').order('meet_date',{ascending:false}); meets=data||[];
@@ -70,6 +75,7 @@ async function load(){
       <div class="font-bold flex-1">${m.name} <span class="font-normal text-gray-500">${fmtDate(m.meet_date)} · ${m.status}</span></div>
       <button class="btn bg-gray-200 text-sm" data-act="toggle" data-id="${m.id}">${m.status==='open'?'Close entries':'Reopen'}</button>
       <button class="btn bg-gray-200 text-sm" data-act="events" data-id="${m.id}">Events offered</button>
+      <button class="btn bg-blue-600 text-white text-sm" data-act="rebuild" data-id="${m.id}">Build events</button>
       <button class="btn bg-green-600 text-white text-sm" data-act="export" data-id="${m.id}">Hy-Tek entries</button>
       <button class="btn bg-gray-200 text-sm" data-act="summary" data-id="${m.id}">Entry list</button>
       <button class="btn bg-purple-600 text-white text-sm" data-act="results" data-id="${m.id}">Results</button>
@@ -93,6 +99,16 @@ async function act(a,id){
       if(!confirm('Remove this event from the meet?')) { cb.checked=true; return; }
       await sb.from('meet_events').delete().eq('id',cb.dataset.ev);
     });
+  }
+  if(a==='rebuild'){
+    const [{count:nEv},{count:nEn}]=await Promise.all([
+      sb.from('meet_events').select('*',{count:'exact',head:true}).eq('meet_id',id),
+      sb.from('entries').select('*',{count:'exact',head:true}).eq('meet_id',id)]);
+    if(nEn>0) return alert(`"${m.name}" already has ${nEn} athlete entries, so its events can't be rebuilt without losing them. Ask before doing that.`);
+    if(!confirm(nEv?`Replace this meet's ${nEv} events with the standard event list? (No athletes are entered yet, so nothing is lost.)`:'Fill this meet with the standard event list?')) return;
+    if(nEv){ const {error}=await sb.from('meet_events').delete().eq('meet_id',id); if(error) return alert(error.message); }
+    const err=await buildEvents(id); if(err) return alert(err.message);
+    alert('Events built from the standard list.'); return load();
   }
   if(a==='results') return resultsPanel(m);
   if(a==='summary'||a==='export'){
