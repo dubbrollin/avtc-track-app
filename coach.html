@@ -15,6 +15,13 @@
 <script src="events.js"></script>
 <script src="pdf.js"></script>
 <style>
+  /* Coach dashboard sections: roster on the left in its own scroll box, meet tools on the right; on phones they stack. Only the roster box scrolls. */
+  .dash2{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-items:start}
+  @media(min-width:900px){ .dash2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)} }
+  .rosterScroll{max-height:52vh;overflow-y:auto;padding-right:6px;border:1px solid #e5e7eb;border-radius:8px;padding:8px}
+  @media(min-width:900px){ .rosterScroll{max-height:calc(100vh - 250px);min-height:260px} }
+  .rosterNames{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:2px 12px;margin-bottom:8px}
+  .rosterScroll .divhead{position:sticky;top:-8px;background:#fff;padding:4px 0;z-index:1;border-bottom:1px solid #f3f4f6;margin-bottom:2px}
   body{background:#f3f4f6}
   .card{background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
   .btn{min-height:44px;padding:8px 14px;border-radius:8px;font-weight:600;font-size:14px}
@@ -136,11 +143,13 @@
       </div></div>
 
       <!-- DASHBOARD -->
-      <div id="dashView"><div class="max-w-4xl mx-auto">
-          <div class="card">
+      <div id="dashView"><div class="max-w-6xl mx-auto dash2">
+          <div class="card" id="rosterSection">
             <div class="col-head"><h2 class="flex-1">My roster <span id="dashCount" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
-            <div id="dashRoster" class="text-sm"></div>
+            <div id="dashRoster" class="text-sm rosterScroll"></div>
           </div>
+
+          <div id="toolsSection">
 
           <div class="card">
             <div class="col-head"><h2>Meet registration &amp; results</h2></div>
@@ -155,6 +164,7 @@
             <div class="col-head"><h2>Upload meet results</h2></div>
             <p class="text-xs text-gray-500 mb-2">Upload a meet's results (Hy-Tek Meet Manager export or your Team Manager .tcl file), or add one by hand — that happens on the Meet Admin page: find the meet in the list there and click "Results".</p>
             <a href="meets-admin.html" class="btn bg-purple-600 text-white text-sm inline-block">Go to Meet Admin →</a>
+          </div>
           </div>
 
       </div></div>
@@ -278,7 +288,7 @@ function renderDashRoster(){
   if(!rows.length){ el.innerHTML='<p class="text-gray-500">No athletes on your roster yet. Share the registration link with parents.</p>'; return; }
   const order=(window.DIVISIONS||[]).map(d=>d.name);
   const by={}; rows.forEach(r=>(by[r.division]=by[r.division]||[]).push(r));
-  el.innerHTML=Object.keys(by).sort((x,y)=>order.indexOf(x)-order.indexOf(y)).map(d=>`<div class="mb-2"><div class="text-xs font-bold uppercase text-gray-500">${esc(d)} (${by[d].length})</div><div class="flex flex-wrap gap-x-4 gap-y-0.5">`+
+  el.innerHTML=Object.keys(by).sort((x,y)=>order.indexOf(x)-order.indexOf(y)).map(d=>`<div class="mb-2"><div class="text-xs font-bold uppercase text-gray-500 divhead">${esc(d)} (${by[d].length})</div><div class="rosterNames">`+
     by[d].sort((p,q)=>(p.last_name+p.first_name).localeCompare(q.last_name+q.first_name)).map(r=>`<span>${esc(r.last_name)}, ${esc(r.first_name)} <span class="text-gray-400 text-xs">${r.gender==='Girl'?'F':'M'}${r.status==='verified'?'':' · '+esc(r.status)}</span></span>`).join('')+`</div></div>`).join('');
 }
 function render(){
