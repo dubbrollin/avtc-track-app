@@ -26,8 +26,13 @@
     <div id="loginWidget"></div>
   </div>
 
+  <div id="noAccess" class="hidden bg-white rounded-xl shadow p-4 mt-3">
+    <p class="font-semibold">Meet Admin is for admins and approved timers.</p>
+    <p class="text-sm text-gray-600 mt-1" id="noAccessWho"></p>
+  </div>
   <div id="app" class="hidden">
-    <div class="bg-white rounded-xl shadow p-4 mt-3">
+    <p id="timerNote" class="hidden text-sm text-gray-700 mt-3 bg-purple-50 border border-purple-200 rounded-lg p-3">You're signed in as a <b>timer</b>. For each meet you can <b>download the entries</b> (Hy-Tek file for Meet Manager) and <b>upload results</b>.</p>
+    <div id="newMeetCard" class="bg-white rounded-xl shadow p-4 mt-3">
       <h2 class="font-bold mb-2">New meet</h2>
       <div class="grid grid-cols-2 gap-2">
         <input id="mName" class="border rounded p-2 col-span-2" placeholder="Meet name">
@@ -47,8 +52,16 @@ const $=id=>document.getElementById(id);
 const CFG=window.APP_CONFIG;
 let sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // avoid cross-tab navigator.locks deadlock when multiple app pages are open at once
 let meets=[];
-window.mountLoginWidget(sb, $('loginWidget'), {hint:"Coach sign-in."});
-sb.auth.onAuthStateChange(async(_e,s)=>{ if(!s||window.__authDone===s.user.id) return; window.__authDone=s.user.id; sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } } /* rebuild: original client can wedge after an OAuth redirect */); $('login').classList.add('hidden'); $('app').classList.remove('hidden'); load(); });
+// Who's here: site/team admins get everything; an approved timer can ONLY upload results to existing meets
+// (the database enforces the same rules). Everyone else is turned away.
+let TIMER=false;
+window.mountLoginWidget(sb, $('loginWidget'), {hint:"Admin or timer sign-in."});
+sb.auth.onAuthStateChange(async(_e,s)=>{ if(!s||window.__authDone===s.user.id) return; window.__authDone=s.user.id; sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } } /* rebuild: original client can wedge after an OAuth redirect */); $('login').classList.add('hidden');
+  const {data:me}=await sb.from('coaches').select('is_admin,team_admin,role_type').eq('email',s.user.email).eq('approved',true).maybeSingle();
+  const isAdmin=!!(me&&(me.is_admin||me.team_admin)); TIMER=!!(me&&!isAdmin&&me.role_type==='timer');
+  if(!isAdmin&&!TIMER){ $('noAccessWho').textContent=`Signed in as ${s.user.email}. Results are uploaded by team admins and approved timers — register as a timer on the Register page, or ask your team admin.`; $('noAccess').classList.remove('hidden'); return; }
+  $('newMeetCard').classList.toggle('hidden',TIMER); $('timerNote').classList.toggle('hidden',!TIMER);
+  $('app').classList.remove('hidden'); load(); });
 
 $('create').onclick=async()=>{
   const name=$('mName').value.trim(), date=$('mDate').value, close=$('mClose').value;
@@ -101,6 +114,16 @@ async function buildEvents(meetId){
 
 async function load(){
   const {data}=await sb.from('meets').select('*').order('meet_date',{ascending:false}); meets=data||[];
+  if(TIMER){ meets=meets.filter(m=>m.status!=='archived');
+    $('meets').innerHTML=meets.map(m=>`<div class="bg-white rounded-xl shadow p-4 mb-3">
+    <div class="flex flex-wrap items-center gap-2">
+      <div class="font-bold flex-1">${m.name} <span class="font-normal text-gray-500">${fmtDate(m.meet_date)}</span></div>
+      <button class="btn bg-green-600 text-white text-sm" data-act="texport" data-id="${m.id}">Download entries (Hy-Tek)</button>
+      <button class="btn bg-purple-600 text-white text-sm" data-act="results" data-id="${m.id}">Upload results</button>
+    </div>
+    <div id="panel-${m.id}" class="mt-3"></div></div>`).join('')||'<p class="text-gray-500">No meets yet.</p>';
+    document.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>act(b.dataset.act,b.dataset.id));
+    return; }
   $('meets').innerHTML=meets.map(m=>`<div class="bg-white rounded-xl shadow p-4 mb-3">
     <div class="flex flex-wrap items-center gap-2">
       <div class="font-bold flex-1">${m.name} <span class="font-normal text-gray-500">${fmtDate(m.meet_date)} · ${m.status}</span></div>
@@ -120,6 +143,18 @@ async function load(){
 
 async function act(a,id){
   const m=meets.find(x=>x.id===id);
+  if(TIMER&&a!=='results'&&a!=='texport') return;
+  if(a==='texport'){
+    // Timers can't read entries/rosters directly; meet_export() returns exactly what this one meet's Hy-Tek file needs.
+    const all=[]; for(let f=0;;f+=1000){ const {data,error}=await sb.rpc('meet_export',{p_meet:id}).range(f,f+999); if(error) return alert(error.message); all.push(...(data||[])); if(!data||data.length<1000) break; }
+    const reg=x=>({id:x.reg_id,first_name:x.first_name,last_name:x.last_name,gender:x.gender,dob:x.dob,division:x.division,age_on_dec31:x.age_on_dec31,team_code:x.team_code});
+    const rows=all.filter(x=>x.kind==='entry').map(x=>({r:reg(x),e:{code:x.ev_code,name:x.ev_name,division:x.ev_division,gender:x.ev_gender,is_relay:x.ev_is_relay},mark:x.seed_mark,rt:x.relay_team,leg:x.leg}));
+    if(!rows.length) return alert('No entries yet for this meet.');
+    window.__hyDropped=0; const txt=hytekEntries(rows,CFG,all.filter(x=>x.kind==='roster').map(reg));
+    if(window.__hyDropped) alert(window.__hyDropped+' relay alternate(s) were left out of the file because their relay has fewer than 4 runners.');
+    const a2=document.createElement('a'); a2.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));
+    a2.download=`${m.name.replace(/[^\w]+/g,'_')}_ALL_TEAMS_entries_and_roster.txt`; a2.click(); return;
+  }
   if(a==='toggle'){ await sb.from('meets').update({status:m.status==='open'?'closed':'open'}).eq('id',id); return load(); }
   if(a==='champ'){ await sb.from('meets').update({is_championship:!m.is_championship}).eq('id',id); return load(); }
   if(a==='archive'){ if(!confirm(`Archive "${m.name}"? Entries are kept but parents won't see it.`)) return; await sb.from('meets').update({status:'archived'}).eq('id',id); return load(); }
@@ -219,10 +254,12 @@ async function resultsPanel(m){
       <input id="rp-${m.id}" type="number" class="border rounded p-1" placeholder="Place (optional)">
       <button id="rsave-${m.id}" class="btn bg-purple-600 text-white text-sm">Save result</button>
     </div>
-    <hr class="my-3">
-    <button id="rdel-${m.id}" class="btn bg-red-100 text-red-700 text-sm">Delete all results for this meet</button>
+    ${TIMER?'<p class="text-xs text-gray-500 mt-3">Uploaded something by mistake? Ask a team admin to remove it.</p>':`<hr class="my-3">
+    <button id="rdel-${m.id}" class="btn bg-red-100 text-red-700 text-sm">Delete all results for this meet</button>`}
   </div>`;
-  const {data:regs}=await sb.from('registrations').select('id,first_name,last_name,gender,division').eq('status','verified').order('last_name');
+  // Every verified athlete league-wide (name, gender, division, team only) so results link to the right athlete.
+  const {data:regs0,error:rerr}=await sb.rpc('results_athletes'); const regs=regs0||[];
+  if(rerr) $('rprev-'+m.id).innerHTML='<span class="text-red-600">Could not load the athlete list: '+rerr.message+'</span>';
   const sa=$('ra-'+m.id); regs.forEach(r=>sa.add(new Option(`${r.last_name}, ${r.first_name} (${r.division} ${r.gender})`,r.id)));
   sa.onchange=()=>{ const r=regs.find(x=>x.id===sa.value); const se=$('re-'+m.id); se.innerHTML='<option value="">Event…</option>';
     if(r) eventsFor(r.division,r.gender).filter(e=>!e.relay).forEach(e=>se.add(new Option(e.name,e.code))); };
@@ -234,7 +271,7 @@ async function resultsPanel(m){
       event_code:code,event_name:ev.name,is_relay:false,round:'F',mark,mark_value:markToValue(mark,isTime,'M'),is_time:isTime,place:parseInt($('rp-'+m.id).value)||null,source:'manual'});
     if(error) return alert(error.message); $('rm-'+m.id).value=$('rp-'+m.id).value=''; resultsPanel(m);
   };
-  $('rdel-'+m.id).onclick=async()=>{ if(!confirm(`Delete ALL results for "${m.name}"? This can't be undone.`)) return;
+  if($('rdel-'+m.id)) $('rdel-'+m.id).onclick=async()=>{ if(!confirm(`Delete ALL results for "${m.name}"? This can't be undone.`)) return;
     await sb.from('results').delete().eq('meet_id',m.id); resultsPanel(m); };
   $('rf-'+m.id).onchange=async ev=>{
     const text=await ev.target.files[0].text();

@@ -89,6 +89,12 @@
       <p id="pendingInfo" class="text-sm text-gray-600 mt-2"></p>
       <button type="button" class="signout-btn btn bg-gray-200 mt-3">Sign out</button>
     </div>
+    <div class="card max-w-lg mx-auto" id="timerBox" style="display:none">
+      <h2 class="font-bold text-lg mb-1">You're a timer</h2>
+      <p class="text-sm text-gray-700">Timers download meet entries and upload meet results — that's all this account can do. Go to Meet Admin and pick the meet.</p>
+      <a href="meets-admin.html" class="btn bg-purple-600 text-white mt-3 inline-block">Upload results →</a>
+      <button type="button" class="signout-btn btn bg-gray-200 mt-3 ml-2">Sign out</button>
+    </div>
     <div id="coachApp" style="display:none">
       <div class="card flex flex-wrap items-center gap-2">
         <div class="flex-1 min-w-0">
@@ -173,7 +179,7 @@
             </div>
           </div>
 
-          <div class="card">
+          <div class="card" id="uploadCard">
             <div class="col-head"><h2>Upload meet results</h2></div>
             <p class="text-xs text-gray-500 mb-2">Upload a meet's results (Hy-Tek Meet Manager export or your Team Manager .tcl file), or add one by hand — that happens on the Meet Admin page: find the meet in the list there and click "Results".</p>
             <a href="meets-admin.html" class="btn bg-purple-600 text-white text-sm inline-block">Go to Meet Admin →</a>
@@ -200,6 +206,7 @@ function roleLabel(c){
   if(c.role_type==='division_coach') return `${c.division_or_age_group||'Division'}${c.coach_gender?' '+c.coach_gender:''} Coach`;
   if(c.role_type==='event_specialist') return `Field Event Coach${c.event_specialty?' ('+c.event_specialty+')':''}`;
   if(c.role_type==='team_staff') return c.admin_title||'Team staff';
+  if(c.role_type==='timer') return 'Timer';
   return 'Head Coach';
 }
 
@@ -230,7 +237,7 @@ function bgStatus(c){
 
 async function loadMe(){
   if(window.leagueReady) await window.leagueReady;
-  ['notCoachBox','pendingBox','coachApp'].forEach(id=>$(id).style.display='none');
+  ['notCoachBox','pendingBox','coachApp','timerBox'].forEach(id=>$(id).style.display='none');
   const {data,error}=await sb.from('coaches').select('*').eq('email',user.email).eq('approved',true).maybeSingle();
   if(error){ $('ncEmail').textContent=user.email||''; $('notCoachBox').style.display='block'; return; }
   if(!data){
@@ -243,6 +250,7 @@ async function loadMe(){
     return;
   }
   myCoach=data;
+  if(myCoach.role_type==='timer' && !myCoach.is_admin && !myCoach.team_admin){ $('timerBox').style.display='block'; return; }
   try{ localStorage.setItem('vyc_admin', (myCoach.is_admin||myCoach.team_admin)?'1':'0'); }catch(e){}
   fullAccess=isFullAccess(myCoach);
   $('notCoachBox').style.display='none'; $('coachApp').style.display='block';
@@ -256,6 +264,7 @@ async function loadMe(){
   $('rosterNote').classList.toggle('hidden',fullAccess);
   $('coachesCard').style.display=fullAccess?'':'none';
   $('clearCard').style.display=fullAccess?'':'none';
+  $('uploadCard').style.display=fullAccess?'':'none'; // uploading results = team admins (and timers), not regular coaches
   // Roster lives on its own view (head coaches only) — the everyday dashboard is just Meet Register + Results.
   const vw=new URLSearchParams(location.search).get('view');
   const wantRoster = fullAccess && vw==='roster', wantReg = vw==='register';

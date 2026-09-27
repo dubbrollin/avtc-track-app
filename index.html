@@ -63,6 +63,7 @@
       <div class="roletab active" data-role="parent">Parent / Athlete</div>
       <div class="roletab" data-role="coach">Coach</div>
       <div class="roletab" data-role="admin">Team Admin</div>
+      <div class="roletab" data-role="timer">Timer</div>
       <div class="roletab" data-role="vus">Valley United Striders (postseason)</div>
     </div>
   </div>
@@ -326,6 +327,42 @@
   </div>
   </form>
 
+  <!-- ================= TIMER FORM ================= -->
+  <form id="timerForm" class="hidden">
+  <div class="card">
+    <h2 class="font-bold text-lg mb-2">Timer registration</h2>
+    <p class="text-sm text-gray-600 mb-2">Timers download each meet's entries (the Hy-Tek file for Meet Manager) and upload the meet's results. That's all a timer account can do — no team rosters, athlete records or entering athletes into meets. Your registration is reviewed and approved by a VYC site admin or your team's team admin.</p>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div><label class="f req">First name</label><input id="tFirst" required></div>
+      <div><label class="f req">Last name</label><input id="tLast" required></div>
+      <div><label class="f req">Phone</label><input id="tPhone" required></div>
+      <div><label class="f req">Team you time for</label><select id="tTeam" required></select></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="legal"><p>By registering as a timer I agree to follow the Valley Youth Conference Code of Conduct, to upload only official, accurate meet results, and to not share or alter results.</p></div>
+    <label class="flex items-center gap-2 text-sm mt-2 req"><input type="checkbox" id="tAgree" required> I agree to the above.</label>
+  </div>
+  <div class="card">
+    <h2 class="font-bold text-lg mb-1">Last step — create your sign-in</h2>
+    <p class="text-sm text-gray-600 mb-2">Fill in everything above first, then finish with Google or an email and password.</p>
+    <div id="timerAcctGoogleDone" class="hidden text-sm text-green-700 font-semibold mb-2"></div>
+    <div id="timerAcctFields">
+      <button type="button" id="timerGoogleBtn" class="btn bg-white border w-full">Finish with Google</button>
+      <div class="flex items-center gap-2 my-3 text-xs text-gray-400"><div class="flex-1 border-t"></div>or use a password<div class="flex-1 border-t"></div></div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div><label class="f">Email</label><input type="email" id="tEmail"></div>
+        <div></div>
+        <div><label class="f">Choose a password</label><input type="password" id="tPass" autocomplete="new-password"></div>
+        <div><label class="f">Confirm password</label><input type="password" id="tPass2" autocomplete="new-password"></div>
+      </div>
+      <p class="text-xs text-gray-500 mt-1">At least 6 characters. You'll use this to sign in to Meet Admin and upload results.</p>
+    </div>
+    <button type="submit" class="btn bg-blue-600 text-white w-full mt-3">Submit timer registration</button>
+    <p id="timerMsg" class="text-sm mt-2"></p>
+  </div>
+  </form>
+
   <!-- ================= VALLEY UNITED STRIDERS FORM ================= -->
   <form id="vusForm" class="hidden">
   <div class="card" style="border:2px solid #7c3aed">
@@ -410,11 +447,12 @@ const sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth
 
 // ---- account creation (password or Google) alongside registration — replaces old magic-link login ----
 let authSession=null;
-sb.auth.getSession().then(({data})=>{ authSession=data.session; reflectAcctState(); setTimeout(()=>{ window.resumeGoogleCoach&&window.resumeGoogleCoach(); window.resumeGoogleAdmin&&window.resumeGoogleAdmin(); },0); });
-sb.auth.onAuthStateChange((_e,s)=>{ authSession=s; reflectAcctState(); setTimeout(()=>{ window.resumeGoogleCoach&&window.resumeGoogleCoach(); window.resumeGoogleAdmin&&window.resumeGoogleAdmin(); },0); });
+sb.auth.getSession().then(({data})=>{ authSession=data.session; reflectAcctState(); setTimeout(resumeAllGoogle,0); });
+sb.auth.onAuthStateChange((_e,s)=>{ authSession=s; reflectAcctState(); setTimeout(resumeAllGoogle,0); });
+function resumeAllGoogle(){ ['resumeGoogleCoach','resumeGoogleAdmin','resumeGoogleTimer'].forEach(f=>window[f]&&window[f]()); }
 function reflectAcctState(){
   const email=authSession?.user?.email||'';
-  ['parent','coach','admin'].forEach(prefix=>{
+  ['parent','coach','admin','timer'].forEach(prefix=>{
     const done=$(prefix+'AcctGoogleDone'), fields=$(prefix+'AcctFields');
     if(!done||!fields) return;
     if(email){ done.textContent=`Signed in with Google as ${email} — you're all set, no password needed.`; done.classList.remove('hidden'); fields.classList.add('hidden'); }
@@ -549,8 +587,55 @@ async function ensureAccount(email, password, msgEl){
   }
 }
 
+// ---- TIMER registration (its own tab). An approved timer can only upload results to existing meets. ----
+function collectTimer(){
+  if(!$('tTeam').value) throw new Error('Please select the team you time for.');
+  return { first:$('tFirst').value.trim(), last:$('tLast').value.trim(), phone:$('tPhone').value.trim(), team:$('tTeam').value };
+}
+const saveTimerViaLogin=(client,d)=>client.rpc('submit_timer_request',{ p_first:d.first, p_last:d.last, p_phone:d.phone, p_team:d.team, p_contract:true });
+const TIMER_DONE='Timer registration submitted! A site admin or your team admin will review and approve it. Once approved, sign in on Meet Admin to upload results.';
+$('timerGoogleBtn').onclick=async()=>{
+  const msg=$('timerMsg'); if(!$('timerForm').reportValidity()) return;
+  try{ sessionStorage.setItem('vycTimerPending', JSON.stringify(collectTimer())); }
+  catch(err){ msg.textContent='Error: '+(err.message||err); msg.className='text-sm mt-2 text-red-600'; return; }
+  await sb.auth.signInWithOAuth({provider:'google', options:{redirectTo:location.href.split('#')[0].split('?')[0]+'?role=timer'}});
+};
+let timerResumed=false;
+window.resumeGoogleTimer=async function(){
+  if(timerResumed||!authSession) return;
+  let d=null; try{ d=JSON.parse(sessionStorage.getItem('vycTimerPending')||'null'); }catch(e){}
+  if(!d) return;
+  timerResumed=true; sessionStorage.removeItem('vycTimerPending');
+  document.querySelector('#roleTabs .roletab[data-role=timer]').click();
+  const msg=$('timerMsg'); msg.textContent='Finishing your registration…'; msg.className='text-sm mt-2 text-gray-600';
+  const c2=supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth:{ lock:(n,t,f)=>f() } });
+  const {error}=await saveTimerViaLogin(c2,d);
+  if(error){ msg.textContent='Could not finish: '+error.message; msg.className='text-sm mt-2 text-red-600'; return; }
+  msg.textContent=TIMER_DONE+` You're signed in as ${authSession.user.email}.`; msg.className='text-sm mt-2 text-green-700 font-semibold';
+};
+$('timerForm').addEventListener('submit', async(e)=>{
+  e.preventDefault();
+  const msg=$('timerMsg'); msg.textContent='Submitting…'; msg.className='text-sm mt-2 text-gray-600';
+  try{
+    const d=collectTimer();
+    if(authSession){ const {error}=await saveTimerViaLogin(sb,d); if(error) throw error; }
+    else {
+      const email=$('tEmail').value.trim(), p1=$('tPass').value, p2=$('tPass2').value;
+      if(!email) throw new Error('Please enter your email, or use "Finish with Google."');
+      if(!p1||!p2) throw new Error('Please choose a password, or use "Finish with Google."');
+      if(p1.length<6) throw new Error('Password must be at least 6 characters.');
+      if(p1!==p2) throw new Error('Passwords do not match.');
+      const {error}=await sb.from('coaches').insert({ season_year:CFG.SEASON_YEAR, first_name:d.first, last_name:d.last, email, phone:d.phone,
+        team_code:d.team, role_type:'timer', approved:false, contract_signed_at:new Date().toISOString(), contract_version:'VYC-2026' });
+      if(error) throw /duplicate key/i.test(error.message)?new Error('You already have a registration on file with this email. Ask your site admin to update it.'):error;
+      await ensureAccount(email, p1, msg);
+    }
+    msg.textContent=TIMER_DONE; msg.className='text-sm mt-2 text-green-700 font-semibold'; e.target.reset();
+  }catch(err){ msg.textContent='Error: '+(err.message||err); msg.className='text-sm mt-2 text-red-600'; }
+});
+
 // ---- role tabs ----
-const forms={parent:$('parentForm'), coach:$('coachForm'), admin:$('adminForm'), vus:$('vusForm')};
+const forms={parent:$('parentForm'), coach:$('coachForm'), admin:$('adminForm'), timer:$('timerForm'), vus:$('vusForm')};
 document.querySelectorAll('#roleTabs .roletab').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('#roleTabs .roletab').forEach(x=>x.classList.remove('active'));
   t.classList.add('active');
@@ -563,10 +648,9 @@ function fillTeams(sel){
   sel.innerHTML='<option value="">Select…</option>'+window.VYC_TEAMS.map(t=>`<option value="${t.code}">${t.name} (${t.conference})</option>`).join('');
 }
 function fillAllTeams(){
-  const act=window.VYC_TEAMS.filter(t=>t.active!==false); const keep=[$('teamCode').value,$('cTeam').value,$('vHomeTeam').value,$('aTeam').value];
+  const act=window.VYC_TEAMS.filter(t=>t.active!==false); const sels=['teamCode','cTeam','vHomeTeam','aTeam','tTeam'].map($); const keep=sels.map(s=>s.value);
   const lab=t=>`<option value="${t.code}">${t.name} (${t.conference==='West'?'Western':'Eastern'})</option>`;
-  [$('teamCode'),$('cTeam'),$('vHomeTeam'),$('aTeam')].forEach(sel=>{ sel.innerHTML='<option value="">Select…</option>'+act.map(lab).join(''); });
-  $('teamCode').value=keep[0]||''; $('cTeam').value=keep[1]||''; $('vHomeTeam').value=keep[2]||''; $('aTeam').value=keep[3]||'';
+  sels.forEach((sel,i)=>{ sel.innerHTML='<option value="">Select…</option>'+act.map(lab).join(''); sel.value=keep[i]||''; });
 }
 fillAllTeams(); if(window.leagueReady) window.leagueReady.then(fillAllTeams);
 

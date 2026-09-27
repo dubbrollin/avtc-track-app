@@ -93,7 +93,7 @@ async function run(p,okMsg){ const {error}=await p; if(error){ toast(error.messa
 const teamName=c=>{ const t=teams.find(x=>x.code===c); return t?t.name:(c||'—'); };
 const teamOpts=(v,blank)=>(blank?'<option value="">'+blank+'</option>':'')+teams.map(t=>`<option value="${esc(t.code)}" ${t.code===v?'selected':''}>${esc(t.name)} (${esc(t.code)})</option>`).join('');
 const opts=(list,v,blank)=>(blank?'<option value="">'+blank+'</option>':'')+list.map(x=>{ const [val,lab]=Array.isArray(x)?x:[x,x]; return `<option value="${esc(val)}" ${String(val)===String(v??'')?'selected':''}>${esc(lab)}</option>`; }).join('');
-const ROLES=[['head_coach','Head Coach'],['division_coach','Division Coach'],['event_specialist','Field Event Coach'],['team_staff','Team staff (not coaching)']];
+const ROLES=[['head_coach','Head Coach'],['division_coach','Division Coach'],['event_specialist','Field Event Coach'],['team_staff','Team staff (not coaching)'],['timer','Timer (uploads results only)']];
 const roleLabel=r=>(ROLES.find(x=>x[0]===r)||[0,r==='head_age_group'||!r?'Head Coach':r])[1];
 
 // ---- mark parsing/formatting (times in seconds, field marks in metres) ----
