@@ -306,33 +306,45 @@ async function loadClearances(){
 // Pending requests are matched to the athlete's old registration on our roster (same name + birth date)
 // so that name lights up on the roster; requests with no match still show in the banner.
 const xferKey=(f,l,d)=>[f,l,d].map(x=>String(x||'').trim().toLowerCase()).join('|');
-let xferByKey={};
+// "flagged" requests were opened by the database because the parent said NO other team, but an athlete
+// with the same birth date and first or last name is registered with that team — it must be verified.
+let xferByKey={}, xferById={};
 function clearPill(c){
   if(!c) return '';
-  const m={pending:['bg-yellow-100 text-yellow-800','Transfer pending'],cleared:['bg-green-100 text-green-800','Transfer approved'],owes_fees:['bg-red-100 text-red-800','Transfer issue']}[c.status];
-  return `<span class="pill ${m[0]}" title="From ${esc(TEAM_NAME(c.from_team))}${c.note?' — '+esc(c.note):''}">${m[1]}</span>`;
+  const m=c.flagged&&c.status==='pending'?['bg-orange-100 text-orange-800','Possible transfer — verifying']:
+    {pending:['bg-yellow-100 text-yellow-800','Transfer pending'],cleared:['bg-green-100 text-green-800','Transfer approved'],owes_fees:['bg-red-100 text-red-800','Transfer issue'],not_same:['bg-gray-200 text-gray-700','Not the same athlete']}[c.status];
+  return `<span class="pill ${m[0]}" title="${c.flagged?'Parent said no other team — ':''}${esc(TEAM_NAME(c.from_team))}${c.note?' — '+esc(c.note):''}">${m[1]}</span>`;
 }
 function renderClearances(){
   const pend=clearOut.filter(c=>c.status==='pending');
-  xferByKey={}; pend.forEach(c=>xferByKey[xferKey(c.athlete_first,c.athlete_last,c.dob)]=c);
+  xferByKey={}; xferById={}; pend.forEach(c=>{ xferByKey[xferKey(c.athlete_first,c.athlete_last,c.dob)]=c; if(c.match_registration_id) xferById[c.match_registration_id]=c; });
   $('clearCount').textContent=clearOut.length?`(${pend.length} waiting)`:'';
   $('clearList').innerHTML=clearOut.length?clearOut.map(xferCardHtml).join(''):'<p class="text-sm text-gray-500">No transfer requests right now.</p>';
   $('xferBanner').innerHTML=pend.length?`<div class="card xferCard"><div class="col-head"><h2 class="flex-1">Transfer requests waiting for you (${pend.length})</h2></div>${pend.map(xferCardHtml).join('')}</div>`:'';
 }
 function xferCardHtml(c){
   const done=c.status!=='pending';
-  return `<div class="card ${done?'':'xferCard'}" style="margin-bottom:8px">
+  const mine=c.match_registration_id&&rows.find(r=>r.id===c.match_registration_id);
+  return `<div class="card ${done?'':'xferCard'}" style="margin-bottom:8px" id="xc-${c.id}">
     <div class="flex flex-wrap items-center gap-2">
       <div class="flex-1 min-w-0"><div class="font-bold">${esc(c.athlete_last)}, ${esc(c.athlete_first)} <span class="text-gray-500 font-normal text-sm">DOB ${fmtDate(c.dob)} · ${esc(c.division||'')}</span></div>
-      <div class="text-sm">Requesting a transfer to <b>${esc(TEAM_NAME(c.to_team))}</b></div>
+      ${c.flagged?`<div class="text-sm text-orange-800"><b>Possible transfer to ${esc(TEAM_NAME(c.to_team))}.</b> The parent said this athlete was <b>not</b> on another team, but this looks like ${mine?`<b>${esc(mine.first_name)} ${esc(mine.last_name)}</b> on your roster`:'an athlete on your roster'} (same birth date). Is it the same athlete?</div>`
+        :`<div class="text-sm">Requesting a transfer to <b>${esc(TEAM_NAME(c.to_team))}</b></div>`}
       <div class="text-xs text-gray-500">Requested ${fmtDate(c.created_at)}${c.responded_at?` · answered ${fmtDate(c.responded_at)} by ${esc(c.responded_by||'')}`:''}${c.note?' · '+esc(c.note):''}</div></div>
       ${clearPill(c)}
     </div>
     <div class="flex flex-wrap gap-2 mt-2">
-      ${c.status!=='cleared'?`<button class="btn bg-green-600 text-white" onclick="approveTransfer('${c.id}')">✓ Yes, OK to transfer — no issues</button>`:''}
-      ${c.status!=='owes_fees'?`<button class="btn bg-gray-200 text-sm" onclick="flagTransfer('${c.id}')">There's an issue…</button>`:''}
+      ${c.status!=='cleared'?`<button class="btn bg-green-600 text-white" onclick="approveTransfer('${c.id}')">✓ ${c.flagged?'Same athlete — OK to transfer':'Yes, OK to transfer — no issues'}</button>`:''}
+      ${c.status!=='owes_fees'?`<button class="btn bg-gray-200 text-sm" onclick="flagTransfer('${c.id}')">${c.flagged?'Same athlete — there\'s an issue…':'There\'s an issue…'}</button>`:''}
+      ${c.flagged&&c.status!=='not_same'?`<button class="btn bg-gray-200 text-sm" onclick="notSameAthlete('${c.id}')">Not the same athlete</button>`:''}
     </div></div>`;
 }
+function notSameAthlete(id){
+  const c=clearOut.find(x=>x.id===id); if(!c) return;
+  if(!confirm(`Confirm ${c.athlete_first} ${c.athlete_last} (registering with ${TEAM_NAME(c.to_team)}) is NOT the same athlete as the one on your roster?`)) return;
+  answerClearance(id,'not_same',null);
+}
+function showXfer(id){ const el=$('xc-'+id)||document.querySelector('#xferBanner .xferCard'); if(el) el.scrollIntoView({behavior:'smooth',block:'center'}); }
 async function answerClearance(id,status,note){
   const {error}=await sb.from('transfer_clearances').update({status,note:note??null}).eq('id',id);
   if(error){ alert('Could not save: '+error.message); return; }
@@ -340,7 +352,7 @@ async function answerClearance(id,status,note){
 }
 function approveTransfer(id){
   const c=clearOut.find(x=>x.id===id); if(!c) return;
-  if(!confirm(`Approve ${c.athlete_first} ${c.athlete_last}'s transfer to ${TEAM_NAME(c.to_team)}? This tells them there are no issues.`)) return;
+  if(!confirm(`${c.flagged?'Confirm this is the same athlete and ':''}Approve ${c.athlete_first} ${c.athlete_last}'s transfer to ${TEAM_NAME(c.to_team)}? This tells them there are no issues.`)) return;
   answerClearance(id,'cleared',null);
 }
 function flagTransfer(id){
@@ -348,7 +360,8 @@ function flagTransfer(id){
   if(note===null) return; if(!note.trim()){ alert('Please describe the issue so the new team knows.'); return; }
   answerClearance(id,'owes_fees',note.trim());
 }
-function xferFor(r){ return xferByKey[xferKey(r.first_name,r.last_name,r.dob)]; }
+function xferFor(r){ return xferById[r.id]||xferByKey[xferKey(r.first_name,r.last_name,r.dob)]; }
+const xferLabel=x=>x.flagged?`Possible transfer to ${esc(TEAM_NAME(x.to_team))} — please verify`:`Requesting transfer to ${esc(TEAM_NAME(x.to_team))}`;
 function pill(r){
   const s=r.dob_check_status;
   const c={match:'bg-green-100 text-green-800',mismatch:'bg-red-100 text-red-800',pending:'bg-yellow-100 text-yellow-800',unreadable:'bg-orange-100 text-orange-800',error:'bg-red-100 text-red-800'}[s];
@@ -363,7 +376,7 @@ function renderDashRoster(){
   const order=(window.DIVISIONS||[]).map(d=>d.name);
   const by={}; rows.forEach(r=>{ ((by[r.division]??={})[r.gender]??=[]).push(r); });
   const nm=r=>{ const x=fullAccess&&xferFor(r);
-    if(x) return `<span class="xfer" onclick="approveTransfer('${x.id}')" title="Click to approve the transfer">${esc(r.last_name)}, ${esc(r.first_name)}<small>Requesting transfer to ${esc(TEAM_NAME(x.to_team))}</small></span>`;
+    if(x) return `<span class="xfer" onclick="showXfer('${x.id}')" title="Click to review this transfer">${esc(r.last_name)}, ${esc(r.first_name)}<small>${xferLabel(x)}</small></span>`;
     return `<span>${esc(r.last_name)}, ${esc(r.first_name)}${r.status==='verified'?'':` <span class="text-gray-400 text-xs">· ${esc(r.status)}</span>`}</span>`; };
   const sortN=(p,q)=>(p.last_name+p.first_name).localeCompare(q.last_name+q.first_name);
   el.innerHTML=Object.keys(by).sort((x,y)=>order.indexOf(x)-order.indexOf(y)).map(d=>{
@@ -391,7 +404,7 @@ function render(){
   }
   $('list').innerHTML=shown.map(r=>{ const x=xferFor(r); return `
   <div class="card ${x?'xferCard':''}" data-id="${r.id}">
-    ${x?`<div class="flex flex-wrap items-center gap-2 mb-2"><b class="text-amber-800 flex-1">Requesting a transfer to ${esc(TEAM_NAME(x.to_team))}</b><button class="btn bg-green-600 text-white" onclick="approveTransfer('${x.id}')">✓ Yes, OK to transfer — no issues</button><button class="btn bg-gray-200 text-sm" onclick="flagTransfer('${x.id}')">There's an issue…</button></div>`:''}
+    ${x?`<div class="flex flex-wrap items-center gap-2 mb-2"><b class="text-amber-800 flex-1">${xferLabel(x)}</b>${x.flagged?`<button class="btn bg-amber-500 text-white" onclick="showXfer('${x.id}')">Review</button>`:`<button class="btn bg-green-600 text-white" onclick="approveTransfer('${x.id}')">✓ Yes, OK to transfer — no issues</button><button class="btn bg-gray-200 text-sm" onclick="flagTransfer('${x.id}')">There's an issue…</button>`}</div>`:''}
     <div class="flex flex-wrap items-center gap-2">
       <div class="flex-1 min-w-0">
         <div class="font-bold text-base">${esc(r.last_name)}, ${esc(r.first_name)} <span class="text-gray-500 font-normal text-sm">${r.gender} · ${r.division} (${r.age_on_dec31}) · ${esc(r.sport)}</span></div>

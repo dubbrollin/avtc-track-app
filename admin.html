@@ -258,7 +258,8 @@ if(!Object.keys(patch).length){ closeModal(); return; } if(await run(sb.from('re
 // prior team to confirm no fees are owed from last season. Site admins see all; team admins see
 // requests to or from their team, and answer the ones addressed to them.
 let clr=[];
-const CLR={pending:['warn','Requesting transfer'],cleared:['ok','Transfer approved'],owes_fees:['bad','Transfer issue']};
+const CLR={pending:['warn','Requesting transfer'],cleared:['ok','Transfer approved'],owes_fees:['bad','Transfer issue'],not_same:['gray','Not the same athlete']};
+// flagged = the parent said "no other team", but the database found a same-birthday, same-name athlete on that team.
 async function refreshClrBadge(){
 let q=sb.from('transfer_clearances').select('id',{count:'exact',head:true}).eq('status','pending'); if(!SITE) q=q.eq('from_team',MYTEAM);
 const {count}=await q; $('clrBadge').textContent=(count||0)+' waiting'; $('clrBadge').classList.toggle('hide',!count);
@@ -267,26 +268,27 @@ async function paintClearances(){
 $('pane').innerHTML='<p class="text-sm text-gray-500">Loading…</p>';
 try{ clr=await pageAll(()=>sb.from('transfer_clearances').select('*').order('created_at',{ascending:false})); }catch(e){ $('pane').innerHTML='<p class="text-red-700">'+esc(e.message)+'</p>'; return; }
 $('pane').innerHTML=`<div class="card"><p class="text-sm text-gray-600 mb-2">${SITE?'Every transfer request in the league.':`<b>Leaving your team:</b> athletes who were on ${esc(teamName(MYTEAM))} last season and are requesting a transfer — approve it if there are no issues (for example, no fees owed). <b>Joining your team:</b> what their old team said.`}</p>
-<div class="flex flex-wrap gap-2 mb-2"><select id="cStat"><option value="">Any answer</option><option value="pending">Requesting transfer</option><option value="cleared">Transfer approved</option><option value="owes_fees">Transfer issue</option></select>
+<div class="flex flex-wrap gap-2 mb-2"><select id="cStat"><option value="">Any answer</option><option value="pending">Requesting transfer</option><option value="cleared">Transfer approved</option><option value="owes_fees">Transfer issue</option><option value="not_same">Not the same athlete</option><option value="flagged">Possible (not declared by parent)</option></select>
 ${SITE?'':'<select id="cDir"><option value="">Both directions</option><option value="out">Leaving our team</option><option value="in">Joining our team</option></select>'}</div>
 <div class="scroll"><table class="t"><thead><tr><th>Athlete</th><th>Last season</th><th>Transferring to</th><th>Status</th><th>Note</th><th></th></tr></thead><tbody id="cBody"></tbody></table></div></div>`;
 ['cStat','cDir'].forEach(i=>$(i)&&($(i).onchange=drawClearances)); drawClearances();
 }
 function drawClearances(){
 const s=$('cStat').value, d=$('cDir')?$('cDir').value:'';
-const rows=clr.filter(c=>(!s||c.status===s)&&(!d||(d==='out'?c.from_team===MYTEAM:c.to_team===MYTEAM)));
-$('cBody').innerHTML=rows.map(c=>{ const canAnswer=SITE||c.from_team===MYTEAM, [cls,lab]=CLR[c.status]; return `<tr data-id="${c.id}">
-<td><b>${esc(c.athlete_last)}</b>, ${esc(c.athlete_first)} <div class="text-xs text-gray-500">${c.dob?esc(c.dob)+' · ':''}${esc(c.division||'')} · asked ${esc((c.created_at||'').slice(0,10))}</div></td>
+const rows=clr.filter(c=>(!s||(s==='flagged'?c.flagged:c.status===s))&&(!d||(d==='out'?c.from_team===MYTEAM:c.to_team===MYTEAM)));
+$('cBody').innerHTML=rows.map(c=>{ const canAnswer=SITE||c.from_team===MYTEAM, [cls,lab]=c.flagged&&c.status==='pending'?['bad','Possible transfer — verify']:CLR[c.status]; return `<tr data-id="${c.id}">
+<td><b>${esc(c.athlete_last)}</b>, ${esc(c.athlete_first)} <div class="text-xs text-gray-500">${c.dob?esc(c.dob)+' · ':''}${esc(c.division||'')} · asked ${esc((c.created_at||'').slice(0,10))}</div>${c.flagged?'<div class="text-xs font-semibold" style="color:#9a3412">Parent said no other team — same birth date &amp; name found on this team. Same athlete?</div>':''}</td>
 <td>${esc(teamName(c.from_team))}</td><td>${esc(teamName(c.to_team))}</td>
 <td><span class="pill ${cls}">${lab}</span>${c.responded_by?`<div class="text-xs text-gray-500">${esc(c.responded_by)}</div>`:''}</td>
 <td>${canAnswer?`<input data-f="note" value="${esc(c.note||'')}" placeholder="issue (e.g. owes fees)" style="width:11rem">`:esc(c.note||'')}</td>
-<td class="whitespace-nowrap">${canAnswer?'<button class="btn grn" data-act="cleared">Yes, OK to transfer</button> <button class="btn lite" data-act="owes_fees">There&#39;s an issue</button>':''}</td></tr>`; }).join('')||'<tr><td colspan="6" class="p-3 text-gray-500">No requests match.</td></tr>';
+<td class="whitespace-nowrap">${canAnswer?(c.flagged?'<button class="btn grn" data-act="cleared">Same athlete — OK to transfer</button> <button class="btn lite" data-act="owes_fees">Same athlete — issue</button> <button class="btn lite" data-act="not_same">Not the same athlete</button>':'<button class="btn grn" data-act="cleared">Yes, OK to transfer</button> <button class="btn lite" data-act="owes_fees">There&#39;s an issue</button>'):''}</td></tr>`; }).join('')||'<tr><td colspan="6" class="p-3 text-gray-500">No requests match.</td></tr>';
 }
 document.addEventListener('click',async e=>{
 const b=e.target.closest('#cBody button'); if(!b) return; const tr=b.closest('tr'), id=tr.dataset.id, c=clr.find(x=>x.id===id);
 const note=tr.querySelector('[data-f=note]').value.trim()||null, status=b.dataset.act;
 if(status==='owes_fees'&&!note){ toast('Type the issue in the note box first so the new team knows.',true); return; }
-if(status==='cleared'&&!confirm(`Approve ${c.athlete_first} ${c.athlete_last}'s transfer to ${teamName(c.to_team)}? This tells them there are no issues.`)) return;
+if(status==='not_same'&&!confirm(`Confirm ${c.athlete_first} ${c.athlete_last} (registering with ${teamName(c.to_team)}) is NOT the same athlete as the one on ${teamName(c.from_team)}?`)) return;
+if(status==='cleared'&&!confirm(`${c.flagged?'Confirm this is the same athlete and ':''}Approve ${c.athlete_first} ${c.athlete_last}'s transfer to ${teamName(c.to_team)}? This tells them there are no issues.`)) return;
 if(await run(sb.from('transfer_clearances').update({status,note}).eq('id',id),'Saved')){ Object.assign(c,{status,note,responded_by:me.email}); drawClearances(); refreshClrBadge(); }
 });
 
