@@ -273,11 +273,17 @@ ${SITE?'':'<select id="cDir"><option value="">Both directions</option><option va
 <div class="scroll"><table class="t"><thead><tr><th>Athlete</th><th>Last season</th><th>Transferring to</th><th>Status</th><th>Note</th><th></th></tr></thead><tbody id="cBody"></tbody></table></div></div>`;
 ['cStat','cDir'].forEach(i=>$(i)&&($(i).onchange=drawClearances)); drawClearances();
 }
+// Evidence from the database's comparison with the old team: first + last name, birth date, parent/guardian name.
+function matchPills(c){
+if(!c.match_registration_id) return c.flagged?'':'<div class="text-xs text-gray-500">No same-name athlete found on that team</div>';
+const t=(ok,lab)=>`<span class="pill ${ok?'ok':'gray'}">${ok?'✓':'✗'} ${lab}</span>`;
+return `<div class="mt-1">${t(true,'Name')} ${t(c.match_dob,'Birth date')} ${t(c.match_parent,'Parent')}</div>`;
+}
 function drawClearances(){
 const s=$('cStat').value, d=$('cDir')?$('cDir').value:'';
 const rows=clr.filter(c=>(!s||(s==='flagged'?c.flagged:c.status===s))&&(!d||(d==='out'?c.from_team===MYTEAM:c.to_team===MYTEAM)));
 $('cBody').innerHTML=rows.map(c=>{ const canAnswer=SITE||c.from_team===MYTEAM, [cls,lab]=c.flagged&&c.status==='pending'?['bad','Possible transfer — verify']:CLR[c.status]; return `<tr data-id="${c.id}">
-<td><b>${esc(c.athlete_last)}</b>, ${esc(c.athlete_first)} <div class="text-xs text-gray-500">${c.dob?esc(c.dob)+' · ':''}${esc(c.division||'')} · asked ${esc((c.created_at||'').slice(0,10))}</div>${c.flagged?'<div class="text-xs font-semibold" style="color:#9a3412">Parent said no other team — same birth date &amp; name found on this team. Same athlete?</div>':''}</td>
+<td><b>${esc(c.athlete_last)}</b>, ${esc(c.athlete_first)} <div class="text-xs text-gray-500">${c.dob?esc(c.dob)+' · ':''}${esc(c.division||'')} · asked ${esc((c.created_at||'').slice(0,10))}</div>${c.flagged?'<div class="text-xs font-semibold" style="color:#9a3412">Parent said no other team — same first &amp; last name, birthday and parent found on this team. Same athlete?</div>':''}${matchPills(c)}</td>
 <td>${esc(teamName(c.from_team))}</td><td>${esc(teamName(c.to_team))}</td>
 <td><span class="pill ${cls}">${lab}</span>${c.responded_by?`<div class="text-xs text-gray-500">${esc(c.responded_by)}</div>`:''}</td>
 <td>${canAnswer?`<input data-f="note" value="${esc(c.note||'')}" placeholder="issue (e.g. owes fees)" style="width:11rem">`:esc(c.note||'')}</td>

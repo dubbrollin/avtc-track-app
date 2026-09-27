@@ -328,8 +328,9 @@ function xferCardHtml(c){
   return `<div class="card ${done?'':'xferCard'}" style="margin-bottom:8px" id="xc-${c.id}">
     <div class="flex flex-wrap items-center gap-2">
       <div class="flex-1 min-w-0"><div class="font-bold">${esc(c.athlete_last)}, ${esc(c.athlete_first)} <span class="text-gray-500 font-normal text-sm">DOB ${fmtDate(c.dob)} · ${esc(c.division||'')}</span></div>
-      ${c.flagged?`<div class="text-sm text-orange-800"><b>Possible transfer to ${esc(TEAM_NAME(c.to_team))}.</b> The parent said this athlete was <b>not</b> on another team, but this looks like ${mine?`<b>${esc(mine.first_name)} ${esc(mine.last_name)}</b> on your roster`:'an athlete on your roster'} (same birth date). Is it the same athlete?</div>`
+      ${c.flagged?`<div class="text-sm text-orange-800"><b>Possible transfer to ${esc(TEAM_NAME(c.to_team))}.</b> The parent said this athlete was <b>not</b> on another team, but the first and last name, birthday and parent name all match ${mine?`<b>${esc(mine.first_name)} ${esc(mine.last_name)}</b> on your roster`:'an athlete on your roster'}. Is it the same athlete?</div>`
         :`<div class="text-sm">Requesting a transfer to <b>${esc(TEAM_NAME(c.to_team))}</b></div>`}
+      ${matchLine(c)}
       <div class="text-xs text-gray-500">Requested ${fmtDate(c.created_at)}${c.responded_at?` · answered ${fmtDate(c.responded_at)} by ${esc(c.responded_by||'')}`:''}${c.note?' · '+esc(c.note):''}</div></div>
       ${clearPill(c)}
     </div>
@@ -338,6 +339,12 @@ function xferCardHtml(c){
       ${c.status!=='owes_fees'?`<button class="btn bg-gray-200 text-sm" onclick="flagTransfer('${c.id}')">${c.flagged?'Same athlete — there\'s an issue…':'There\'s an issue…'}</button>`:''}
       ${c.flagged&&c.status!=='not_same'?`<button class="btn bg-gray-200 text-sm" onclick="notSameAthlete('${c.id}')">Not the same athlete</button>`:''}
     </div></div>`;
+}
+// What the database found when it compared this athlete with your roster (first + last name, birth date, parent/guardian name).
+function matchLine(c){
+  if(!c.match_registration_id) return c.flagged?'':'<div class="text-xs text-gray-500">No athlete with this first and last name found on your roster — check the name.</div>';
+  const t=(ok,lab)=>`<span class="pill ${ok?'bg-green-100 text-green-800':'bg-gray-200 text-gray-600'}">${ok?'✓':'✗'} ${lab}</span>`;
+  return `<div class="flex flex-wrap gap-1 mt-1">${t(true,'Athlete name')}${t(c.match_dob,'Birth date')}${t(c.match_parent,'Parent name')}</div>`;
 }
 function notSameAthlete(id){
   const c=clearOut.find(x=>x.id===id); if(!c) return;
