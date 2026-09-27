@@ -199,6 +199,7 @@ function isFullAccess(c){ return !!(c.is_admin || c.team_admin); }
 function roleLabel(c){
   if(c.role_type==='division_coach') return `${c.division_or_age_group||'Division'}${c.coach_gender?' '+c.coach_gender:''} Coach`;
   if(c.role_type==='event_specialist') return `Field Event Coach${c.event_specialty?' ('+c.event_specialty+')':''}`;
+  if(c.role_type==='team_staff') return c.admin_title||'Team staff';
   return 'Head Coach';
 }
 
@@ -445,10 +446,10 @@ function renderCoaches(){
         </div>
         <span class="pill ${st.cls}">${st.label}</span>
         <span class="pill ${c.approved?'bg-green-600 text-white':'bg-gray-200'}">${c.approved?'Approved':'Pending approval'}</span>
-        ${c.is_admin?'<span class="pill bg-red-100 text-red-800">Site admin</span>':c.team_admin?'<span class="pill bg-blue-100 text-blue-800">Team admin</span>':''}
+        ${c.is_admin?'<span class="pill bg-red-100 text-red-800">Site admin</span>':c.team_admin?'<span class="pill bg-blue-100 text-blue-800">Team admin</span>':c.requested_team_admin?'<span class="pill bg-yellow-100 text-yellow-800">Requested team admin</span>':''}
       </div>
       ${c.email.toLowerCase()===user.email.toLowerCase()?'':`<div class="flex gap-2 mt-2">
-        ${!c.approved?`<button class="btn bg-green-600 text-white" onclick="setCoachApproval('${esc(c.email)}',true)">Approve</button>`:`<button class="btn bg-gray-200" onclick="setCoachApproval('${esc(c.email)}',false)">Revoke access</button>`}
+        ${!c.approved?(c.requested_team_admin?`<button class="btn bg-green-600 text-white" onclick="setTeamAdmin('${esc(c.email)}',true)">Approve as team admin</button><button class="btn bg-gray-200" onclick="setCoachApproval('${esc(c.email)}',true)">Approve as coach only</button>`:`<button class="btn bg-green-600 text-white" onclick="setCoachApproval('${esc(c.email)}',true)">Approve</button>`):`<button class="btn bg-gray-200" onclick="setCoachApproval('${esc(c.email)}',false)">Revoke access</button>`}
         <button class="btn bg-gray-200" onclick="setTeamAdmin('${esc(c.email)}',${!c.team_admin})">${c.team_admin?'Remove team admin':'Make team admin'}</button>
       </div>`}
     </div>`;
