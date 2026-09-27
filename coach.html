@@ -22,6 +22,11 @@
   @media(min-width:900px){ .rosterScroll{max-height:calc(100vh - 250px);min-height:260px} }
   .sexhead{font-size:12px;font-weight:700;color:#1d4ed8;margin:6px 0 2px}
   .rosterNames{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:2px 12px;margin-bottom:8px}
+  .xfer{background:#fef08a;border:2px solid #f59e0b;border-radius:8px;padding:2px 6px;cursor:pointer;animation:xferGlow 1.6s ease-in-out infinite}
+  .xfer small{display:block;font-size:11px;font-weight:700;color:#92400e}
+  .xferCard{border:2px solid #f59e0b;background:#fffbeb;animation:xferGlow 1.6s ease-in-out infinite}
+  @keyframes xferGlow{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,.55)}50%{box-shadow:0 0 0 6px rgba(245,158,11,0)}}
+  @media (prefers-reduced-motion:reduce){.xfer,.xferCard{animation:none}}
   .rosterScroll .divhead{position:sticky;top:-8px;background:#fff;padding:4px 0;z-index:1;border-bottom:1px solid #f3f4f6;margin-bottom:2px}
   body{background:#f3f4f6}
   .card{background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
@@ -116,8 +121,8 @@
             <div id="coachList"></div>
           </div>
           <div class="card" id="clearCard">
-            <div class="col-head"><h2 class="flex-1">Fee clearance requests <span id="clearCount" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
-            <p class="text-xs text-gray-500 mb-2">Athletes who were on your team last season and are registering with another team. Confirm whether they owe your team any fees from last season.</p>
+            <div class="col-head"><h2 class="flex-1">Transfer requests <span id="clearCount" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
+            <p class="text-xs text-gray-500 mb-2">Athletes from your team last season who are registering with another team. Approve the transfer if there are no issues (for example, no fees owed from last season).</p>
             <div id="clearList"></div>
           </div>
       </div></div>
@@ -149,7 +154,9 @@
       </div></div>
 
       <!-- DASHBOARD -->
-      <div id="dashView"><div class="max-w-6xl mx-auto dash2">
+      <div id="dashView">
+        <div id="xferBanner" class="max-w-6xl mx-auto"></div>
+        <div class="max-w-6xl mx-auto dash2">
           <div class="card" id="rosterSection">
             <div class="col-head"><h2 class="flex-1">My roster <span id="dashCount" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
             <div id="dashRoster" class="text-sm rosterScroll"></div>
@@ -286,44 +293,62 @@ async function load(){
     if(!cerr){ coachRows=cdata||[]; renderCoaches(); }
   }
 }
-// ---- prior-team fee clearances (incoming = our new athletes; outgoing = other teams asking us) ----
+// ---- transfer requests (incoming = our new athletes; outgoing = our old athletes asking to leave) ----
 let clearIn={}, clearOut=[];
 const TEAM_NAME=c=>(window.VYC_TEAMS.find(t=>t.code===c)||{}).name||c||'';
 async function loadClearances(){
   const {data,error}=await sb.from('transfer_clearances').select('*').or(`from_team.eq.${myCoach.team_code},to_team.eq.${myCoach.team_code}`).order('created_at',{ascending:false});
-  if(error){ $('clearList').innerHTML='<p class="text-sm text-red-700">Could not load clearance requests: '+esc(error.message)+'</p>'; return; }
+  if(error){ $('clearList').innerHTML='<p class="text-sm text-red-700">Could not load transfer requests: '+esc(error.message)+'</p>'; return; }
   clearIn={}; (data||[]).filter(c=>c.to_team===myCoach.team_code).forEach(c=>clearIn[c.registration_id]=c);
   clearOut=(data||[]).filter(c=>c.from_team===myCoach.team_code);
   renderClearances();
 }
+// Pending requests are matched to the athlete's old registration on our roster (same name + birth date)
+// so that name lights up on the roster; requests with no match still show in the banner.
+const xferKey=(f,l,d)=>[f,l,d].map(x=>String(x||'').trim().toLowerCase()).join('|');
+let xferByKey={};
 function clearPill(c){
   if(!c) return '';
-  const m={pending:['bg-yellow-100 text-yellow-800','Fee clearance pending'],cleared:['bg-green-100 text-green-800','Cleared by prior team'],owes_fees:['bg-red-100 text-red-800','Owes prior team fees']}[c.status];
-  return `<span class="pill ${m[0]}" title="${esc(TEAM_NAME(c.from_team))}${c.note?' — '+esc(c.note):''}">${m[1]}</span>`;
+  const m={pending:['bg-yellow-100 text-yellow-800','Transfer pending'],cleared:['bg-green-100 text-green-800','Transfer approved'],owes_fees:['bg-red-100 text-red-800','Transfer issue']}[c.status];
+  return `<span class="pill ${m[0]}" title="From ${esc(TEAM_NAME(c.from_team))}${c.note?' — '+esc(c.note):''}">${m[1]}</span>`;
 }
 function renderClearances(){
-  const pend=clearOut.filter(c=>c.status==='pending').length;
-  $('clearCount').textContent=clearOut.length?`(${pend} waiting)`:'';
-  if(!clearOut.length){ $('clearList').innerHTML='<p class="text-sm text-gray-500">No requests right now.</p>'; return; }
-  $('clearList').innerHTML=clearOut.map(c=>`<div class="card" style="margin-bottom:8px">
+  const pend=clearOut.filter(c=>c.status==='pending');
+  xferByKey={}; pend.forEach(c=>xferByKey[xferKey(c.athlete_first,c.athlete_last,c.dob)]=c);
+  $('clearCount').textContent=clearOut.length?`(${pend.length} waiting)`:'';
+  $('clearList').innerHTML=clearOut.length?clearOut.map(xferCardHtml).join(''):'<p class="text-sm text-gray-500">No transfer requests right now.</p>';
+  $('xferBanner').innerHTML=pend.length?`<div class="card xferCard"><div class="col-head"><h2 class="flex-1">Transfer requests waiting for you (${pend.length})</h2></div>${pend.map(xferCardHtml).join('')}</div>`:'';
+}
+function xferCardHtml(c){
+  const done=c.status!=='pending';
+  return `<div class="card ${done?'':'xferCard'}" style="margin-bottom:8px">
     <div class="flex flex-wrap items-center gap-2">
-      <div class="flex-1 min-w-0"><div class="font-bold">${esc(c.athlete_last)}, ${esc(c.athlete_first)} <span class="text-gray-500 font-normal text-sm">DOB ${fmtDate(c.dob)} · ${esc(c.division||'')} · now registering with ${esc(TEAM_NAME(c.to_team))}</span></div>
-      <div class="text-xs text-gray-500">Requested ${fmtDate(c.created_at)}${c.responded_at?` · answered ${fmtDate(c.responded_at)} by ${esc(c.responded_by||'')}`:''}</div></div>
+      <div class="flex-1 min-w-0"><div class="font-bold">${esc(c.athlete_last)}, ${esc(c.athlete_first)} <span class="text-gray-500 font-normal text-sm">DOB ${fmtDate(c.dob)} · ${esc(c.division||'')}</span></div>
+      <div class="text-sm">Requesting a transfer to <b>${esc(TEAM_NAME(c.to_team))}</b></div>
+      <div class="text-xs text-gray-500">Requested ${fmtDate(c.created_at)}${c.responded_at?` · answered ${fmtDate(c.responded_at)} by ${esc(c.responded_by||'')}`:''}${c.note?' · '+esc(c.note):''}</div></div>
       ${clearPill(c)}
     </div>
-    <div class="flex flex-wrap gap-2 mt-2 items-center">
-      <input id="cn-${c.id}" class="border rounded p-1 text-sm flex-1 min-w-0" placeholder="Note (e.g. amount owed)" value="${esc(c.note||'')}">
-      <button class="btn bg-green-600 text-white" onclick="answerClearance('${c.id}','cleared')">No fees owed</button>
-      <button class="btn bg-red-100 text-red-800" onclick="answerClearance('${c.id}','owes_fees')">Owes fees</button>
-    </div></div>`).join('');
+    <div class="flex flex-wrap gap-2 mt-2">
+      ${c.status!=='cleared'?`<button class="btn bg-green-600 text-white" onclick="approveTransfer('${c.id}')">✓ Yes, OK to transfer — no issues</button>`:''}
+      ${c.status!=='owes_fees'?`<button class="btn bg-gray-200 text-sm" onclick="flagTransfer('${c.id}')">There's an issue…</button>`:''}
+    </div></div>`;
 }
-async function answerClearance(id,status){
-  const note=$('cn-'+id).value.trim()||null;
-  if(status==='owes_fees'&&!note&&!confirm('Mark as owing fees without a note? Adding the amount helps the new team.')) return;
-  const {error}=await sb.from('transfer_clearances').update({status,note}).eq('id',id);
+async function answerClearance(id,status,note){
+  const {error}=await sb.from('transfer_clearances').update({status,note:note??null}).eq('id',id);
   if(error){ alert('Could not save: '+error.message); return; }
-  await loadClearances();
+  await loadClearances(); render();
 }
+function approveTransfer(id){
+  const c=clearOut.find(x=>x.id===id); if(!c) return;
+  if(!confirm(`Approve ${c.athlete_first} ${c.athlete_last}'s transfer to ${TEAM_NAME(c.to_team)}? This tells them there are no issues.`)) return;
+  answerClearance(id,'cleared',null);
+}
+function flagTransfer(id){
+  const note=prompt('What is the issue? (for example: owes $75 in fees from last season)');
+  if(note===null) return; if(!note.trim()){ alert('Please describe the issue so the new team knows.'); return; }
+  answerClearance(id,'owes_fees',note.trim());
+}
+function xferFor(r){ return xferByKey[xferKey(r.first_name,r.last_name,r.dob)]; }
 function pill(r){
   const s=r.dob_check_status;
   const c={match:'bg-green-100 text-green-800',mismatch:'bg-red-100 text-red-800',pending:'bg-yellow-100 text-yellow-800',unreadable:'bg-orange-100 text-orange-800',error:'bg-red-100 text-red-800'}[s];
@@ -337,7 +362,9 @@ function renderDashRoster(){
   // Division/Event coaches to their own division and sex, a Head Coach sees the whole team.
   const order=(window.DIVISIONS||[]).map(d=>d.name);
   const by={}; rows.forEach(r=>{ ((by[r.division]??={})[r.gender]??=[]).push(r); });
-  const nm=r=>`<span>${esc(r.last_name)}, ${esc(r.first_name)}${r.status==='verified'?'':` <span class="text-gray-400 text-xs">· ${esc(r.status)}</span>`}</span>`;
+  const nm=r=>{ const x=fullAccess&&xferFor(r);
+    if(x) return `<span class="xfer" onclick="approveTransfer('${x.id}')" title="Click to approve the transfer">${esc(r.last_name)}, ${esc(r.first_name)}<small>Requesting transfer to ${esc(TEAM_NAME(x.to_team))}</small></span>`;
+    return `<span>${esc(r.last_name)}, ${esc(r.first_name)}${r.status==='verified'?'':` <span class="text-gray-400 text-xs">· ${esc(r.status)}</span>`}</span>`; };
   const sortN=(p,q)=>(p.last_name+p.first_name).localeCompare(q.last_name+q.first_name);
   el.innerHTML=Object.keys(by).sort((x,y)=>order.indexOf(x)-order.indexOf(y)).map(d=>{
     const total=(by[d].Boy||[]).length+(by[d].Girl||[]).length;
@@ -362,8 +389,9 @@ function render(){
     </div>`).join('');
     return;
   }
-  $('list').innerHTML=shown.map(r=>`
-  <div class="card" data-id="${r.id}">
+  $('list').innerHTML=shown.map(r=>{ const x=xferFor(r); return `
+  <div class="card ${x?'xferCard':''}" data-id="${r.id}">
+    ${x?`<div class="flex flex-wrap items-center gap-2 mb-2"><b class="text-amber-800 flex-1">Requesting a transfer to ${esc(TEAM_NAME(x.to_team))}</b><button class="btn bg-green-600 text-white" onclick="approveTransfer('${x.id}')">✓ Yes, OK to transfer — no issues</button><button class="btn bg-gray-200 text-sm" onclick="flagTransfer('${x.id}')">There's an issue…</button></div>`:''}
     <div class="flex flex-wrap items-center gap-2">
       <div class="flex-1 min-w-0">
         <div class="font-bold text-base">${esc(r.last_name)}, ${esc(r.first_name)} <span class="text-gray-500 font-normal text-sm">${r.gender} · ${r.division} (${r.age_on_dec31}) · ${esc(r.sport)}</span></div>
@@ -382,7 +410,7 @@ function render(){
     </div>
     <div id="proof-${r.id}" class="mt-2"></div>
     <div id="det-${r.id}" class="mt-2 text-sm hidden"></div>
-  </div>`).join('');
+  </div>`; }).join('');
 }
 function renderCoaches(){
   $('coachCount').textContent=`(${coachRows.length})`;
