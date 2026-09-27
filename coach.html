@@ -74,13 +74,13 @@
   <div id="app" class="hidden">
     <div class="card max-w-lg mx-auto" id="notCoachBox" style="display:none">
       <h2 class="font-bold text-lg mb-1">Finish your coach registration</h2>
-      <p class="text-sm text-gray-700">You're signed in as <b id="ncEmail"></b>, but we don't have your coach details yet. Answer a few quick questions (name, team, division) and your team's head coach can approve you.</p>
+      <p class="text-sm text-gray-700">You're signed in as <b id="ncEmail"></b>, but we don't have your coach details yet. Answer a few quick questions (name, team, division) and a site admin can approve you.</p>
       <a href="index.html?role=coach" class="btn bg-blue-600 text-white mt-3 inline-block">Finish registration</a>
       <button type="button" class="signout-btn btn bg-gray-200 mt-3 ml-2">Sign out</button>
     </div>
     <div class="card max-w-lg mx-auto" id="pendingBox" style="display:none">
       <h2 class="font-bold text-lg mb-1">Thanks — you're on the list</h2>
-      <p class="text-sm text-gray-700">Your coach registration is waiting for approval from your team's head coach. You'll get into the Coach Dashboard as soon as they approve you.</p>
+      <p class="text-sm text-gray-700">Your coach registration is waiting for approval from a site admin. You'll get into the Coach Dashboard as soon as they approve you.</p>
       <p id="pendingInfo" class="text-sm text-gray-600 mt-2"></p>
       <button type="button" class="signout-btn btn bg-gray-200 mt-3">Sign out</button>
     </div>
@@ -106,14 +106,19 @@
               <button id="exportCsv" class="btn bg-gray-200">Export CSV</button>
               <button id="exportHytek" class="btn bg-gray-200">Hy-Tek roster</button>
             </div>
-            <p id="rosterNote" class="text-xs text-gray-500 mb-2 hidden">You're seeing names, divisions and status only — full registration details (documents, contact info, medical info) are visible to head coaches only.</p>
+            <p id="rosterNote" class="text-xs text-gray-500 mb-2 hidden">You're seeing names, divisions and status only — full registration details (documents, contact info, medical info) are visible to team admins only.</p>
             <p id="msg" class="text-sm text-gray-600 mb-2"></p>
             <div id="list"></div>
           </div>
           <div class="card" id="coachesCard">
             <div class="col-head"><h2 class="flex-1">Coaches on my team <span id="coachCount" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
-            <p class="text-xs text-gray-500 mb-2">Approve a new coach registration, or review background-check status. Only head coaches should approve others.</p>
+            <p class="text-xs text-gray-500 mb-2">Approve a new coach registration, make a coach a team admin, or review background-check status. Only team admins can do this.</p>
             <div id="coachList"></div>
+          </div>
+          <div class="card" id="clearCard">
+            <div class="col-head"><h2 class="flex-1">Fee clearance requests <span id="clearCount" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
+            <p class="text-xs text-gray-500 mb-2">Athletes who were on your team last season and are registering with another team. Confirm whether they owe your team any fees from last season.</p>
+            <div id="clearList"></div>
           </div>
       </div></div>
 
@@ -180,11 +185,10 @@ let rows=[], coachRows=[], user=null, myCoach=null, fullAccess=false;
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 // A coach is "full access" (sees documents/contact/medical info, can verify/reject, manage coaches) when
-// they're an admin, registered as Head Coach, or (grandfathered) registered under the old combined
-// "Head / age-group coach" option before this Head/Division split existed. Everyone else — Division
-// Coach or Event-Specialist Coach — gets a names-and-status-only roster, scoped to their division for
-// Division Coaches (Event-Specialist Coaches see the whole team, per how that role works).
-function isFullAccess(c){ return !!(c.is_admin || c.role_type==='head_coach' || c.role_type==='head_age_group' || !c.role_type); }
+// they're a site admin or a team admin (team admins only for their own team — the database enforces it).
+// Everyone else — Head, Division or Event-Specialist Coach — gets a names-and-status-only roster, scoped to
+// their division for Division Coaches (Head and Event-Specialist Coaches see the whole team).
+function isFullAccess(c){ return !!(c.is_admin || c.team_admin); }
 function roleLabel(c){
   if(c.role_type==='division_coach') return `${c.division_or_age_group||'Division'}${c.coach_gender?' '+c.coach_gender:''} Coach`;
   if(c.role_type==='event_specialist') return `Field Event Coach${c.event_specialty?' ('+c.event_specialty+')':''}`;
@@ -231,11 +235,11 @@ async function loadMe(){
     return;
   }
   myCoach=data;
-  try{ localStorage.setItem('vyc_admin', myCoach.is_admin?'1':'0'); }catch(e){}
+  try{ localStorage.setItem('vyc_admin', (myCoach.is_admin||myCoach.team_admin)?'1':'0'); }catch(e){}
   fullAccess=isFullAccess(myCoach);
   $('notCoachBox').style.display='none'; $('coachApp').style.display='block';
   const team=window.VYC_TEAMS.find(t=>t.code===myCoach.team_code);
-  $('teamLabel').textContent = (team ? `— ${team.name}${team.conference?' ('+team.conference+')':''} · ${roleLabel(myCoach)}${myCoach.is_admin?' · Site admin':''}` : `— ${roleLabel(myCoach)}`);
+  $('teamLabel').textContent = (team ? `— ${team.name}${team.conference?' ('+team.conference+')':''} · ${roleLabel(myCoach)}${myCoach.is_admin?' · Site admin':myCoach.team_admin?' · Team admin':''}` : `— ${roleLabel(myCoach)}`);
   const st=bgStatus(myCoach);
   $('bgStatusLine').innerHTML = `Your background-check status: <span class="pill ${st.cls}">${st.label}</span>`;
   $('runChecks').style.display=fullAccess?'':'none';
@@ -243,6 +247,7 @@ async function loadMe(){
   $('exportHytek').style.display=fullAccess?'':'none';
   $('rosterNote').classList.toggle('hidden',fullAccess);
   $('coachesCard').style.display=fullAccess?'':'none';
+  $('clearCard').style.display=fullAccess?'':'none';
   // Roster lives on its own view (head coaches only) — the everyday dashboard is just Meet Register + Results.
   const vw=new URLSearchParams(location.search).get('view');
   const wantRoster = fullAccess && vw==='roster', wantReg = vw==='register';
@@ -269,6 +274,7 @@ async function load(){
     if(error){ $('msg').textContent='Could not load: '+error.message; return; }
     rows=data||[];
   }
+  if(fullAccess) await loadClearances();
   render();
   const pending=rows.filter(r=>r.dob_check_status==='pending');
   if(fullAccess && pending.length) runChecks(pending);
@@ -279,6 +285,44 @@ async function load(){
     const {data:cdata,error:cerr}=await cq;
     if(!cerr){ coachRows=cdata||[]; renderCoaches(); }
   }
+}
+// ---- prior-team fee clearances (incoming = our new athletes; outgoing = other teams asking us) ----
+let clearIn={}, clearOut=[];
+const TEAM_NAME=c=>(window.VYC_TEAMS.find(t=>t.code===c)||{}).name||c||'';
+async function loadClearances(){
+  const {data,error}=await sb.from('transfer_clearances').select('*').or(`from_team.eq.${myCoach.team_code},to_team.eq.${myCoach.team_code}`).order('created_at',{ascending:false});
+  if(error){ $('clearList').innerHTML='<p class="text-sm text-red-700">Could not load clearance requests: '+esc(error.message)+'</p>'; return; }
+  clearIn={}; (data||[]).filter(c=>c.to_team===myCoach.team_code).forEach(c=>clearIn[c.registration_id]=c);
+  clearOut=(data||[]).filter(c=>c.from_team===myCoach.team_code);
+  renderClearances();
+}
+function clearPill(c){
+  if(!c) return '';
+  const m={pending:['bg-yellow-100 text-yellow-800','Fee clearance pending'],cleared:['bg-green-100 text-green-800','Cleared by prior team'],owes_fees:['bg-red-100 text-red-800','Owes prior team fees']}[c.status];
+  return `<span class="pill ${m[0]}" title="${esc(TEAM_NAME(c.from_team))}${c.note?' — '+esc(c.note):''}">${m[1]}</span>`;
+}
+function renderClearances(){
+  const pend=clearOut.filter(c=>c.status==='pending').length;
+  $('clearCount').textContent=clearOut.length?`(${pend} waiting)`:'';
+  if(!clearOut.length){ $('clearList').innerHTML='<p class="text-sm text-gray-500">No requests right now.</p>'; return; }
+  $('clearList').innerHTML=clearOut.map(c=>`<div class="card" style="margin-bottom:8px">
+    <div class="flex flex-wrap items-center gap-2">
+      <div class="flex-1 min-w-0"><div class="font-bold">${esc(c.athlete_last)}, ${esc(c.athlete_first)} <span class="text-gray-500 font-normal text-sm">DOB ${fmtDate(c.dob)} · ${esc(c.division||'')} · now registering with ${esc(TEAM_NAME(c.to_team))}</span></div>
+      <div class="text-xs text-gray-500">Requested ${fmtDate(c.created_at)}${c.responded_at?` · answered ${fmtDate(c.responded_at)} by ${esc(c.responded_by||'')}`:''}</div></div>
+      ${clearPill(c)}
+    </div>
+    <div class="flex flex-wrap gap-2 mt-2 items-center">
+      <input id="cn-${c.id}" class="border rounded p-1 text-sm flex-1 min-w-0" placeholder="Note (e.g. amount owed)" value="${esc(c.note||'')}">
+      <button class="btn bg-green-600 text-white" onclick="answerClearance('${c.id}','cleared')">No fees owed</button>
+      <button class="btn bg-red-100 text-red-800" onclick="answerClearance('${c.id}','owes_fees')">Owes fees</button>
+    </div></div>`).join('');
+}
+async function answerClearance(id,status){
+  const note=$('cn-'+id).value.trim()||null;
+  if(status==='owes_fees'&&!note&&!confirm('Mark as owing fees without a note? Adding the amount helps the new team.')) return;
+  const {error}=await sb.from('transfer_clearances').update({status,note}).eq('id',id);
+  if(error){ alert('Could not save: '+error.message); return; }
+  await loadClearances();
 }
 function pill(r){
   const s=r.dob_check_status;
@@ -323,9 +367,9 @@ function render(){
     <div class="flex flex-wrap items-center gap-2">
       <div class="flex-1 min-w-0">
         <div class="font-bold text-base">${esc(r.last_name)}, ${esc(r.first_name)} <span class="text-gray-500 font-normal text-sm">${r.gender} · ${r.division} (${r.age_on_dec31}) · ${esc(r.sport)}</span></div>
-        <div class="text-xs text-gray-500">DOB ${fmtDate(r.dob)} · submitted ${fmtDate(r.created_at)} · ${r.is_returning?('Returning'+(r.ran_for_other_team?' from '+esc(r.prior_team):'')):'New athlete'}${r.medical_option==='conditions'?' · <b class="text-red-700">Medical conditions noted</b>':''}</div>
+        <div class="text-xs text-gray-500">DOB ${fmtDate(r.dob)} · submitted ${fmtDate(r.created_at)} · ${r.is_returning?'Returning':'New athlete'}${r.ran_for_other_team?' · last season: '+esc(r.prior_team||'another team'):''}${r.medical_option==='conditions'?' · <b class="text-red-700">Medical conditions noted</b>':''}</div>
       </div>
-      ${pill(r)} <span class="pill ${r.status==='verified'?'bg-green-600 text-white':r.status==='rejected'?'bg-red-600 text-white':'bg-gray-200'}">${r.status}</span>
+      ${clearPill(clearIn[r.id])} ${pill(r)} <span class="pill ${r.status==='verified'?'bg-green-600 text-white':r.status==='rejected'?'bg-red-600 text-white':'bg-gray-200'}">${r.status}</span>
     </div>
     ${r.dob_check_note?`<div class="text-xs mt-1 ${r.dob_check_status==='match'?'text-green-700':'text-red-700'}">${esc(r.dob_check_note)}</div>`:''}
     <div class="flex flex-wrap gap-2 mt-3">
@@ -353,17 +397,27 @@ function renderCoaches(){
         </div>
         <span class="pill ${st.cls}">${st.label}</span>
         <span class="pill ${c.approved?'bg-green-600 text-white':'bg-gray-200'}">${c.approved?'Approved':'Pending approval'}</span>
+        ${c.is_admin?'<span class="pill bg-red-100 text-red-800">Site admin</span>':c.team_admin?'<span class="pill bg-blue-100 text-blue-800">Team admin</span>':''}
       </div>
-      <div class="flex gap-2 mt-2">
-        ${!c.approved?`<button class="btn bg-green-600 text-white" onclick="setCoachApproval('${c.id}',true)">Approve</button>`:`<button class="btn bg-gray-200" onclick="setCoachApproval('${c.id}',false)">Revoke access</button>`}
-      </div>
+      ${c.email.toLowerCase()===user.email.toLowerCase()?'':`<div class="flex gap-2 mt-2">
+        ${!c.approved?`<button class="btn bg-green-600 text-white" onclick="setCoachApproval('${esc(c.email)}',true)">Approve</button>`:`<button class="btn bg-gray-200" onclick="setCoachApproval('${esc(c.email)}',false)">Revoke access</button>`}
+        <button class="btn bg-gray-200" onclick="setTeamAdmin('${esc(c.email)}',${!c.team_admin})">${c.team_admin?'Remove team admin':'Make team admin'}</button>
+      </div>`}
     </div>`;
   }).join('');
 }
-async function setCoachApproval(id,approved){
-  const {error}=await sb.from('coaches').update({approved}).eq('id',id);
+async function setCoachApproval(email,approved){
+  const {error}=await sb.from('coaches').update({approved}).eq('email',email);
   if(error){ alert('Could not save: '+error.message); return; }
-  const c=coachRows.find(x=>x.id===id); if(c) c.approved=approved; renderCoaches();
+  const c=coachRows.find(x=>x.email===email); if(c) c.approved=approved; renderCoaches();
+}
+async function setTeamAdmin(email,on){
+  const c=coachRows.find(x=>x.email===email); const nm=c?(c.first_name||c.name||email):email;
+  if(!confirm(on?`Make ${nm} a TEAM ADMIN? They'll see private registration details and can approve coaches for your team.`:`Remove team-admin access from ${nm}?`)) return;
+  const patch={team_admin:on}; if(on) patch.approved=true;
+  const {error}=await sb.from('coaches').update(patch).eq('email',email);
+  if(error){ alert('Could not save: '+error.message); return; }
+  if(c) Object.assign(c,patch); renderCoaches();
 }
 $('filter').onchange=render;
 

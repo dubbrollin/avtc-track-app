@@ -1,0 +1,5 @@
+﻿test-data/
+supabase/.temp/
+supabase/.branches/
+.env
+*.local

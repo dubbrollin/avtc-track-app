@@ -51,19 +51,20 @@ table.t td{padding:5px 6px;border-top:1px solid #f3f4f6;vertical-align:middle}
 </nav>
 </div></header>
 <div class="max-w-6xl mx-auto p-4">
-<h1 class="text-2xl font-bold mb-1">Site Admin</h1>
-<p class="text-sm text-gray-600 mb-3">Change anything here — people, athletes, meets, records and league setup. Only site admins can open this page, and the database enforces it.</p>
+<h1 class="text-2xl font-bold mb-1" id="pgTitle">Site Admin</h1>
+<p class="text-sm text-gray-600 mb-3" id="pgIntro">Change anything here — people, athletes, meets, records and league setup. Only site admins and team admins can open this page, and the database enforces what each can see and change.</p>
 
 <div id="login" class="card"><div id="loginWidget"></div></div>
-<div id="denied" class="card hide"><p class="font-semibold">This page is for site admins only.</p><p class="text-sm text-gray-600" id="deniedWho"></p></div>
+<div id="denied" class="card hide"><p class="font-semibold">This page is for site admins and team admins only.</p><p class="text-sm text-gray-600" id="deniedWho"></p></div>
 
 <div id="app" class="hide">
 <div class="flex flex-wrap rounded-lg overflow-hidden border text-sm mb-3 w-fit">
 <button class="tab active" data-tab="people">People &amp; Access <span id="pendBadge" class="pill warn hide"></span></button>
 <button class="tab" data-tab="athletes">Athletes</button>
+<button class="tab" data-tab="clearances">Fee Clearances <span id="clrBadge" class="pill warn hide"></span></button>
 <button class="tab" data-tab="meets">Meets &amp; Results</button>
-<button class="tab" data-tab="records">Records &amp; Standards</button>
-<button class="tab" data-tab="league">League Setup</button>
+<button class="tab site-only" data-tab="records">Records &amp; Standards</button>
+<button class="tab site-only" data-tab="league">League Setup</button>
 </div>
 <div id="pane"></div>
 </div>
@@ -77,6 +78,8 @@ const CFG=window.APP_CONFIG;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let sb=supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{auth:{lock:(n,t,fn)=>fn()}});
 let me=null, tab='people', teams=[];
+// SITE = site admin (everything, every team). Otherwise a team admin: everything for MYTEAM only.
+let SITE=false, MYTEAM=null;
 const DIVS=(window.DIVISIONS||[]).map(d=>d.name);
 const AGES={'Sub-Gremlin':[5,6],'Gremlin':[7,8],'Bantam':[9,10],'Juniors':[11,12],'Youth':[13,14],'Intermediates':[15,18]};
 const FIELD_CODES=['HJ','LJ','SP','JT','TJ','PV','DT'];
@@ -110,14 +113,20 @@ if(!s||window.__authDone===s.user.id) return; window.__authDone=s.user.id;
 sb=supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{auth:{lock:(n,t,fn)=>fn()}}); // fresh client after sign-in redirect
 $('login').classList.add('hide');
 const {data}=await sb.from('coaches').select('*').eq('email',s.user.email).eq('approved',true).maybeSingle();
-if(!data||!data.is_admin){ try{localStorage.setItem('vyc_admin','0')}catch(e){} $('deniedWho').textContent='Signed in as '+s.user.email+'. Ask an existing site admin to give you access.'; $('denied').classList.remove('hide'); return; }
+if(!data||!(data.is_admin||data.team_admin)){ try{localStorage.setItem('vyc_admin','0')}catch(e){} $('deniedWho').textContent='Signed in as '+s.user.email+'. Ask a site admin or your team admin to give you access.'; $('denied').classList.remove('hide'); return; }
 try{localStorage.setItem('vyc_admin','1')}catch(e){}
-me=data; $('app').classList.remove('hide');
-await loadTeams(); show('people');
+me=data; SITE=!!data.is_admin; MYTEAM=data.team_code; $('app').classList.remove('hide');
+await loadTeams();
+if(!SITE){
+document.querySelectorAll('.site-only').forEach(el=>el.classList.add('hide'));
+$('pgTitle').textContent='Team Admin — '+teamName(MYTEAM); document.title='Team Admin';
+$('pgIntro').textContent="Manage your team's coaches and athletes, answer fee-clearance requests from other teams, and manage meets. You only see your own team — the database enforces it.";
+}
+show('people'); refreshClrBadge();
 });
 async function loadTeams(){ const {data}=await sb.from('league_teams').select('*').order('sort_order').order('name'); teams=data||[]; }
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>show(b.dataset.tab));
-function show(t){ tab=t; document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===t)); ({people:paintPeople,athletes:paintAthletes,meets:paintMeets,records:paintRecords,league:paintLeague})[t](); }
+function show(t){ tab=t; document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===t)); ({people:paintPeople,athletes:paintAthletes,clearances:paintClearances,meets:paintMeets,records:paintRecords,league:paintLeague})[t](); }
 
 /* ============================ PEOPLE & ACCESS ============================ */
 // NOTE: the `coaches` table has no `id` column — its primary key is `email`.
@@ -125,12 +134,12 @@ function show(t){ tab=t; document.querySelectorAll('.tab').forEach(b=>b.classLis
 let coaches=[];
 async function paintPeople(){
 $('pane').innerHTML='<p class="text-sm text-gray-500">Loading…</p>';
-try{ coaches=await pageAll(()=>sb.from('coaches').select('*').order('registered_at',{ascending:false})); }catch(e){ $('pane').innerHTML='<p class="text-red-700">'+esc(e.message)+'</p>'; return; }
+try{ coaches=await pageAll(()=>{ let q=sb.from('coaches').select('*').order('registered_at',{ascending:false}); if(!SITE) q=q.eq('team_code',MYTEAM); return q; }); }catch(e){ $('pane').innerHTML='<p class="text-red-700">'+esc(e.message)+'</p>'; return; }
 const pend=coaches.filter(c=>!c.approved).length; $('pendBadge').textContent=pend+' pending'; $('pendBadge').classList.toggle('hide',!pend);
 $('pane').innerHTML=`<div class="card">
 <div class="flex flex-wrap gap-2 mb-2">
-<select id="pTeam">${teamOpts('', 'All teams')}</select>
-<select id="pStat"><option value="">All</option><option value="pending">Waiting for approval</option><option value="approved">Approved</option><option value="admin">Site admins</option></select>
+<select id="pTeam" class="${SITE?'':'hide'}">${teamOpts('', 'All teams')}</select>
+<select id="pStat"><option value="">All</option><option value="pending">Waiting for approval</option><option value="approved">Approved</option><option value="tadmin">Team admins</option>${SITE?'<option value="admin">Site admins</option>':''}</select>
 <input id="pQ" class="flex-1" placeholder="Search name or email">
 <span class="text-xs text-gray-500 self-center" id="pCount"></span>
 </div>
@@ -140,18 +149,19 @@ $('pane').innerHTML=`<div class="card">
 }
 function drawPeople(){
 const t=$('pTeam').value, s=$('pStat').value, q=$('pQ').value.toLowerCase();
-const rows=coaches.filter(c=>(!t||c.team_code===t)&&(!s||(s==='pending'?!c.approved:s==='approved'?c.approved:c.is_admin))&&(!q||((c.first_name||'')+' '+(c.last_name||'')+' '+(c.name||'')+' '+c.email).toLowerCase().includes(q)))
+const rows=coaches.filter(c=>(!t||c.team_code===t)&&(!s||(s==='pending'?!c.approved:s==='approved'?c.approved:s==='tadmin'?c.team_admin:c.is_admin))&&(!q||((c.first_name||'')+' '+(c.last_name||'')+' '+(c.name||'')+' '+c.email).toLowerCase().includes(q)))
 .sort((a,b)=>(a.approved===b.approved?0:a.approved?1:-1)); // pending first
 $('pCount').textContent=rows.length+' of '+coaches.length;
-$('pBody').innerHTML=rows.map(c=>`<tr data-id="${esc(c.email)}">
+$('pBody').innerHTML=rows.map(c=>{ const self=c.email.toLowerCase()===me.email.toLowerCase(), lock=!SITE&&self; return `<tr data-id="${esc(c.email)}">
 <td><div class="font-semibold">${esc((c.first_name||c.name||'')+' '+(c.last_name||''))}</div><div class="text-xs text-gray-500">${esc(c.email)}${c.phone?' · '+esc(c.phone):''}</div></td>
-<td><select data-f="team_code">${teamOpts(c.team_code,'(none)')}</select></td>
-<td><select data-f="role_type">${opts(ROLES,(c.role_type==='head_age_group'||!c.role_type)?'head_coach':c.role_type)}</select></td>
+<td>${SITE?`<select data-f="team_code">${teamOpts(c.team_code,'(none)')}</select>`:esc(teamName(c.team_code))}</td>
+<td><select data-f="role_type" ${lock?'disabled':''}>${opts(ROLES,(c.role_type==='head_age_group'||!c.role_type)?'head_coach':c.role_type)}</select></td>
 <td><input data-f="division_or_age_group" value="${esc(c.division_or_age_group||'')}" style="width:9rem" placeholder="e.g. Bantam"></td>
-<td><span class="pill ${c.approved?'ok':'warn'}">${c.approved?'Approved':'Pending'}</span> ${c.is_admin?'<span class="pill bad">Site admin</span>':''}</td>
-<td class="whitespace-nowrap">${c.approved?'<button class="btn lite" data-act="revoke">Revoke</button>':'<button class="btn grn" data-act="approve">Approve</button>'}
-<button class="btn lite" data-act="admin">${c.is_admin?'Remove admin':'Make site admin'}</button>
-<button class="btn red" data-act="del">Delete</button></td></tr>`).join('')||'<tr><td colspan="6" class="text-gray-500 p-3">No coaches match.</td></tr>';
+<td><span class="pill ${c.approved?'ok':'warn'}">${c.approved?'Approved':'Pending'}</span> ${c.is_admin?'<span class="pill bad">Site admin</span>':''} ${c.team_admin?'<span class="pill gray">Team admin</span>':''}</td>
+<td class="whitespace-nowrap">${lock?'<span class="text-xs text-gray-500">(you)</span>':`${c.approved?'<button class="btn lite" data-act="revoke">Revoke</button>':'<button class="btn grn" data-act="approve">Approve</button>'}
+<button class="btn lite" data-act="tadmin">${c.team_admin?'Remove team admin':'Make team admin'}</button>
+${SITE?`<button class="btn lite" data-act="admin">${c.is_admin?'Remove site admin':'Make site admin'}</button>
+<button class="btn red" data-act="del">Delete</button>`:''}`}</td></tr>`; }).join('')||'<tr><td colspan="6" class="text-gray-500 p-3">No coaches match.</td></tr>';
 }
 document.addEventListener('change',async e=>{
 const el=e.target; const tr=el.closest('#pBody tr'); if(!tr||!el.dataset.f) return;
@@ -163,6 +173,8 @@ const b=e.target.closest('#pBody button'); if(!b) return; const email=b.closest(
 const nm=(c.first_name||c.name||c.email);
 if(act==='approve'||act==='revoke'){ if(act==='revoke'&&!confirm(`Revoke access for ${nm}? They will lose the Coach Dashboard until approved again.`)) return;
 if(await run(sb.from('coaches').update({approved:act==='approve'}).eq('email',email),act==='approve'?'Approved':'Access revoked')){ c.approved=act==='approve'; paintPeople(); } }
+if(act==='tadmin'){ if(!confirm(c.team_admin?`Remove team-admin access from ${nm}?`:`Make ${nm} a TEAM ADMIN for ${teamName(c.team_code)}? They'll see private registration details and can approve coaches for that team.`)) return;
+const patch={team_admin:!c.team_admin}; if(!c.team_admin) patch.approved=true; if(await run(sb.from('coaches').update(patch).eq('email',email),'Saved')){ Object.assign(c,patch); paintPeople(); } }
 if(act==='admin'){ if(c.email.toLowerCase()===me.email.toLowerCase()&&c.is_admin){ toast("You can't remove your own admin access — ask another site admin.",true); return; }
 if(!confirm(c.is_admin?`Remove site-admin access from ${nm}?`:`Make ${nm} a SITE ADMIN? They will be able to see and change everything on every team.`)) return;
 const patch={is_admin:!c.is_admin}; if(!c.is_admin) patch.approved=true; if(await run(sb.from('coaches').update(patch).eq('email',email),'Saved')){ Object.assign(c,patch); paintPeople(); } }
@@ -177,7 +189,7 @@ const A_FIELDS=[['first_name','First name'],['last_name','Last name'],['gender',
 function paintAthletes(){
 $('pane').innerHTML=`<div class="card">
 <div class="flex flex-wrap gap-2 mb-2">
-<select id="aTeam">${teamOpts('','All teams')}</select>
+<select id="aTeam" class="${SITE?'':'hide'}">${teamOpts(SITE?'':MYTEAM,'All teams')}</select>
 <select id="aStat"><option value="">Any status</option><option>submitted</option><option>verified</option><option>rejected</option></select>
 <select id="aDiv">${opts(DIVS,'','All divisions')}</select>
 <input id="aQ" class="flex-1" placeholder="Search last or first name">
@@ -187,7 +199,7 @@ $('pane').innerHTML=`<div class="card">
 <div class="scroll"><table class="t"><thead><tr><th>Athlete</th><th>Team</th><th>Division</th><th>Status</th><th>Actions</th></tr></thead><tbody id="aBody"></tbody></table></div>
 <div class="mt-2"><button class="btn lite hide" id="aMore">Load more</button></div>
 </div>
-<div class="card border border-red-200"><h3 class="font-bold text-red-800 mb-1">Test data cleanup</h3>
+<div class="card border border-red-200 ${SITE?'':'hide'}"><h3 class="font-bold text-red-800 mb-1">Test data cleanup</h3>
 <p class="text-sm text-gray-600 mb-2">Removes the last-season roster that was loaded for testing (every athlete tagged ROSTER-2026), plus their meet entries. Real registrations are not touched.</p>
 <button class="btn red" id="aWipe">Delete test roster athletes…</button></div>`;
 $('aGo').onclick=()=>aLoad(true); $('aQ').onkeydown=e=>{ if(e.key==='Enter') aLoad(true); }; ['aTeam','aStat','aDiv'].forEach(i=>$(i).onchange=()=>aLoad(true)); $('aMore').onclick=()=>aLoad(false); $('aWipe').onclick=wipeTest;
@@ -196,7 +208,7 @@ aLoad(true);
 async function aLoad(reset){
 if(reset){ aRows=[]; aFrom=0; }
 let q=sb.from('registrations').select('id,first_name,last_name,gender,division,team_code,status,dob,age_on_dec31,contract_version,created_at',{count:'exact'}).order('last_name').order('first_name').range(aFrom,aFrom+99);
-const t=$('aTeam').value, s=$('aStat').value, d=$('aDiv').value, qq=$('aQ').value.trim();
+const t=SITE?$('aTeam').value:MYTEAM, s=$('aStat').value, d=$('aDiv').value, qq=$('aQ').value.trim();
 if(t) q=q.eq('team_code',t); if(s) q=q.eq('status',s); if(d) q=q.eq('division',d);
 if(qq) q=q.or(`last_name.ilike.%${qq.replace(/[%,()]/g,'')}%,first_name.ilike.%${qq.replace(/[%,()]/g,'')}%`);
 const {data,error,count}=await q; if(error){ toast(error.message,true); return; }
@@ -231,7 +243,7 @@ const {data:r,error}=await sb.from('registrations').select('*').eq('id',id).sing
 const inputs=A_FIELDS.filter(f=>f[0] in r||true).map(([k,lab,kind,list])=>{
 const v=r[k]??''; let el;
 if(kind==='sel') el=`<select data-k="${k}">${opts(list,v,'')}</select>`;
-else if(kind==='team') el=`<select data-k="${k}">${teamOpts(v,'(none)')}</select>`;
+else if(kind==='team') el=SITE?`<select data-k="${k}">${teamOpts(v,'(none)')}</select>`:`<div class="text-sm py-1">${esc(teamName(v))}</div>`;
 else el=`<input data-k="${k}" type="${kind==='date'?'date':kind==='num'?'number':'text'}" value="${esc(v)}">`;
 return `<div><label>${lab}</label>${el}</div>`; }).join('');
 openModal(`<h3 class="font-bold text-lg mb-2">Edit ${esc(r.first_name)} ${esc(r.last_name)}</h3><div class="grid2" id="aForm">${inputs}</div>
@@ -240,6 +252,42 @@ openModal(`<h3 class="font-bold text-lg mb-2">Edit ${esc(r.first_name)} ${esc(r.
 $('aSave').onclick=async()=>{ const patch={}; document.querySelectorAll('#aForm [data-k]').forEach(el=>{ const k=el.dataset.k; let v=el.value; if(v==='') v=null; else if(el.type==='number') v=+v; if(String(v??'')!==String(r[k]??'')) patch[k]=v; });
 if(!Object.keys(patch).length){ closeModal(); return; } if(await run(sb.from('registrations').update(patch).eq('id',id),'Saved')){ closeModal(); aLoad(true); } };
 }
+
+/* ============================ FEE CLEARANCES ============================ */
+// When a registration names a different prior VYC team, the database opens a request for that
+// prior team to confirm no fees are owed from last season. Site admins see all; team admins see
+// requests to or from their team, and answer the ones addressed to them.
+let clr=[];
+const CLR={pending:['warn','Waiting'],cleared:['ok','No fees owed'],owes_fees:['bad','Owes fees']};
+async function refreshClrBadge(){
+let q=sb.from('transfer_clearances').select('id',{count:'exact',head:true}).eq('status','pending'); if(!SITE) q=q.eq('from_team',MYTEAM);
+const {count}=await q; $('clrBadge').textContent=(count||0)+' waiting'; $('clrBadge').classList.toggle('hide',!count);
+}
+async function paintClearances(){
+$('pane').innerHTML='<p class="text-sm text-gray-500">Loading…</p>';
+try{ clr=await pageAll(()=>sb.from('transfer_clearances').select('*').order('created_at',{ascending:false})); }catch(e){ $('pane').innerHTML='<p class="text-red-700">'+esc(e.message)+'</p>'; return; }
+$('pane').innerHTML=`<div class="card"><p class="text-sm text-gray-600 mb-2">${SITE?'Every fee-clearance request in the league.':`<b>Asked of you:</b> athletes who were on ${esc(teamName(MYTEAM))} last season and are registering with another team — confirm whether they owe you fees. <b>Your new athletes:</b> what their old team said.`}</p>
+<div class="flex flex-wrap gap-2 mb-2"><select id="cStat"><option value="">Any answer</option><option value="pending">Waiting</option><option value="cleared">No fees owed</option><option value="owes_fees">Owes fees</option></select>
+${SITE?'':'<select id="cDir"><option value="">Both directions</option><option value="out">Asked of us</option><option value="in">Our new athletes</option></select>'}</div>
+<div class="scroll"><table class="t"><thead><tr><th>Athlete</th><th>Last season</th><th>Now registering with</th><th>Answer</th><th>Note</th><th></th></tr></thead><tbody id="cBody"></tbody></table></div></div>`;
+['cStat','cDir'].forEach(i=>$(i)&&($(i).onchange=drawClearances)); drawClearances();
+}
+function drawClearances(){
+const s=$('cStat').value, d=$('cDir')?$('cDir').value:'';
+const rows=clr.filter(c=>(!s||c.status===s)&&(!d||(d==='out'?c.from_team===MYTEAM:c.to_team===MYTEAM)));
+$('cBody').innerHTML=rows.map(c=>{ const canAnswer=SITE||c.from_team===MYTEAM, [cls,lab]=CLR[c.status]; return `<tr data-id="${c.id}">
+<td><b>${esc(c.athlete_last)}</b>, ${esc(c.athlete_first)} <div class="text-xs text-gray-500">${c.dob?esc(c.dob)+' · ':''}${esc(c.division||'')} · asked ${esc((c.created_at||'').slice(0,10))}</div></td>
+<td>${esc(teamName(c.from_team))}</td><td>${esc(teamName(c.to_team))}</td>
+<td><span class="pill ${cls}">${lab}</span>${c.responded_by?`<div class="text-xs text-gray-500">${esc(c.responded_by)}</div>`:''}</td>
+<td>${canAnswer?`<input data-f="note" value="${esc(c.note||'')}" placeholder="e.g. amount owed" style="width:11rem">`:esc(c.note||'')}</td>
+<td class="whitespace-nowrap">${canAnswer?'<button class="btn grn" data-act="cleared">No fees owed</button> <button class="btn red" data-act="owes_fees">Owes fees</button>':''}</td></tr>`; }).join('')||'<tr><td colspan="6" class="p-3 text-gray-500">No requests match.</td></tr>';
+}
+document.addEventListener('click',async e=>{
+const b=e.target.closest('#cBody button'); if(!b) return; const tr=b.closest('tr'), id=tr.dataset.id, c=clr.find(x=>x.id===id);
+const note=tr.querySelector('[data-f=note]').value.trim()||null, status=b.dataset.act;
+if(status==='owes_fees'&&!note&&!confirm('Mark as owing fees without a note? Adding the amount helps the new team.')) return;
+if(await run(sb.from('transfer_clearances').update({status,note}).eq('id',id),'Saved')){ Object.assign(c,{status,note,responded_by:me.email}); drawClearances(); refreshClrBadge(); }
+});
 
 /* ============================ MEETS & RESULTS ============================ */
 async function paintMeets(){
