@@ -72,7 +72,8 @@
     <h2 class="font-bold text-lg mb-2">Athlete Information</h2>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div><label class="f req">First name</label><input id="firstName" required></div>
-      <div><label class="f req">Last name</label><input id="lastName" required></div>
+      <div><label class="f req">Last name</label><input id="lastName" required autocomplete="off"></div>
+      <div id="pastMatches" class="sm:col-span-2 hidden"></div>
       <div><label class="f req">Date of birth</label><input type="date" id="dob" required></div>
       <div><label class="f">Division (auto)</label><input id="divisionShow" disabled></div>
       <div><label class="f req">Address</label><input id="address" required></div>
@@ -494,6 +495,53 @@ function fillPriorTeams(){
 }
 fillPriorTeams(); if(window.leagueReady) window.leagueReady.then(fillPriorTeams);
 $('priorTeamCode').onchange=()=>$('priorTeam').classList.toggle('hidden',$('priorTeamCode').value!=='__OTHER');
+
+// ---- "Is this your athlete?" — last season's athletes league-wide, matched as the last name is typed ----
+// The database returns only first/last name, team and division (no birth dates or family details).
+let pastPick=null, pastTimer=null, pastSeq=0;
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const teamLabel=c=>(window.VYC_TEAMS.find(t=>t.code===c)||{}).name||c||'';
+function setRadio(name,val){ const r=document.querySelector(`input[name=${name}][value=${val}]`); if(r){ r.checked=true; r.dispatchEvent(new Event('change')); } }
+function applyPastPick(){
+  if(!pastPick) return;
+  const mine=$('teamCode').value;
+  setRadio('returning', mine && pastPick.team_code===mine ? 'yes' : 'no');
+  if(mine && pastPick.team_code!==mine){ setRadio('otherTeam','yes'); $('priorTeamCode').value=pastPick.team_code; $('priorTeamCode').onchange(); }
+  else setRadio('otherTeam','no');
+}
+function showPastPicked(){
+  const p=pastPick, box=$('pastMatches');
+  box.innerHTML=`<div class="rounded-lg border-2 border-green-500 bg-green-50 p-2 text-sm flex flex-wrap items-center gap-2">
+    <span class="flex-1">✓ Linked to last season's athlete <b>${esc(p.first_name)} ${esc(p.last_name)}</b> — ${esc(teamLabel(p.team_code))}${p.division?' · '+esc(p.division):''}</span>
+    <button type="button" class="btn bg-gray-200 text-xs" id="pastUndo">Not this athlete</button></div>`;
+  box.classList.remove('hidden');
+  $('pastUndo').onclick=()=>{ pastPick=null; setRadio('returning','no'); setRadio('otherTeam','no'); findPast(); };
+}
+async function findPast(){
+  if(pastPick) return;
+  const q=$('lastName').value.trim(), box=$('pastMatches'), seq=++pastSeq;
+  if(q.replace(/[^a-z]/gi,'').length<3){ box.classList.add('hidden'); box.innerHTML=''; return; }
+  const {data,error}=await sb.rpc('find_returning_athletes',{p_last:q});
+  if(seq!==pastSeq) return; // a newer keystroke already took over
+  if(error||!data||!data.length){ box.classList.add('hidden'); box.innerHTML=''; return; }
+  const f=$('firstName').value.trim().toLowerCase();
+  const list=data.slice().sort((a,b)=>((b.first_name||'').toLowerCase().startsWith(f)?1:0)-((a.first_name||'').toLowerCase().startsWith(f)?1:0));
+  box.innerHTML=`<div class="rounded-lg border-2 border-amber-400 bg-amber-50 p-2">
+    <p class="text-sm font-semibold mb-1">Did this athlete run in the VYC last season? Is this your athlete?</p>
+    <div class="flex flex-col gap-1">${list.map((a,i)=>`<button type="button" class="text-left bg-white border rounded p-2 text-sm hover:bg-amber-100" data-i="${i}">
+      <b>${esc(a.first_name)} ${esc(a.last_name)}</b> <span class="text-gray-600">— ${esc(teamLabel(a.team_code))}${a.division?' · '+esc(a.division):''} (${a.season_year})</span>
+      <span class="float-right text-green-700 font-semibold">Yes, this is my athlete</span></button>`).join('')}</div>
+    <p class="text-xs text-gray-500 mt-1">Not listed? Just keep filling out the form.</p></div>`;
+  box.classList.remove('hidden');
+  box.querySelectorAll('button[data-i]').forEach(b=>b.onclick=()=>{
+    pastPick=list[+b.dataset.i];
+    $('firstName').value=pastPick.first_name; $('lastName').value=pastPick.last_name;
+    applyPastPick(); showPastPicked();
+  });
+}
+$('lastName').addEventListener('input',()=>{ clearTimeout(pastTimer); pastTimer=setTimeout(findPast,300); });
+$('firstName').addEventListener('input',()=>{ if(!pastPick&&!$('pastMatches').classList.contains('hidden')){ clearTimeout(pastTimer); pastTimer=setTimeout(findPast,300); } });
+$('teamCode').addEventListener('change',applyPastPick);
 function updateDivision(){
   const dob=$('dob').value; if(!dob) return;
   const age=window.ageOnDec31(dob, CFG.SEASON_YEAR);
@@ -614,6 +662,7 @@ $('parentForm').addEventListener('submit', async(e)=>{
       emergency_name:$('emergencyName').value.trim(), emergency_phone:$('emergencyPhone').value.trim(),
       is_returning: document.querySelector('input[name=returning]:checked').value==='yes',
       ran_for_other_team: otherTeam, prior_team:priorName, prior_team_code:priorVyc,
+      prior_registration_id: pastPick ? pastPick.id : null,
       proof_path:proofPath,
       insurance_carrier:$('insuranceCarrier').value.trim(),
       medical_option: $('medicalConditions').value.trim() ? 'conditions':'clear',
@@ -633,6 +682,7 @@ $('parentForm').addEventListener('submit', async(e)=>{
     msg.textContent='Registration submitted! Your team will review it shortly.'; msg.className='text-sm mt-2 text-green-700 font-semibold';
     if(wantsAcct) await ensureAccount($('email').value.trim(), p1, msg);
     e.target.reset(); $('priorTeamWrap').classList.add('hidden'); $('priorTeam').classList.add('hidden');
+    pastPick=null; $('pastMatches').classList.add('hidden'); $('pastMatches').innerHTML='';
   }catch(err){ msg.textContent='Error: '+(err.message||err); msg.className='text-sm mt-2 text-red-600'; }
 });
 
