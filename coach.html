@@ -465,7 +465,7 @@ function render(){
     <div class="flex flex-wrap items-center gap-2">
       <div class="flex-1 min-w-0">
         <div class="font-bold text-base">${r.comp_number?`<span class="text-blue-700">#${r.comp_number}</span> `:''}${esc(r.last_name)}, ${esc(r.first_name)} <span class="text-gray-500 font-normal text-sm">${r.gender} · ${r.division} (${r.age_on_dec31}) · ${esc(r.sport)}</span></div>
-        <div class="text-xs text-gray-500">DOB ${fmtDate(r.dob)} · submitted ${fmtDate(r.created_at)} · ${r.is_returning?'Returning':'New athlete'}${r.ran_for_other_team?' · last season: '+esc(r.prior_team||'another team'):''}${r.medical_option==='conditions'?' · <b class="text-red-700">Medical conditions noted</b>':''}</div>
+        <div class="text-xs text-gray-500">DOB ${fmtDate(r.dob)} · submitted ${fmtDate(r.created_at)} · ${r.is_returning?'Returning':'New athlete'}${r.ran_for_other_team?' · last season: '+esc(r.prior_team||'another team'):''}${r.medical_option==='conditions'?' · <b class="text-red-700">Medical: '+esc(r.medical_conditions||'condition listed — see Details')+'</b>':''}</div>
       </div>
       ${clearPill(clearIn[r.id])} ${pill(r)} ${r.is_late?'<span class="pill bg-red-100 text-red-800">Late registration</span>':''} ${statusPill(r.status)}
     </div>
