@@ -636,10 +636,10 @@ function renderAthletePanel(ev,m){
       <label class="flex items-center gap-1"><input type="checkbox" id="regOnlyEntered" ${regOnlyEntered?'checked':''}> Only athletes already entered</label>
       ${open?'':'<span class="text-red-600">Entries are closed for this meet.</span>'}
     </div>`;
-  const body=pool.length?`<table class="athtbl"><thead><tr><th>Entered</th><th>Last name</th><th>First name</th><th>Best (this event)</th><th title="Age on December 31">Age (12/31)</th><th>Gen</th>${wide?'<th>Div</th>':''}<th>All best times</th></tr></thead><tbody>`+pool.map(a=>{
+  const body=pool.length?`<table class="athtbl"><thead><tr><th>Entered</th><th>Last name</th><th>First name</th><th>Best (this event)</th><th title="Age on December 31">Age (12/31)</th><th>Gen</th>${wide?'<th>Div</th>':''}</tr></thead><tbody>`+pool.map(a=>{
       const en=enOf(a), err=en?null:checkLimits(a.division,myEventsOf(a),{relay:false}), b=bestMark(a,ev);
       return `<tr class="${en?'entered':''}"><td><input type="checkbox" data-a="${a.id}" data-e="${ev.id}" ${en?'checked':''} ${(!open)||(err&&!en)?'disabled':''} title="${err?esc(err):''}"></td>
-        <td>${esc(a.last_name)}</td><td>${esc(a.first_name)}</td><td class="font-mono">${b?esc(b.mark):'NT'}</td><td>${a.age_on_dec31??''}</td><td>${a.gender==='Girl'?'F':'M'}</td>${wide?`<td>${divAbbr(a.division)}</td>`:''}<td class="text-xs">${allBests(a)}</td></tr>`; }).join('')+`</tbody></table>`
+        <td>${esc(a.last_name)}</td><td>${esc(a.first_name)}</td><td class="font-mono">${b?esc(b.mark):'NT'}</td><td>${a.age_on_dec31??''}</td><td>${a.gender==='Girl'?'F':'M'}</td>${wide?`<td>${divAbbr(a.division)}</td>`:''}</tr>`; }).join('')+`</tbody></table>`
     : '<p class="text-sm text-gray-500 py-2">No eligible athletes for this event.</p>';
   $('regAthletes').innerHTML=head+body;
   document.querySelectorAll('#regAthletes input[type=checkbox][data-a]').forEach(cb=>cb.onchange=toggleReg);
@@ -678,10 +678,12 @@ function renderRelayPanel(ev,m){
       <button type="button" id="rlBest" class="btn bg-gray-200" ${open&&regRelay?'':'disabled'}>Find Best Relay</button>
       ${open?'':'<span class="text-red-600">Entries are closed for this meet.</span>'}
     </div>`;
-  const left=`<div><div class="text-xs font-semibold mb-1">Eligible athletes — click Add to put them on Relay ${regRelay||'…'}</div><table class="athtbl"><thead><tr><th></th><th>Last name</th><th>First name</th><th>Best (leg)</th><th title="Age on December 31">Age (12/31)</th><th>All best times</th></tr></thead><tbody>`+
-    pool.map(a=>{ const b=bestMark(a,ev), where=inRelay[a.id]; return `<tr class="${where?'entered':''}"><td>${where?`<span class="text-xs font-bold">${where}</span>`:`<button type="button" data-add="${a.id}" class="btn bg-gray-200 text-xs" ${open&&regRelay?'':'disabled'}>Add</button>`}</td><td>${esc(a.last_name)}</td><td>${esc(a.first_name)}</td><td class="font-mono">${b?esc(b.mark):'NT'}</td><td>${a.age_on_dec31??''}</td><td class="text-xs">${allBests(a)}</td></tr>`; }).join('')+`</tbody></table></div>`;
-  const right=`<div><div class="text-xs font-semibold mb-1">${regRelay?`Relay ${regRelay} runners`:'Click New Relay to start'}</div><div class="border rounded">`+
-    slots.map((en,i)=>{ const a=en&&rows.find(r=>r.id===en.registration_id); return `<div class="relaySlot"><span class="w-12 text-xs text-gray-500">${i<4?'Leg '+(i+1):'Alt '+(i-3)}</span><span class="flex-1">${a?esc(a.last_name+', '+a.first_name):'<span class="text-gray-300">—</span>'}</span>${a&&open?`<button type="button" data-rm="${en.id}" class="text-red-600 text-xs">✕</button>`:''}</div>`; }).join('')+`</div></div>`;
+  // Relays show ONE best time: the athlete's best in the leg's individual event (4x100 -> 100m, 4x400 -> 400m, 4x800 -> 800m).
+  const legName={'100':'100m','400':'400m','800':'800m'}[RELAY_LEG[ev.code]]||'leg';
+  const left=`<div class="min-w-0 overflow-x-auto"><div class="text-xs font-semibold mb-1">Eligible athletes — click Add to put them on Relay ${regRelay||'…'}</div><table class="athtbl"><thead><tr><th></th><th>Last name</th><th>First name</th><th>Best ${legName}</th><th title="Age on December 31">Age (12/31)</th></tr></thead><tbody>`+
+    pool.map(a=>{ const b=bestMark(a,ev), where=inRelay[a.id]; return `<tr class="${where?'entered':''}"><td>${where?`<span class="text-xs font-bold">${where}</span>`:`<button type="button" data-add="${a.id}" class="btn bg-gray-200 text-xs" ${open&&regRelay?'':'disabled'}>Add</button>`}</td><td>${esc(a.last_name)}</td><td>${esc(a.first_name)}</td><td class="font-mono">${b?esc(b.mark):'NT'}</td><td>${a.age_on_dec31??''}</td></tr>`; }).join('')+`</tbody></table></div>`;
+  const right=`<div class="min-w-0"><div class="text-xs font-semibold mb-1">${regRelay?`Relay ${regRelay} runners`:'Click New Relay to start'}</div><div class="border rounded">`+
+    slots.map((en,i)=>{ const a=en&&rows.find(r=>r.id===en.registration_id), b=a&&bestMark(a,ev); return `<div class="relaySlot"><span class="text-xs text-gray-500 flex-none" style="width:3.25rem">${i<4?'Leg '+(i+1):'Alt '+(i-3)}</span><span class="flex-1 min-w-0 truncate">${a?esc(a.last_name+', '+a.first_name):'<span class="text-gray-300">—</span>'}</span>${a?`<span class="font-mono text-xs text-gray-600 flex-none">${b?esc(b.mark):'NT'}</span>`:''}${a&&open?`<button type="button" data-rm="${en.id}" class="text-red-600 text-xs flex-none">✕</button>`:''}</div>`; }).join('')+`</div></div>`;
   $('regAthletes').innerHTML=head+`<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${left}${right}</div>`;
   $('rlNew').onclick=()=>{ const used=new Set(letters); let L='A'; while(used.has(L)) L=String.fromCharCode(L.charCodeAt(0)+1); (regRelayNew[ev.id]??=[]).push(L); regRelay=L; renderReg(); };
   document.querySelectorAll('[data-rl]').forEach(b=>b.onclick=()=>{ regRelay=b.dataset.rl; renderReg(); });
