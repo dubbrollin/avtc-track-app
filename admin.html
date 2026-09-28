@@ -136,17 +136,35 @@ async function paintPeople(){
 $('pane').innerHTML='<p class="text-sm text-gray-500">Loading…</p>';
 try{ coaches=await pageAll(()=>{ let q=sb.from('coaches').select('*').order('registered_at',{ascending:false}); if(!SITE) q=q.eq('team_code',MYTEAM); return q; }); }catch(e){ $('pane').innerHTML='<p class="text-red-700">'+esc(e.message)+'</p>'; return; }
 const pend=coaches.filter(c=>!c.approved).length; $('pendBadge').textContent=pend+' pending'; $('pendBadge').classList.toggle('hide',!pend);
-$('pane').innerHTML=`<div class="card">
+$('pane').innerHTML=`${SITE?`<div class="card"><h3 class="font-bold mb-1">Add a site admin</h3>
+<p class="text-xs text-gray-500 mb-2">Site admins can see and change everything on every team. The person doesn't need to register first — once added, they sign in on this page with this email (Google, or "First time? Create password").</p>
+<div class="flex flex-wrap gap-2 items-end"><div><label class="text-xs font-bold">Email</label><br><input id="saEmail" type="email" style="width:16rem" placeholder="name@example.com"></div>
+<div><label class="text-xs font-bold">First name</label><br><input id="saFirst" style="width:9rem"></div><div><label class="text-xs font-bold">Last name</label><br><input id="saLast" style="width:9rem"></div>
+<button class="btn grn" id="saAdd">Make site admin</button></div></div>`:''}<div class="card">
 <div class="flex flex-wrap gap-2 mb-2">
 <select id="pTeam" ${SITE?'':'disabled'}>${teamOpts(SITE?'':MYTEAM, 'All teams')}</select>
 <select id="pStat"><option value="">All</option><option value="pending">Waiting for approval</option><option value="approved">Approved</option><option value="tadmin">Team admins</option>${SITE?'<option value="admin">Site admins</option>':''}</select>
 <input id="pQ" class="flex-1" placeholder="Search name or email">
 <span class="text-xs text-gray-500 self-center" id="pCount"></span>
 </div>
-<div class="scroll"><table class="t"><thead><tr><th>Coach</th><th>Team</th><th>Role</th><th>Division</th><th>Status</th><th>Actions</th></tr></thead><tbody id="pBody"></tbody></table></div>
+<div class="scroll"><table class="t"><thead><tr><th>Coach</th><th>Team</th><th>Role</th><th>Division</th><th>Status</th><th>Access level</th><th>Actions</th></tr></thead><tbody id="pBody"></tbody></table></div>
 <p class="text-xs text-gray-500 mt-2">Parents don't have accounts to manage here — they show up through their athletes (Athletes tab).</p></div>`;
 ['pTeam','pStat'].forEach(i=>$(i).onchange=drawPeople); $('pQ').oninput=drawPeople; drawPeople();
+if(SITE) $('saAdd').onclick=addSiteAdmin;
 }
+async function addSiteAdmin(){
+const email=$('saEmail').value.trim().toLowerCase(), first=$('saFirst').value.trim()||null, last=$('saLast').value.trim()||null;
+if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ toast('Enter a valid email address.',true); return; }
+const existing=coaches.find(c=>c.email.toLowerCase()===email);
+if(existing&&existing.is_admin){ toast(`${email} is already a site admin.`); return; }
+if(!confirm(`Make ${first||email} a SITE ADMIN? They will be able to see and change everything on every team.`)) return;
+const ok=existing
+? await run(sb.from('coaches').update({is_admin:true,approved:true}).eq('email',existing.email),'Site admin added')
+: await run(sb.from('coaches').insert({email,first_name:first,last_name:last,approved:true,is_admin:true,season_year:CFG.SEASON_YEAR}),'Site admin added');
+if(ok) paintPeople();
+}
+// One clear "Access level" per person: Regular / Team admin / Site admin (site admins only can grant site admin).
+const accessOf=c=>c.is_admin?'site':c.team_admin?'team':'regular';
 function drawPeople(){
 const t=$('pTeam').value, s=$('pStat').value, q=$('pQ').value.toLowerCase();
 const rows=coaches.filter(c=>(!t||c.team_code===t)&&(!s||(s==='pending'?!c.approved:s==='approved'?c.approved:s==='tadmin'?c.team_admin:c.is_admin))&&(!q||((c.first_name||'')+' '+(c.last_name||'')+' '+(c.name||'')+' '+c.email).toLowerCase().includes(q)))
@@ -157,12 +175,27 @@ $('pBody').innerHTML=rows.map(c=>{ const self=c.email.toLowerCase()===me.email.t
 <td><select data-f="team_code" ${SITE?'':'disabled title="Only a site admin can move a coach to another team"'}>${teamOpts(c.team_code,'(none)')}</select></td>
 <td><select data-f="role_type" ${lock?'disabled':''}>${opts(ROLES,(c.role_type==='head_age_group'||!c.role_type)?'head_coach':c.role_type)}</select></td>
 <td><input data-f="division_or_age_group" value="${esc(c.division_or_age_group||'')}" style="width:9rem" placeholder="e.g. Bantam"></td>
-<td><span class="pill ${c.approved?'ok':'warn'}">${c.approved?'Approved':'Pending'}</span> ${c.is_admin?'<span class="pill bad">Site admin</span>':''} ${c.team_admin?'<span class="pill gray">Team admin</span>':''}</td>
+<td><span class="pill ${c.approved?'ok':'warn'}">${c.approved?'Approved':'Pending'}</span></td>
+<td><select data-access="1" ${self||(!SITE&&c.is_admin)?'disabled title="'+(self?'You can\'t change your own access':'Only a site admin can change a site admin')+'"':''} style="font-weight:600;${c.is_admin?'color:#991b1b':c.team_admin?'color:#1e40af':''}">
+<option value="regular" ${accessOf(c)==='regular'?'selected':''}>Regular (no admin)</option>
+<option value="team" ${accessOf(c)==='team'?'selected':''}>Team admin</option>
+${SITE||c.is_admin?`<option value="site" ${accessOf(c)==='site'?'selected':''}>Site admin</option>`:''}
+</select></td>
 <td class="whitespace-nowrap">${lock?'<span class="text-xs text-gray-500">(you)</span>':`${c.approved?'<button class="btn lite" data-act="revoke">Revoke</button>':c.requested_team_admin?'<button class="btn grn" data-act="tadmin">Approve as team admin</button> <button class="btn lite" data-act="approve">Approve as coach only</button>':'<button class="btn grn" data-act="approve">Approve</button>'}
-<button class="btn lite" data-act="tadmin">${c.team_admin?'Remove team admin':'Make team admin'}</button>
-${SITE?`<button class="btn lite" data-act="admin">${c.is_admin?'Remove site admin':'Make site admin'}</button>
-<button class="btn red" data-act="del">Delete</button>`:''}`}</td></tr>`; }).join('')||'<tr><td colspan="6" class="text-gray-500 p-3">No coaches match.</td></tr>';
+${SITE&&!self?'<button class="btn red" data-act="del">Delete</button>':''}`}</td></tr>`; }).join('')||'<tr><td colspan="7" class="text-gray-500 p-3">No coaches match.</td></tr>';
 }
+document.addEventListener('change',async e=>{
+const sel=e.target.closest('#pBody select[data-access]'); if(!sel) return;
+const email=sel.closest('tr').dataset.id, c=coaches.find(x=>x.email===email), nm=c.first_name||c.name||c.email, to=sel.value, from=accessOf(c);
+const msg={site:`Make ${nm} a SITE ADMIN? They will be able to see and change everything on every team.`,
+  team:`Make ${nm} a TEAM ADMIN for ${teamName(c.team_code)}? They'll see private registration details and can approve coaches for that team only.${c.is_admin?' (This removes their site-admin access.)':''}`,
+  regular:`Remove all admin access from ${nm}? They keep their regular coach access.`}[to];
+if(to==='team'&&!c.team_code){ toast('Pick their team first (Team column) — a team admin needs a team.',true); sel.value=from; return; }
+if(!confirm(msg)){ sel.value=from; return; }
+const patch=to==='site'?{is_admin:true,approved:true}:to==='team'?{is_admin:false,team_admin:true,approved:true}:{is_admin:false,team_admin:false};
+if(!SITE) delete patch.is_admin;
+if(await run(sb.from('coaches').update(patch).eq('email',email),'Access updated')){ Object.assign(c,patch); drawPeople(); } else sel.value=from;
+});
 document.addEventListener('change',async e=>{
 const el=e.target; const tr=el.closest('#pBody tr'); if(!tr||!el.dataset.f) return;
 const email=tr.dataset.id, c=coaches.find(x=>x.email===email); let v=el.value; if(v==='') v=null;
