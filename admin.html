@@ -61,11 +61,14 @@ table.t td{padding:5px 6px;border-top:1px solid #f3f4f6;vertical-align:middle}
 <div class="flex flex-wrap rounded-lg overflow-hidden border text-sm mb-3 w-fit">
 <button class="tab active" data-tab="people">People &amp; Access <span id="pendBadge" class="pill warn hide"></span></button>
 <button class="tab" data-tab="athletes">Athletes</button>
+<button class="tab" data-tab="cert">Certification <span id="certBadge" class="pill warn hide"></span></button>
 <button class="tab" data-tab="clearances">Transfer Requests <span id="clrBadge" class="pill warn hide"></span></button>
+<button class="tab" data-tab="fees">Fees &amp; Fines <span id="feeBadge" class="pill bad hide"></span></button>
 <button class="tab" data-tab="meets">Meets &amp; Results</button>
 <button class="tab" data-tab="records">Records &amp; Standards</button>
 <button class="tab" data-tab="league">League Setup</button>
 </div>
+<div id="feeNotice"></div>
 <div id="pane"></div>
 </div>
 </div>
@@ -80,6 +83,14 @@ let sb=supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{auth:{lock:
 let me=null, tab='people', teams=[];
 // SITE = site admin (everything, every team). Otherwise a team admin: everything for MYTEAM only.
 let SITE=false, MYTEAM=null;
+// PRES = 'East' / 'West' when this person is the Conference President confirmed for the current SEASON.
+let PRES=null, SEASON=null, COMM=false, TREAS=false;
+const CONF_NAME={East:'Eastern',West:'Western'};
+const money=v=>'$'+(+v||0).toFixed(2).replace(/\.00$/,'');
+const teamConf=c=>(teams.find(t=>t.code===c)||{}).conference||null;
+const isPresFor=teamCode=>!!PRES&&teamConf(teamCode)===PRES;
+const STATUS_LABEL={submitted:'Needs team review',reviewed:'Team reviewed',verified:'Certified',rejected:'Rejected',archived:'Archived'};
+const statusPill=s=>`<span class="pill ${s==='verified'?'ok':s==='rejected'?'bad':s==='reviewed'?'gray':'warn'}">${esc(STATUS_LABEL[s]||s||'')}</span>`;
 const DIVS=(window.DIVISIONS||[]).map(d=>d.name);
 const AGES={'Sub-Gremlin':[5,6],'Gremlin':[7,8],'Bantam':[9,10],'Juniors':[11,12],'Youth':[13,14],'Intermediates':[15,18]};
 const FIELD_CODES=['HJ','LJ','SP','JT','TJ','PV','DT'];
@@ -113,20 +124,33 @@ if(!s||window.__authDone===s.user.id) return; window.__authDone=s.user.id;
 sb=supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{auth:{lock:(n,t,fn)=>fn()}}); // fresh client after sign-in redirect
 $('login').classList.add('hide');
 const {data}=await sb.from('coaches').select('*').eq('email',s.user.email).eq('approved',true).maybeSingle();
-if(!data||!(data.is_admin||data.team_admin)){ try{localStorage.setItem('vyc_admin','0')}catch(e){} $('deniedWho').textContent='Signed in as '+s.user.email+'. Ask a site admin or your team admin to give you access.'; $('denied').classList.remove('hide'); return; }
+SEASON=+(await window.currentSeason());
+const pres=data&&data.president_conference&&data.president_season===SEASON?data.president_conference:null;
+const comm=!!(data&&data.commissioner_season===SEASON), treas=!!(data&&data.treasurer_season===SEASON);
+if(!data||!(data.is_admin||data.team_admin||pres||comm||treas)){ try{localStorage.setItem('vyc_admin','0')}catch(e){} $('deniedWho').textContent='Signed in as '+s.user.email+'. Ask a site admin or your team admin to give you access.'; $('denied').classList.remove('hide'); return; }
 try{localStorage.setItem('vyc_admin','1')}catch(e){}
-me=data; SITE=!!data.is_admin; MYTEAM=data.team_code; $('app').classList.remove('hide');
+me=data; SITE=!!data.is_admin; MYTEAM=data.team_code; PRES=pres; COMM=comm; TREAS=treas; $('app').classList.remove('hide');
 await loadTeams();
+if(!SITE&&!data.team_admin){
+// A board officer who isn't also a team admin only sees the tabs for their job.
+const tabs=PRES?['cert','clearances','fees']:COMM?['cert','clearances','fees']:['fees'];
+document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('hide',!tabs.includes(b.dataset.tab)));
+const title=PRES?CONF_NAME[PRES]+' Conference President':COMM?'VYC Commissioner':'VYC Treasurer';
+$('pgTitle').textContent=title; document.title=title;
+$('pgIntro').textContent=PRES?`Certify ${CONF_NAME[PRES]} Conference athletes, make changes to them, answer site-admin change requests, request late passes, and assess fines.`
+  :COMM?'Approve transfers and late additions, spot-check rosters, and assess fines.':'Record fee and fine payments for every team.';
+show(tabs[0]); refreshCertBadge(); refreshClrBadge(); return;
+}
 if(!SITE){
 // Same page, same tabs as a site admin — scoped to their own team. League-wide tabs are view-only.
 $('pgTitle').textContent='Team Admin — '+teamName(MYTEAM); document.title='Team Admin';
 $('pgIntro').textContent=`Change anything for ${teamName(MYTEAM)} here — people, athletes, transfer requests and meets. League-wide records and setup are view-only. The database enforces what you can see and change.`;
 }
-show('people'); refreshClrBadge();
+show('people'); refreshClrBadge(); refreshCertBadge(); showFeeNotice();
 });
 async function loadTeams(){ const {data}=await sb.from('league_teams').select('*').order('sort_order').order('name'); teams=data||[]; }
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>show(b.dataset.tab));
-function show(t){ tab=t; document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===t)); ({people:paintPeople,athletes:paintAthletes,clearances:paintClearances,meets:paintMeets,records:paintRecords,league:paintLeague})[t](); }
+function show(t){ tab=t; document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===t)); ({people:paintPeople,athletes:paintAthletes,cert:paintCert,clearances:paintClearances,fees:paintFees,meets:paintMeets,records:paintRecords,league:paintLeague})[t](); }
 
 /* ============================ PEOPLE & ACCESS ============================ */
 // NOTE: the `coaches` table has no `id` column — its primary key is `email`.
@@ -136,7 +160,7 @@ async function paintPeople(){
 $('pane').innerHTML='<p class="text-sm text-gray-500">Loading…</p>';
 try{ coaches=await pageAll(()=>{ let q=sb.from('coaches').select('*').order('registered_at',{ascending:false}); if(!SITE) q=q.eq('team_code',MYTEAM); return q; }); }catch(e){ $('pane').innerHTML='<p class="text-red-700">'+esc(e.message)+'</p>'; return; }
 const pend=coaches.filter(c=>!c.approved).length; $('pendBadge').textContent=pend+' pending'; $('pendBadge').classList.toggle('hide',!pend);
-$('pane').innerHTML=`${SITE?`<div class="card"><h3 class="font-bold mb-1">Add a site admin</h3>
+$('pane').innerHTML=`${SITE?'<div class="card" id="presCard"><p class="text-sm text-gray-500">Loading presidents…</p></div>':''}${SITE?`<div class="card"><h3 class="font-bold mb-1">Add a site admin</h3>
 <p class="text-xs text-gray-500 mb-2">Site admins can see and change everything on every team. The person doesn't need to register first — once added, they sign in on this page with this email (Google, or "First time? Create password").</p>
 <div class="flex flex-wrap gap-2 items-end"><div><label class="text-xs font-bold">Email</label><br><input id="saEmail" type="email" style="width:16rem" placeholder="name@example.com"></div>
 <div><label class="text-xs font-bold">First name</label><br><input id="saFirst" style="width:9rem"></div><div><label class="text-xs font-bold">Last name</label><br><input id="saLast" style="width:9rem"></div>
@@ -151,12 +175,59 @@ $('pane').innerHTML=`${SITE?`<div class="card"><h3 class="font-bold mb-1">Add a 
 <div class="scroll"><table class="t"><thead><tr><th>Coach</th><th>Team</th><th>Role</th><th>Division</th><th>Status</th><th>Access level</th><th>Actions</th></tr></thead><tbody id="pBody"></tbody></table></div>
 <p class="text-xs text-gray-500 mt-2">Parents don't have accounts to manage here — they show up through their athletes (Athletes tab).</p></div>`;
 ['pTeam','pStat'].forEach(i=>$(i).onchange=drawPeople); $('pQ').oninput=drawPeople; drawPeople();
-if(SITE) $('saAdd').onclick=addSiteAdmin;
+if(SITE){ $('saAdd').onclick=addSiteAdmin; paintPresidents(); }
 $('pUsatfAll').onclick=async()=>{ const list=coaches.filter(c=>c.usatf_certified); if(!list.length){ toast('No USATF-certified coaches on this list.'); return; }
   $('pUsatfAll').disabled=true; let ok=0; for(const c of list){ $('pUsatfAll').textContent=`Checking ${ok+1} of ${list.length}…`; if(await checkUsatf(c)) ok++; }
   $('pUsatfAll').disabled=false; $('pUsatfAll').textContent='Check all USATF coaches'; drawPeople();
   toast(`Checked ${ok} of ${list.length}: ${list.filter(c=>c.usatf_registry_status==='verified').length} verified`); };
 }
+// ---- Conference Presidents: one per conference, approved by a site admin, confirmed again every season (elections every 2 years) ----
+const fullName=c=>((c.first_name||c.name||'')+' '+(c.last_name||'')).trim()||c.email;
+const nameKey=s=>String(s||'').toLowerCase().replace(/[^a-z]/g,'');
+// Board positions. Each is one person per season, set by a site admin; the rulebook elects them for 2-year terms, so re-confirm every season.
+//  East/West = president_conference + president_season; Commissioner = commissioner_season; Treasurer = treasurer_season.
+const POSITIONS={East:{title:'Eastern Conference President',exp:'expected_president_East',what:'certifies and changes Eastern Conference athletes, approves site-admin change requests, requests late passes, assesses fines'},
+  West:{title:'Western Conference President',exp:'expected_president_West',what:'certifies and changes Western Conference athletes, approves site-admin change requests, requests late passes, assesses fines'},
+  Commissioner:{title:'Commissioner',exp:'expected_commissioner',what:'approves transfers and late additions, spot-checks any roster, assesses fines'},
+  Treasurer:{title:'Treasurer',exp:'expected_treasurer',what:'receives fees and records payments'}};
+const holds=(c,pos)=>pos==='Commissioner'?c.commissioner_season:pos==='Treasurer'?c.treasurer_season:(c.president_conference===pos?c.president_season:null);
+const posPatch=(pos,on)=>pos==='Commissioner'?{commissioner_season:on?SEASON:null}:pos==='Treasurer'?{treasurer_season:on?SEASON:null}:(on?{president_conference:pos,president_season:SEASON}:{president_conference:null,president_season:null});
+async function paintPresidents(){
+const {data:st}=await sb.from('app_settings').select('*').in('key',Object.values(POSITIONS).map(p=>p.exp));
+const EXP={}; (st||[]).forEach(x=>{ const k=Object.keys(POSITIONS).find(p=>POSITIONS[p].exp===x.key); if(k) EXP[k]=x.value; });
+const box=pos=>{
+  const P=POSITIONS[pos];
+  const cur=coaches.find(c=>holds(c,pos)===SEASON);
+  const old=coaches.filter(c=>holds(c,pos)&&holds(c,pos)!==SEASON);
+  const reqs=coaches.filter(c=>c.requested_president_conference===pos&&holds(c,pos)!==SEASON);
+  const match=c=>EXP[pos]&&nameKey(fullName(c))===nameKey(EXP[pos])?'<span class="pill ok">✓ matches name on file</span>':'<span class="pill bad">Name doesn\'t match the name on file</span>';
+  return `<div class="flex-1" style="min-width:18rem"><h4 class="font-bold">${P.title}</h4><div class="text-xs text-gray-500 mb-1">${P.what}.</div>
+  <div class="text-xs mb-1">On file: <input data-exp="${pos}" value="${esc(EXP[pos]||'')}" style="width:12rem"> <button class="btn lite" data-pact="saveExp" data-conf="${pos}">Save</button></div>
+  ${cur?`<div class="text-sm"><b>${esc(fullName(cur))}</b> <span class="text-xs text-gray-500">${esc(cur.email)}</span> <span class="pill ok">Confirmed for ${SEASON}</span> ${match(cur)} <button class="btn lite" data-pact="remove" data-email="${esc(cur.email)}" data-conf="${pos}">Remove</button></div>`
+      :`<div class="text-sm"><span class="pill warn">No ${P.title} confirmed for ${SEASON}</span></div>`}
+  ${old.map(c=>`<div class="text-sm mt-1">${esc(fullName(c))} <span class="text-xs text-gray-500">(${holds(c,pos)} ${P.title})</span> ${match(c)} ${cur?'':`<button class="btn grn" data-pact="confirm" data-email="${esc(c.email)}" data-conf="${pos}">Re-confirm for ${SEASON}</button>`} <button class="btn lite" data-pact="remove" data-email="${esc(c.email)}" data-conf="${pos}">Remove</button></div>`).join('')}
+  ${reqs.map(c=>`<div class="text-sm mt-1 p-2 rounded" style="background:#fffbeb"><b>Request:</b> ${esc(fullName(c))} <span class="text-xs text-gray-500">${esc(c.email)} · ${esc(teamName(c.team_code))}</span> ${match(c)}<br>
+    <button class="btn grn mt-1" data-pact="confirm" data-email="${esc(c.email)}" data-conf="${pos}">Approve as ${P.title} for ${SEASON}</button> <button class="btn lite mt-1" data-pact="dismiss" data-email="${esc(c.email)}">Dismiss request</button></div>`).join('')}
+  <div class="text-xs mt-2">Or pick someone already registered: <select data-pick="${pos}" style="max-width:14rem"><option value="">Choose…</option>${coaches.filter(c=>c.approved).map(c=>`<option value="${esc(c.email)}">${esc(fullName(c))} (${esc(c.team_code||'')})</option>`).join('')}</select> <button class="btn lite" data-pact="pick" data-conf="${pos}">Make ${P.title}</button></div></div>`; };
+$('presCard').innerHTML=`<h3 class="font-bold mb-1">VYC Board positions — ${SEASON} season</h3>
+<p class="text-xs text-gray-500 mb-2">One person per position per season. Confirm them again every season (elections are every 2 years) — access only works for the season it was confirmed for. Nobody can certify a conference's athletes until its president is confirmed.</p>
+<div class="flex flex-wrap gap-4">${box('East')}${box('West')}</div><div class="flex flex-wrap gap-4 mt-3">${box('Commissioner')}${box('Treasurer')}</div>`;
+}
+document.addEventListener('click',async e=>{
+const b=e.target.closest('#presCard button[data-pact]'); if(!b) return; const act=b.dataset.pact, pos=b.dataset.conf, P=POSITIONS[pos];
+if(act==='saveExp'){ const v=document.querySelector(`#presCard input[data-exp="${pos}"]`).value.trim(); if(await run(sb.from('app_settings').upsert({key:P.exp,value:v}),'Saved')) paintPresidents(); return; }
+let email=b.dataset.email; if(act==='pick'){ email=document.querySelector(`#presCard select[data-pick="${pos}"]`).value; if(!email){ toast('Choose a person first.',true); return; } }
+const c=coaches.find(x=>x.email===email); if(!c) return;
+if(act==='dismiss'){ if(await run(sb.from('coaches').update({requested_president_conference:null}).eq('email',email),'Request dismissed')){ c.requested_president_conference=null; paintPresidents(); } return; }
+if(act==='remove'){ if(!confirm(`Remove ${fullName(c)} as ${P.title}?`)) return;
+  const patch=posPatch(pos,false); if(await run(sb.from('coaches').update(patch).eq('email',email),'Removed')){ Object.assign(c,patch); paintPresidents(); drawPeople(); } return; }
+// confirm / pick: make them THE holder of `pos` for this season (replacing anyone else).
+const cur=coaches.find(x=>holds(x,pos)===SEASON&&x.email!==email);
+if(!confirm(`Make ${fullName(c)} the ${P.title} for the ${SEASON} season?${cur?`\n\nThis replaces ${fullName(cur)}.`:''}\n\nThis person ${P.what}.`)) return;
+if(cur){ const off=posPatch(pos,false); if(!await run(sb.from('coaches').update(off).eq('email',cur.email))) return; Object.assign(cur,off); }
+const patch={...posPatch(pos,true),requested_president_conference:null,approved:true};
+if(await run(sb.from('coaches').update(patch).eq('email',email),`${fullName(c)} is now the ${P.title}`)){ Object.assign(c,patch); paintPresidents(); drawPeople(); }
+});
 async function addSiteAdmin(){
 const email=$('saEmail').value.trim().toLowerCase(), first=$('saFirst').value.trim()||null, last=$('saLast').value.trim()||null;
 if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ toast('Enter a valid email address.',true); return; }
@@ -190,7 +261,7 @@ const rows=coaches.filter(c=>(!t||c.team_code===t)&&(!s||(s==='pending'?!c.appro
 .sort((a,b)=>(a.approved===b.approved?0:a.approved?1:-1)); // pending first
 $('pCount').textContent=rows.length+' of '+coaches.length;
 $('pBody').innerHTML=rows.map(c=>{ const self=c.email.toLowerCase()===me.email.toLowerCase(), lock=!SITE&&self; return `<tr data-id="${esc(c.email)}">
-<td><div class="font-semibold">${esc((c.first_name||c.name||'')+' '+(c.last_name||''))}</div><div class="text-xs text-gray-500">${esc(c.email)}${c.phone?' · '+esc(c.phone):''}${c.admin_title?' · '+esc(c.admin_title):''}</div>${c.requested_team_admin&&!c.team_admin?'<span class="pill warn">Requested team admin</span>':''}</td>
+<td><div class="font-semibold">${esc((c.first_name||c.name||'')+' '+(c.last_name||''))}</div><div class="text-xs text-gray-500">${esc(c.email)}${c.phone?' · '+esc(c.phone):''}${c.admin_title?' · '+esc(c.admin_title):''}</div>${c.requested_team_admin&&!c.team_admin?'<span class="pill warn">Requested team admin</span>':''}${c.president_conference?`<span class="pill ${c.president_season===SEASON?'ok':'gray'}">${CONF_NAME[c.president_conference]} President${c.president_season===SEASON?'':' ('+c.president_season+' — not confirmed for '+SEASON+')'}</span>`:''}${c.commissioner_season?`<span class="pill ${c.commissioner_season===SEASON?'ok':'gray'}">Commissioner${c.commissioner_season===SEASON?'':' ('+c.commissioner_season+')'}</span>`:''}${c.treasurer_season?`<span class="pill ${c.treasurer_season===SEASON?'ok':'gray'}">Treasurer${c.treasurer_season===SEASON?'':' ('+c.treasurer_season+')'}</span>`:''}${c.requested_president_conference&&holds(c,c.requested_president_conference)!==SEASON?`<span class="pill warn">Says they are ${POSITIONS[c.requested_president_conference]?POSITIONS[c.requested_president_conference].title:c.requested_president_conference}</span>`:''}</td>
 <td><select data-f="team_code" ${SITE?'':'disabled title="Only a site admin can move a coach to another team"'}>${teamOpts(c.team_code,'(none)')}</select></td>
 <td><select data-f="role_type" ${lock?'disabled':''}>${opts(ROLES,(c.role_type==='head_age_group'||!c.role_type)?'head_coach':c.role_type)}</select></td>
 <td><input data-f="division_or_age_group" value="${esc(c.division_or_age_group||'')}" style="width:9rem" placeholder="e.g. Bantam"></td>
@@ -239,12 +310,12 @@ if(await run(sb.from('coaches').delete().eq('email',email),'Deleted')){ coaches=
 
 /* ================================ ATHLETES ================================ */
 let aRows=[], aFrom=0, aTotal=0;
-const A_FIELDS=[['first_name','First name'],['last_name','Last name'],['gender','Gender','sel',['Boy','Girl']],['dob','Date of birth','date'],['division','Division','sel',DIVS],['team_code','Team','team'],['status','Status','sel',['submitted','verified','rejected']],['sport','Sport'],['age_on_dec31','Age on Dec 31','num'],['comp_number','Competition #','num'],['parent1_name','Parent 1'],['parent1_relationship','Parent 1 relationship'],['parent2_name','Parent 2'],['phone','Phone'],['email','Email'],['address','Address'],['city','City'],['zip','ZIP'],['emergency_name','Emergency contact'],['emergency_phone','Emergency phone'],['coach_note','Coach note']];
+const A_FIELDS=[['first_name','First name'],['last_name','Last name'],['gender','Gender','sel',['Boy','Girl']],['dob','Date of birth','date'],['division','Division','sel',DIVS],['team_code','Team','team'],['status','Status','sel',[['submitted',STATUS_LABEL.submitted],['reviewed',STATUS_LABEL.reviewed],['verified',STATUS_LABEL.verified],['rejected',STATUS_LABEL.rejected]]],['sport','Sport'],['age_on_dec31','Age on Dec 31','num'],['comp_number','Competition #','num'],['parent1_name','Parent 1'],['parent1_relationship','Parent 1 relationship'],['parent2_name','Parent 2'],['phone','Phone'],['email','Email'],['address','Address'],['city','City'],['zip','ZIP'],['emergency_name','Emergency contact'],['emergency_phone','Emergency phone'],['coach_note','Coach note'],['in_high_school','In high school?','sel',[['true','Yes'],['false','No']]],['hs_track_this_season','Runs for HS track team?','sel',[['true','Yes'],['false','No']]]];
 function paintAthletes(){
 $('pane').innerHTML=`<div class="card">
 <div class="flex flex-wrap gap-2 mb-2">
 <select id="aTeam" ${SITE?'':'disabled'}>${teamOpts(SITE?'':MYTEAM,'All teams')}</select>
-<select id="aStat"><option value="">Any status</option><option>submitted</option><option>verified</option><option>rejected</option></select>
+<select id="aStat">${opts(Object.entries(STATUS_LABEL).filter(x=>x[0]!=='archived'),'','Any status')}</select>
 <select id="aDiv">${opts(DIVS,'','All divisions')}</select>
 <input id="aQ" class="flex-1" placeholder="Search last or first name">
 <button class="btn pri" id="aGo">Search</button>
@@ -261,7 +332,7 @@ aLoad(true);
 }
 async function aLoad(reset){
 if(reset){ aRows=[]; aFrom=0; }
-let q=sb.from('registrations').select('id,first_name,last_name,gender,division,team_code,status,dob,age_on_dec31,contract_version,created_at,comp_number,season_year',{count:'exact'}).order('last_name').order('first_name').range(aFrom,aFrom+99);
+let q=sb.from('registrations').select('id,first_name,last_name,gender,division,team_code,status,dob,age_on_dec31,contract_version,created_at,comp_number,season_year,is_late',{count:'exact'}).order('last_name').order('first_name').range(aFrom,aFrom+99);
 const t=SITE?$('aTeam').value:MYTEAM, s=$('aStat').value, d=$('aDiv').value, qq=$('aQ').value.trim();
 if(t) q=q.eq('team_code',t); if(s) q=q.eq('status',s); if(d) q=q.eq('division',d);
 if(qq) q=q.or(`last_name.ilike.%${qq.replace(/[%,()]/g,'')}%,first_name.ilike.%${qq.replace(/[%,()]/g,'')}%`);
@@ -269,12 +340,16 @@ const {data,error,count}=await q; if(error){ toast(error.message,true); return; 
 aRows=aRows.concat(data||[]); aFrom=aRows.length; aTotal=count||0;
 $('aInfo').textContent=`Showing ${aRows.length} of ${aTotal} athletes`; $('aMore').classList.toggle('hide',aRows.length>=aTotal);
 $('aBody').innerHTML=aRows.map(r=>`<tr data-id="${r.id}"><td class="font-mono">${r.comp_number??''}<span class="text-xs text-gray-400"> ${r.season_year??''}</span></td><td><b>${esc(r.last_name)}</b>, ${esc(r.first_name)} <span class="text-xs text-gray-500">${r.gender==='Girl'?'F':'M'}${r.dob?' · '+esc(r.dob):''}</span></td><td>${esc(teamName(r.team_code))}</td><td>${esc(r.division||'')}</td>
-<td><span class="pill ${r.status==='verified'?'ok':r.status==='rejected'?'bad':'warn'}">${esc(r.status||'')}</span></td>
-<td class="whitespace-nowrap"><button class="btn lite" data-act="edit">Edit</button> <button class="btn red" data-act="del">Delete</button></td></tr>`).join('')||'<tr><td colspan="6" class="p-3 text-gray-500">No athletes match.</td></tr>';
+<td>${statusPill(r.status)}${r.is_late?' <span class="pill bad">Late</span>':''}</td>
+<td class="whitespace-nowrap"><button class="btn lite" data-act="edit">${SITE&&!isPresFor(r.team_code)?'Request change':isPresFor(r.team_code)?'Edit':'Review'}</button> ${isPresFor(r.team_code)?'<button class="btn red" data-act="del">Delete</button>':SITE?'<button class="btn red" data-act="del">Request delete</button>':''}</td></tr>`).join('')||'<tr><td colspan="6" class="p-3 text-gray-500">No athletes match.</td></tr>';
 }
 document.addEventListener('click',async e=>{
 const b=e.target.closest('#aBody button'); if(!b) return; const id=b.closest('tr').dataset.id; const r=aRows.find(x=>x.id===id);
-if(b.dataset.act==='edit') return editAthlete(id);
+if(b.dataset.act==='edit') return editAthlete(id,()=>aLoad(true));
+if(!isPresFor(r.team_code)){ // site admin: removing an athlete needs the conference president's approval
+  const reason=prompt(`Ask the ${CONF_NAME[teamConf(r.team_code)]||''} Conference President to delete ${r.first_name} ${r.last_name}?\n\nWhy? (the president sees this)`); if(reason===null) return;
+  const {error}=await sb.rpc('request_athlete_change',{p_reg:id,p_kind:'delete',p_changes:{},p_reason:reason}); if(error){ toast(error.message,true); return; }
+  toast('Sent to the Conference President for approval'); refreshCertBadge(); return; }
 if(!confirm(`Delete ${r.first_name} ${r.last_name} permanently, including their meet entries? Their past results stay but are unlinked. This can't be undone.`)) return;
 if(await deleteAthletes([id])){ toast('Deleted'); aRows=aRows.filter(x=>x.id!==id); aTotal--; aLoad(true); }
 });
@@ -292,39 +367,176 @@ const typed=prompt(`This will permanently delete ${count} test roster athletes a
 const ids=(await pageAll(()=>sb.from('registrations').select('id').eq('contract_version','ROSTER-2026'))).map(x=>x.id);
 toast('Deleting…'); if(await deleteAthletes(ids)){ toast(`Deleted ${ids.length} test athletes`); aLoad(true); }
 }
-async function editAthlete(id){
+// Who can change what (the database enforces the same rule):
+//  - the Conference President of the athlete's conference: changes anything directly, certifies;
+//  - a site admin: competition # and notes directly; athlete information becomes a request the president approves;
+//  - a team admin: first review only (status Needs review / Team reviewed / Rejected, and the coach note).
+const FREE_KEYS=['comp_number','coach_note'];
+async function editAthlete(id,after){
 const {data:r,error}=await sb.from('registrations').select('*').eq('id',id).single(); if(error){ toast(error.message,true); return; }
-const inputs=A_FIELDS.filter(f=>f[0] in r||true).map(([k,lab,kind,list])=>{
-const v=r[k]??''; let el;
-if(kind==='sel') el=`<select data-k="${k}">${opts(list,v,'')}</select>`;
-else if(kind==='team') el=`<select data-k="${k}" ${SITE?'':'disabled'}>${teamOpts(v,'(none)')}</select>`;
-else el=`<input data-k="${k}" type="${kind==='date'?'date':kind==='num'?'number':'text'}" value="${esc(v)}">`;
+const conf=teamConf(r.team_code), pres=isPresFor(r.team_code), mode=pres?'pres':SITE?'request':'review';
+const editable=k=>mode==='pres'||(mode==='request')||(mode==='review'&&(k==='status'||k==='coach_note'));
+const inputs=A_FIELDS.map(([k,lab,kind,list])=>{
+const v=r[k]??'', dis=editable(k)?'':'disabled'; let el;
+if(kind==='sel'){ const l=(k==='status'&&mode==='review')?list.filter(x=>x[0]!=='verified'||r.status==='verified'):list; el=`<select data-k="${k}" ${dis||(k==='status'&&mode==='review'&&r.status==='verified'?'disabled':'')}>${opts(l,v,'')}</select>`; }
+else if(kind==='team') el=`<select data-k="${k}" ${SITE||pres?'':'disabled'}>${teamOpts(v,'(none)')}</select>`;
+else el=`<input data-k="${k}" type="${kind==='date'?'date':kind==='num'?'number':'text'}" value="${esc(v)}" ${dis}>`;
 return `<div><label>${lab}</label>${el}</div>`; }).join('');
-openModal(`<h3 class="font-bold text-lg mb-2">Edit ${esc(r.first_name)} ${esc(r.last_name)}</h3><div class="grid2" id="aForm">${inputs}</div>
+const note={pres:`You are the ${CONF_NAME[conf]} Conference President — your changes save right away.`,
+  request:`Only the ${CONF_NAME[conf]||''} Conference President can change athlete information. Your changes are sent to them as a request and take effect when they approve it. (Competition # and coach note save right away.)`,
+  review:`Team admins do the first review: set the status to "Team reviewed" (or Rejected). The ${CONF_NAME[conf]||''} Conference President gives the final certification and is the only one who can change athlete information.`}[mode];
+openModal(`<h3 class="font-bold text-lg mb-1">${mode==='request'?'Request a change for':mode==='review'?'Review':'Edit'} ${esc(r.first_name)} ${esc(r.last_name)}</h3>
+<p class="text-sm ${mode==='pres'?'text-green-800':'text-amber-800'} mb-2">${note}</p>
+${r.verified_by?`<p class="text-xs text-gray-600 mb-2">Certified by ${esc(r.verified_by)} on ${esc(String(r.verified_at).slice(0,10))}</p>`:''}${r.reviewed_by?`<p class="text-xs text-gray-600 mb-2">Team reviewed by ${esc(r.reviewed_by)} on ${esc(String(r.reviewed_at).slice(0,10))}</p>`:''}
+<div class="grid2" id="aForm">${inputs}</div>
+${mode==='request'?'<div class="mt-2"><label class="text-xs font-bold">Why? (the president sees this)</label><br><input id="aReason" style="width:100%" placeholder="e.g. parent reported a typo in the birth date"></div>':''}
 <p class="text-xs text-gray-500 mt-2">Changing the date of birth does not change the division automatically — set the division yourself if it should move.</p>
-<div class="mt-3 flex gap-2"><button class="btn pri" id="aSave">Save changes</button><button class="btn lite" onclick="closeModal()">Cancel</button></div>`);
-$('aSave').onclick=async()=>{ const patch={}; document.querySelectorAll('#aForm [data-k]').forEach(el=>{ const k=el.dataset.k; let v=el.value; if(v==='') v=null; else if(el.type==='number') v=+v; if(String(v??'')!==String(r[k]??'')) patch[k]=v; });
-if(!Object.keys(patch).length){ closeModal(); return; } if(await run(sb.from('registrations').update(patch).eq('id',id),'Saved')){ closeModal(); aLoad(true); } };
+<div class="mt-3 flex gap-2"><button class="btn pri" id="aSave">${mode==='request'?'Send to the president':'Save changes'}</button><button class="btn lite" onclick="closeModal()">Cancel</button></div>`);
+$('aSave').onclick=async()=>{ const patch={}; document.querySelectorAll('#aForm [data-k]').forEach(el=>{ if(el.disabled) return; const k=el.dataset.k; let v=el.value; if(v==='') v=null; else if(el.type==='number') v=+v; if(String(v??'')!==String(r[k]??'')) patch[k]=v; });
+if(!Object.keys(patch).length){ closeModal(); return; }
+if(mode!=='request'){ if(await run(sb.from('registrations').update(patch).eq('id',id),'Saved')){ closeModal(); after&&after(); } return; }
+// Site admin: split into what saves now and what needs the president.
+const now={}, ask={}; Object.entries(patch).forEach(([k,v])=>{ const statusOk=k==='status'&&v!=='verified'&&r.status!=='verified'; (FREE_KEYS.includes(k)||statusOk?now:ask)[k]=v; });
+if(Object.keys(now).length&&!await run(sb.from('registrations').update(now).eq('id',id))) return;
+if(Object.keys(ask).length){ const {error}=await sb.rpc('request_athlete_change',{p_reg:id,p_kind:'edit',p_changes:ask,p_reason:$('aReason').value});
+  if(error){ toast(error.message,true); return; } toast(`Sent to the ${CONF_NAME[conf]} Conference President for approval`); refreshCertBadge(); }
+else toast('Saved');
+closeModal(); after&&after(); };
 }
+
+/* ============================== CERTIFICATION ============================== */
+// The Conference Presidents give the final certification (status 'verified' = Certified) after the team admin's
+// first review, answer site-admin change requests, and are the only ones who can allow a registration after the
+// cutoff (two weeks after the certification date) by giving a late pass for one athlete.
+let cRows=[], cReqs=[], cPasses=[], cDate=null;
+const fmtD=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}):'';
+const addDays=(d,n)=>{ const x=new Date(d+'T12:00:00'); x.setDate(x.getDate()+n); return x.toISOString().slice(0,10); };
+async function refreshCertBadge(){
+if(!SITE&&!PRES) return;
+let q=sb.from('athlete_change_requests').select('id',{count:'exact',head:true}).eq('status','pending'); if(!SITE) q=q.eq('conference',PRES);
+const {count}=await q; $('certBadge').textContent=(count||0)+' request'+(count===1?'':'s'); $('certBadge').classList.toggle('hide',!count);
+}
+async function paintCert(){
+$('pane').innerHTML='<p class="text-sm text-gray-500">Loading…</p>';
+if(!SITE&&!PRES&&!COMM){ $('pane').innerHTML=`<div class="card"><p class="text-sm">Only the Eastern and Western Conference Presidents certify athletes. As a team admin, you do the first review: open your roster and mark each athlete <b>Team reviewed</b>. Then your Conference President certifies them.</p></div>`; return; }
+const confTeams=teams.filter(t=>SITE||COMM?true:t.conference===PRES).map(t=>t.code);
+let cutoff=null;
+try{
+  const [{data:st},regs,reqs,passes,{data:co}]=await Promise.all([
+    sb.from('app_settings').select('value').eq('key','certification_date_'+SEASON).maybeSingle(),
+    pageAll(()=>sb.from('registrations').select('id,first_name,last_name,gender,division,team_code,status,dob,is_late,proof_path,dob_check_status,dob_check_note,reviewed_by,verified_by,verified_at,created_at,comp_number,hs_track_this_season').eq('season_year',SEASON).in('team_code',confTeams).order('last_name').order('first_name')),
+    pageAll(()=>{ let q=sb.from('athlete_change_requests').select('*').order('requested_at',{ascending:false}); if(!SITE&&!COMM) q=q.eq('conference',PRES); return q; }),
+    pageAll(()=>{ let q=sb.from('late_registration_passes').select('*').eq('season_year',SEASON).order('created_at',{ascending:false}); if(!SITE&&!COMM) q=q.eq('conference',PRES); return q; }),
+    sb.rpc('late_cutoff',{p_season:SEASON})]);
+  cDate=st&&st.value||null; cRows=regs; cReqs=reqs; cPasses=passes; cutoff=co||null;
+}catch(e){ $('pane').innerHTML='<p class="text-red-700">'+esc(e.message)+'</p>'; return; }
+const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
+const dateLine=!cDate?`<span class="pill warn">No certification date set for ${SEASON}</span> A site admin sets it in League Setup.`
+  :today<=cDate?`Certification date: <b>${fmtD(cDate)}</b>. Anyone registered after it is a late registration (+$10 late fee, rule I.C); athletes can be added until the 2nd meet — <b>${fmtD(cutoff)}</b>.`
+  :today<=cutoff?`Certification date was <b>${fmtD(cDate)}</b>. New registrations are <b>late</b> (+$10 late fee). Athletes can be added until the 2nd meet — <b>${fmtD(cutoff)}</b>.`
+  :`Certification date was <b>${fmtD(cDate)}</b>. Registration is <b>closed</b> (the 2nd meet was ${fmtD(cutoff)}). Per rule X, a late addition needs a late pass: the Conference President requests it, the Commissioner approves it.`;
+const who=SITE&&!PRES&&!COMM?'Both conferences — view only. The Conference Presidents certify, approve your change requests and request late passes; the Commissioner approves late passes.':PRES?`${CONF_NAME[PRES]} Conference — you certify these athletes.${SITE||COMM?' (Other-conference teams are view only.)':''}`:'Commissioner — spot-check any roster (rule II.D.8); you approve late passes and transfers.';
+const sum=confTeams.map(code=>{ const L=cRows.filter(r=>r.team_code===code); const n=s=>L.filter(r=>r.status===s).length; const cert=n('verified'), over=cert+n('reviewed')+n('submitted')>350;
+  return `<tr data-team="${esc(code)}"><td>${esc(teamName(code))} <span class="text-xs text-gray-400">${esc(CONF_NAME[teamConf(code)]||'')}</span>${over?'<div class="text-xs font-semibold" style="color:#991b1b">Over 350 athletes — needs the Commissioner\'s approval (rule II.D.2)</div>':''}</td><td>${n('submitted')}</td><td>${n('reviewed')}</td><td class="font-bold text-green-800">${cert}</td><td>${n('rejected')}</td><td>${L.filter(r=>r.is_late).length||''}</td>
+  <td>${isPresFor(code)&&n('reviewed')?`<button class="btn grn" data-act="certAll">Certify ${n('reviewed')} team-reviewed</button>`:''}</td></tr>`; }).join('');
+const pend=cReqs.filter(q=>q.status==='pending'), done=cReqs.filter(q=>q.status!=='pending').slice(0,20);
+$('pane').innerHTML=`<div class="card"><h3 class="font-bold mb-1">${SEASON} roster certification</h3><p class="text-sm text-gray-600 mb-1">${who}</p><p class="text-sm mb-2">${dateLine}</p>
+<div class="scroll" style="max-height:none"><table class="t"><thead><tr><th>Team</th><th>Needs team review</th><th>Team reviewed</th><th>Certified</th><th>Rejected</th><th>Late</th><th></th></tr></thead><tbody id="cSum">${sum}</tbody></table></div></div>
+<div class="card"><h3 class="font-bold mb-1">Change requests from site admins ${pend.length?`<span class="pill warn">${pend.length} waiting</span>`:''}</h3>
+<p class="text-xs text-gray-500 mb-2">A site admin can't change an athlete directly — the change waits here until the president of that athlete's conference approves it.</p>
+<div id="cReqs">${pend.length?pend.map(reqCard).join(''):'<p class="text-sm text-gray-500">No requests waiting.</p>'}</div>
+${done.length?`<details class="mt-2"><summary class="text-sm cursor-pointer">Recent decisions (${done.length})</summary>${done.map(reqCard).join('')}</details>`:''}</div>
+<div class="card"><h3 class="font-bold mb-1">Late passes ${cPasses.filter(p=>p.status==='requested'&&!p.revoked).length&&COMM?`<span class="pill warn">${cPasses.filter(p=>p.status==='requested'&&!p.revoked).length} waiting for you</span>`:''}</h3>
+<p class="text-xs text-gray-500 mb-2">Rule X: after the 2nd meet an athlete can only be added when the <b>Conference President requests</b> a late pass and the <b>Commissioner approves</b> it. The pass is for one athlete on one team (first and last name must match the registration) and works once, until it expires. The $10 late fee still applies.</p>
+${PRES?`<div class="flex flex-wrap gap-2 items-end mb-2"><div><label class="text-xs font-bold">Team</label><br><select id="lpTeam">${teams.filter(t=>t.conference===PRES&&t.active!==false).map(t=>`<option value="${esc(t.code)}">${esc(t.name)}</option>`).join('')}</select></div>
+<div><label class="text-xs font-bold">Athlete first name</label><br><input id="lpFirst" style="width:9rem"></div><div><label class="text-xs font-bold">Last name</label><br><input id="lpLast" style="width:9rem"></div>
+<div><label class="text-xs font-bold">Good until</label><br><input id="lpExp" type="date" value="${addDays(today,14)}"></div><div class="flex-1"><label class="text-xs font-bold">Reason</label><br><input id="lpNote" style="width:100%" placeholder="why this athlete should be added late"></div>
+<button class="btn grn" id="lpAdd">Request late pass</button></div>`:''}
+<div id="cPasses">${cPasses.length?`<table class="t"><thead><tr><th>Athlete</th><th>Team</th><th>Good until</th><th>Requested by</th><th>Status</th><th></th></tr></thead><tbody>${cPasses.map(p=>`<tr data-id="${p.id}"><td>${esc(p.athlete_last)}, ${esc(p.athlete_first)}${p.note?`<div class="text-xs text-gray-500">${esc(p.note)}</div>`:''}${p.decision_note?`<div class="text-xs text-gray-500">Commissioner: ${esc(p.decision_note)}</div>`:''}</td><td>${esc(teamName(p.team_code))}</td><td>${esc(p.expires_on)}</td><td class="text-xs">${esc(p.created_by||'')}${p.decided_by?`<br>${p.status} by ${esc(p.decided_by)}`:''}</td>
+<td>${p.used_registration_id?'<span class="pill ok">Used — registered</span>':p.revoked?'<span class="pill gray">Revoked</span>':p.status==='declined'?'<span class="pill bad">Declined</span>':p.expires_on<today?'<span class="pill gray">Expired</span>':p.status==='approved'?'<span class="pill ok">Approved — family can register</span>':'<span class="pill warn">Waiting for the Commissioner</span>'}</td>
+<td class="whitespace-nowrap">${COMM&&p.status==='requested'&&!p.revoked?'<button class="btn grn" data-act="lpApprove">Approve</button> <button class="btn lite" data-act="lpDecline">Decline…</button> ':''}${(PRES===p.conference||COMM)&&!p.used_registration_id&&!p.revoked&&p.status!=='declined'?'<button class="btn lite" data-act="lpRevoke">Revoke</button>':''}</td></tr>`).join('')}</tbody></table>`:'<p class="text-sm text-gray-500">No late passes yet.</p>'}</div></div>
+<div class="card"><h3 class="font-bold mb-2">Athletes</h3>
+<div class="flex flex-wrap gap-2 mb-2"><select id="cTeam">${opts(confTeams.map(c=>[c,teamName(c)]),'','All teams')}</select>
+<select id="cStat">${opts(Object.entries(STATUS_LABEL).filter(x=>x[0]!=='archived'),PRES?'reviewed':'','Any status')}</select>
+<label class="text-sm self-center"><input type="checkbox" id="cLate"> Late only</label><input id="cQ" class="flex-1" placeholder="Search name"></div>
+<div class="scroll"><table class="t"><thead><tr><th>Athlete</th><th>Team</th><th>DOB / ID check</th><th>Status</th><th>Actions</th></tr></thead><tbody id="cBody"></tbody></table></div></div>`;
+['cTeam','cStat','cLate'].forEach(i=>$(i).onchange=drawCert); $('cQ').oninput=drawCert; drawCert();
+if(PRES) $('lpAdd').onclick=addLatePass;
+refreshCertBadge();
+}
+function reqCard(q){
+const fields=q.kind==='delete'?'<b class="text-red-700">Delete this athlete</b> (and their meet entries)':Object.keys(q.changes).map(k=>`<div><b>${esc((A_FIELDS.find(f=>f[0]===k)||[0,k])[1])}:</b> <span class="line-through text-gray-500">${esc(k==='status'?STATUS_LABEL[q.old_values[k]]||q.old_values[k]:q.old_values[k]??'(blank)')}</span> → <b>${esc(k==='status'?STATUS_LABEL[q.changes[k]]||q.changes[k]:q.changes[k]??'(blank)')}</b></div>`).join('');
+const canDecide=q.status==='pending'&&PRES===q.conference, canWithdraw=q.status==='pending'&&SITE&&!canDecide;
+return `<div class="card" style="margin-bottom:8px;border:1px solid #e5e7eb" data-req="${q.id}"><div class="flex flex-wrap gap-2 items-start"><div class="flex-1 min-w-0">
+<div class="font-bold">${esc(q.athlete_name||'')} <span class="text-gray-500 font-normal text-sm">${esc(teamName(q.team_code))} · ${esc(CONF_NAME[q.conference]||'')}</span></div>
+<div class="text-sm mt-1">${fields}</div>${q.reason?`<div class="text-sm text-gray-700 mt-1"><b>Why:</b> ${esc(q.reason)}</div>`:''}
+<div class="text-xs text-gray-500 mt-1">Asked by ${esc(q.requested_by||'')} on ${esc(String(q.requested_at).slice(0,10))}${q.decided_at?` · ${esc(q.status)} by ${esc(q.decided_by||'')} on ${esc(String(q.decided_at).slice(0,10))}${q.decision_note?' — '+esc(q.decision_note):''}`:''}</div></div>
+${q.status==='pending'?'<span class="pill warn">Waiting for the president</span>':`<span class="pill ${q.status==='approved'?'ok':'gray'}">${esc(q.status)}</span>`}</div>
+${canDecide||canWithdraw?`<div class="flex gap-2 mt-2">${canDecide?'<button class="btn grn" data-act="reqYes">Approve</button><button class="btn lite" data-act="reqNo">Decline…</button>':''}${canWithdraw?'<button class="btn lite" data-act="reqCancel">Withdraw</button>':''}</div>`:''}</div>`;
+}
+function drawCert(){
+const t=$('cTeam').value, s=$('cStat').value, late=$('cLate').checked, q=$('cQ').value.toLowerCase();
+const L=cRows.filter(r=>(!t||r.team_code===t)&&(!s||r.status===s)&&(!late||r.is_late)&&(!q||(r.first_name+' '+r.last_name).toLowerCase().includes(q)));
+$('cBody').innerHTML=L.map(r=>{ const mine=isPresFor(r.team_code); return `<tr data-id="${r.id}"><td><b>${esc(r.last_name)}</b>, ${esc(r.first_name)} <span class="text-xs text-gray-500">${r.gender==='Girl'?'F':'M'} · ${esc(r.division||'')}${r.comp_number?' · #'+r.comp_number:''}</span>${r.is_late?' <span class="pill bad">Late</span>':''}</td>
+<td>${esc(teamName(r.team_code))}</td><td class="text-xs">${esc(r.dob||'')}<br>${r.proof_path?'ID check: '+esc(r.dob_check_status||''):'Returning — matched last season'}</td>
+<td>${statusPill(r.status)}${r.reviewed_by&&r.status==='reviewed'?`<div class="text-xs text-gray-500">by ${esc(r.reviewed_by)}</div>`:''}${r.verified_by?`<div class="text-xs text-gray-500">by ${esc(r.verified_by)}</div>`:''}</td>
+<td class="whitespace-nowrap">${r.proof_path?'<button class="btn lite" data-act="proof">Proof of birth</button> ':''}${mine?(r.status!=='verified'?'<button class="btn grn" data-act="cert">✓ Certify</button> ':'<button class="btn lite" data-act="uncert">Undo certification</button> ')+'<button class="btn lite" data-act="edit">Edit</button>':''}
+<div class="proofBox"></div></td></tr>`; }).join('')||'<tr><td colspan="5" class="p-3 text-gray-500">No athletes match.</td></tr>';
+}
+async function addLatePass(){
+const first=$('lpFirst').value.trim(), last=$('lpLast').value.trim(), team=$('lpTeam').value, exp=$('lpExp').value;
+if(!first||!last||!exp){ toast('Enter the athlete\'s first and last name and a date.',true); return; }
+if(!confirm(`Ask the Commissioner to allow ${first} ${last} to register late for ${teamName(team)}, until ${fmtD(exp)}?`)) return;
+if(await run(sb.from('late_registration_passes').insert({season_year:SEASON,team_code:team,conference:PRES,athlete_first:first,athlete_last:last,expires_on:exp,note:$('lpNote').value.trim()||null,created_by:me.email.toLowerCase()}),'Late pass requested — waiting for the Commissioner')) paintCert();
+}
+document.addEventListener('click',async e=>{
+const b=e.target.closest('#pane button[data-act]'); if(!b||tab!=='cert') return; const act=b.dataset.act;
+if(act==='certAll'){ const code=b.closest('tr').dataset.team, L=cRows.filter(r=>r.team_code===code&&r.status==='reviewed');
+  if(!confirm(`Certify all ${L.length} team-reviewed athletes on ${teamName(code)}? They become eligible for meets and final competition numbers.`)) return;
+  for(let i=0;i<L.length;i+=100){ if(!await run(sb.from('registrations').update({status:'verified'}).in('id',L.slice(i,i+100).map(r=>r.id)))) return; }
+  toast(`Certified ${L.length} athletes`); return paintCert(); }
+if(act==='lpRevoke'){ const id=b.closest('tr').dataset.id; if(!confirm('Revoke this late pass?')) return; if(await run(sb.from('late_registration_passes').update({revoked:true}).eq('id',id),'Revoked')) paintCert(); return; }
+if(act==='lpApprove'){ const id=b.closest('tr').dataset.id, p=cPasses.find(x=>x.id===id); if(!confirm(`Approve the late addition of ${p.athlete_first} ${p.athlete_last} to ${teamName(p.team_code)}? The family can then register until ${fmtD(p.expires_on)}.`)) return; if(await run(sb.from('late_registration_passes').update({status:'approved'}).eq('id',id),'Approved — the family can register now')) paintCert(); return; }
+if(act==='lpDecline'){ const id=b.closest('tr').dataset.id; const note=prompt('Decline this late pass. Reason (the president sees this):'); if(note===null) return; if(await run(sb.from('late_registration_passes').update({status:'declined',decision_note:note||null}).eq('id',id),'Declined')) paintCert(); return; }
+const rq=b.closest('[data-req]');
+if(rq){ const id=rq.dataset.req;
+  if(act==='reqYes'){ if(!confirm('Approve this change? It is applied to the athlete right away.')) return; const {error}=await sb.rpc('decide_athlete_change',{p_id:id,p_approve:true,p_note:null}); if(error){ toast(error.message,true); return; } toast('Approved and applied'); return paintCert(); }
+  if(act==='reqNo'){ const note=prompt('Decline this request. Reason (the site admin sees this):'); if(note===null) return; const {error}=await sb.rpc('decide_athlete_change',{p_id:id,p_approve:false,p_note:note}); if(error){ toast(error.message,true); return; } toast('Declined'); return paintCert(); }
+  if(act==='reqCancel'){ if(!confirm('Withdraw this request?')) return; const {error}=await sb.rpc('cancel_athlete_change',{p_id:id}); if(error){ toast(error.message,true); return; } toast('Withdrawn'); return paintCert(); }
+}
+const tr=b.closest('tr[data-id]'); if(!tr) return; const r=cRows.find(x=>x.id===tr.dataset.id); if(!r) return;
+if(act==='edit') return editAthlete(r.id,paintCert);
+if(act==='proof'){ const box=tr.querySelector('.proofBox'); if(box.innerHTML){ box.innerHTML=''; return; }
+  const {data,error}=await sb.storage.from('proof-of-birth').createSignedUrl(r.proof_path,300); if(error){ toast('Could not open file: '+error.message,true); return; }
+  box.innerHTML=r.proof_path.toLowerCase().endsWith('.pdf')?`<a class="text-blue-600 underline" target="_blank" href="${data.signedUrl}">Open PDF (link valid 5 min)</a>`:`<img src="${data.signedUrl}" class="max-h-72 rounded border mt-1" alt="proof of birth">`; return; }
+if(act==='cert'){ if(r.status!=='reviewed'&&!confirm(`${r.first_name} ${r.last_name} hasn't been team reviewed yet (${STATUS_LABEL[r.status]}). Certify anyway?`)) return;
+  if(cRows.some(x=>x.id!==r.id&&x.status==='rejected'&&x.team_code!==r.team_code&&x.dob===r.dob&&(x.first_name+x.last_name).toLowerCase()===(r.first_name+r.last_name).toLowerCase())){ toast('Bylaws III.C.2: this athlete was dropped by another VYC team this season and can\'t be certified again this season.',true); return; }
+  if(r.proof_path&&r.dob_check_status!=='match'&&!confirm(`The automatic ID check did not come back as a match (${r.dob_check_status}). Have you compared the birth certificate by eye? Certify anyway?`)) return;
+  if(await run(sb.from('registrations').update({status:'verified'}).eq('id',r.id),'Certified')){ r.status='verified'; r.verified_by=me.email; drawCert(); } return; }
+if(act==='uncert'){ if(!confirm(`Undo the certification for ${r.first_name} ${r.last_name}? They go back to "Team reviewed" and can't be entered in meets until certified again.`)) return;
+  if(await run(sb.from('registrations').update({status:'reviewed'}).eq('id',r.id),'Certification removed')){ r.status='reviewed'; r.verified_by=null; drawCert(); } }
+});
 
 /* ============================ TRANSFER REQUESTS ============================ */
 // When a registration names a different prior VYC team, the database opens a request for that
 // prior team to confirm no fees are owed from last season. Site admins see all; team admins see
 // requests to or from their team, and answer the ones addressed to them.
 let clr=[];
-const CLR={pending:['warn','Requesting transfer'],cleared:['ok','Transfer approved'],owes_fees:['bad','Transfer issue'],not_same:['gray','Not the same athlete']};
+const CLR={pending:['warn','Waiting for former team'],cleared:['ok','In good standing'],owes_fees:['bad','Issue with former team'],not_same:['gray','Not the same athlete']};
 // flagged = the parent said "no other team", but the database found a same-birthday, same-name athlete on that team.
 async function refreshClrBadge(){
-let q=sb.from('transfer_clearances').select('id',{count:'exact',head:true}).eq('status','pending'); if(!SITE) q=q.eq('from_team',MYTEAM);
+let q=sb.from('transfer_clearances').select('id',{count:'exact',head:true});
+if(COMM&&!SITE) q=q.eq('status','cleared').is('commissioner_approved_at',null); else { q=q.eq('status','pending'); if(!SITE&&!PRES) q=q.eq('from_team',MYTEAM); }
 const {count}=await q; $('clrBadge').textContent=(count||0)+' waiting'; $('clrBadge').classList.toggle('hide',!count);
 }
 async function paintClearances(){
 $('pane').innerHTML='<p class="text-sm text-gray-500">Loading…</p>';
 try{ clr=await pageAll(()=>sb.from('transfer_clearances').select('*').order('created_at',{ascending:false})); }catch(e){ $('pane').innerHTML='<p class="text-red-700">'+esc(e.message)+'</p>'; return; }
-$('pane').innerHTML=`<div class="card"><p class="text-sm text-gray-600 mb-2">${SITE?'Every transfer request in the league.':`<b>Leaving your team:</b> athletes who were on ${esc(teamName(MYTEAM))} last season and are requesting a transfer — approve it if there are no issues (for example, no fees owed). <b>Joining your team:</b> what their old team said.`}</p>
-<div class="flex flex-wrap gap-2 mb-2"><select id="cStat"><option value="">Any answer</option><option value="pending">Requesting transfer</option><option value="cleared">Transfer approved</option><option value="owes_fees">Transfer issue</option><option value="not_same">Not the same athlete</option><option value="flagged">Possible (not declared by parent)</option></select>
-${SITE?'':'<select id="cDir"><option value="">Both directions</option><option value="out">Leaving our team</option><option value="in">Joining our team</option></select>'}</div>
-<div class="scroll"><table class="t"><thead><tr><th>Athlete</th><th>Last season</th><th>Transferring to</th><th>Status</th><th>Note</th><th></th></tr></thead><tbody id="cBody"></tbody></table></div></div>`;
+$('pane').innerHTML=`<div class="card"><p class="text-sm text-gray-600 mb-1">${SITE||COMM||PRES?'Every transfer request'+(PRES&&!SITE&&!COMM?' in the '+CONF_NAME[PRES]+' Conference':' in the league')+'.':`<b>Leaving your team:</b> athletes who were on ${esc(teamName(MYTEAM))} last season and are requesting a transfer — confirm they're in good standing if there are no issues. <b>Joining your team:</b> give your team's written approval.`}</p>
+<p class="text-xs text-gray-500 mb-2">VYC rule IV.A.3.c: a transfer needs written approval of <b>both</b> the former team (athlete in good standing — no balance owed, no Code of Conduct issue) <b>and</b> the joining team, <b>and</b> the Commissioner. The athlete can't be certified until all three have approved. The Commissioner's approval also covers the post-season (Valley United) rule, IV.A.3.a.</p>
+<div class="flex flex-wrap gap-2 mb-2"><select id="cStat"><option value="">Any answer</option><option value="pending">Waiting for former team</option><option value="cleared">Former team OK</option><option value="owes_fees">Transfer issue</option><option value="not_same">Not the same athlete</option><option value="flagged">Possible (not declared by parent)</option><option value="needs_comm">Waiting for the Commissioner</option></select>
+${SITE||COMM||PRES?'':'<select id="cDir"><option value="">Both directions</option><option value="out">Leaving our team</option><option value="in">Joining our team</option></select>'}</div>
+<div class="scroll"><table class="t"><thead><tr><th>Athlete</th><th>Last season</th><th>Transferring to</th><th>Former team</th><th>Joining team</th><th>Commissioner</th><th>Note</th><th></th></tr></thead><tbody id="cBody"></tbody></table></div></div>`;
 ['cStat','cDir'].forEach(i=>$(i)&&($(i).onchange=drawClearances)); drawClearances();
 }
 // Evidence from the database's comparison with the old team: first + last name, birth date, parent/guardian name.
@@ -339,21 +551,113 @@ return `<div class="mt-1">${t(true,'Name')} ${t(c.match_dob,'Birth date')} ${t(c
 }
 function drawClearances(){
 const s=$('cStat').value, d=$('cDir')?$('cDir').value:'';
-const rows=clr.filter(c=>(!s||(s==='flagged'?c.flagged:c.status===s))&&(!d||(d==='out'?c.from_team===MYTEAM:c.to_team===MYTEAM)));
-$('cBody').innerHTML=rows.map(c=>{ const canAnswer=SITE||c.from_team===MYTEAM, [cls,lab]=c.flagged&&c.status==='pending'?['bad','Possible transfer — verify']:CLR[c.status]; return `<tr data-id="${c.id}">
+const rows=clr.filter(c=>(!s||(s==='flagged'?c.flagged:s==='needs_comm'?(c.status==='cleared'&&!c.commissioner_approved_at):c.status===s))&&(!d||(d==='out'?c.from_team===MYTEAM:c.to_team===MYTEAM)));
+const ok=(at,by)=>at?`<span class="pill ok">✓ Approved</span><div class="text-xs text-gray-500">${esc(by||'')} · ${esc(String(at).slice(0,10))}</div>`:'<span class="pill warn">Waiting</span>';
+$('cBody').innerHTML=rows.map(c=>{ const canAnswer=SITE||c.from_team===MYTEAM, canJoin=SITE||c.to_team===MYTEAM, live=c.status!=='not_same', [cls,lab]=c.flagged&&c.status==='pending'?['bad','Possible transfer — verify']:CLR[c.status]; return `<tr data-id="${c.id}">
 <td><b>${esc(c.athlete_last)}</b>, ${esc(c.athlete_first)} <div class="text-xs text-gray-500">${c.dob?esc(c.dob)+' · ':''}${esc(c.division||'')} · asked ${esc((c.created_at||'').slice(0,10))}</div>${c.flagged?'<div class="text-xs font-semibold" style="color:#9a3412">Parent said no other team — same first &amp; last name, birthday and parent found on this team. Same athlete?</div>':''}${matchPills(c)}</td>
 <td>${esc(teamName(c.from_team))}</td><td>${esc(teamName(c.to_team))}</td>
 <td><span class="pill ${cls}">${lab}</span>${c.responded_by?`<div class="text-xs text-gray-500">${esc(c.responded_by)}</div>`:''}</td>
-<td>${canAnswer?`<input data-f="note" value="${esc(c.note||'')}" placeholder="issue (e.g. owes fees)" style="width:11rem">`:esc(c.note||'')}</td>
-<td class="whitespace-nowrap">${canAnswer?(c.flagged?'<button class="btn grn" data-act="cleared">Same athlete — OK to transfer</button> <button class="btn lite" data-act="owes_fees">Same athlete — issue</button> <button class="btn lite" data-act="not_same">Not the same athlete</button>':'<button class="btn grn" data-act="cleared">Yes, OK to transfer</button> <button class="btn lite" data-act="owes_fees">There&#39;s an issue</button>'):''}</td></tr>`; }).join('')||'<tr><td colspan="6" class="p-3 text-gray-500">No requests match.</td></tr>';
+<td>${live?ok(c.to_team_approved_at,c.to_team_approved_by):''}${live&&canJoin&&!c.to_team_approved_at?' <button class="btn grn" data-act="join">Approve joining</button>':''}</td>
+<td>${live?ok(c.commissioner_approved_at,c.commissioner_approved_by):''}${c.commissioner_note?`<div class="text-xs text-gray-500">${esc(c.commissioner_note)}</div>`:''}${live&&(COMM||SITE)&&!c.commissioner_approved_at?' <button class="btn grn" data-act="comm">Commissioner approves</button>':''}</td>
+<td>${canAnswer?`<input data-f="note" value="${esc(c.note||'')}" placeholder="issue (e.g. owes fees, conduct)" style="width:11rem">`:esc(c.note||'')}</td>
+<td class="whitespace-nowrap">${canAnswer?(c.flagged?'<button class="btn grn" data-act="cleared">Same athlete — in good standing</button> <button class="btn lite" data-act="owes_fees">Same athlete — issue</button> <button class="btn lite" data-act="not_same">Not the same athlete</button>':'<button class="btn grn" data-act="cleared">In good standing — OK</button> <button class="btn lite" data-act="owes_fees">There&#39;s an issue</button>'):''}</td></tr>`; }).join('')||'<tr><td colspan="8" class="p-3 text-gray-500">No requests match.</td></tr>';
 }
 document.addEventListener('click',async e=>{
 const b=e.target.closest('#cBody button'); if(!b) return; const tr=b.closest('tr'), id=tr.dataset.id, c=clr.find(x=>x.id===id);
-const note=tr.querySelector('[data-f=note]').value.trim()||null, status=b.dataset.act;
+if(b.dataset.act==='join'){ if(!confirm(`${teamName(c.to_team)} gives written approval to accept ${c.athlete_first} ${c.athlete_last}?`)) return;
+  if(await run(sb.from('transfer_clearances').update({to_team_approved_at:new Date().toISOString()}).eq('id',id),'Joining team approved')){ Object.assign(c,{to_team_approved_at:new Date().toISOString(),to_team_approved_by:me.email}); drawClearances(); } return; }
+if(b.dataset.act==='comm'){ const n=prompt(`Commissioner approval for ${c.athlete_first} ${c.athlete_last}'s transfer from ${teamName(c.from_team)} to ${teamName(c.to_team)}.${c.vus?'\n\nThis athlete ran for Valley United — your approval also waives the post-season rule (IV.A.3.a) if it applies.':''}\n\nNote (optional):`); if(n===null) return;
+  if(await run(sb.from('transfer_clearances').update({commissioner_approved_at:new Date().toISOString(),commissioner_note:n||null}).eq('id',id),'Commissioner approved')){ Object.assign(c,{commissioner_approved_at:new Date().toISOString(),commissioner_approved_by:me.email,commissioner_note:n||null}); drawClearances(); } return; }
+const note=(tr.querySelector('[data-f=note]')||{value:''}).value.trim()||null, status=b.dataset.act;
 if(status==='owes_fees'&&!note){ toast('Type the issue in the note box first so the new team knows.',true); return; }
 if(status==='not_same'&&!confirm(`Confirm ${c.athlete_first} ${c.athlete_last} (registering with ${teamName(c.to_team)}) is NOT the same athlete as the one on ${teamName(c.from_team)}?`)) return;
 if(status==='cleared'&&!confirm(`${c.flagged?'Confirm this is the same athlete and ':''}Approve ${c.athlete_first} ${c.athlete_last}'s transfer to ${teamName(c.to_team)}? This tells them there are no issues.`)) return;
 if(await run(sb.from('transfer_clearances').update({status,note}).eq('id',id),'Saved')){ Object.assign(c,{status,note,responded_by:me.email}); drawClearances(); refreshClrBadge(); }
+});
+
+/* ============================== FEES & FINES ============================== */
+// Charges are created automatically by the database (team fee once per season, $/athlete per registration, late fee for late
+// registrations, invitational fee per meet). Fines: Commissioner or the team's Conference President. Payments: Treasurer (or site admin).
+let feeRows=[], feeMeets=[], feeClr={};
+const KIND_LABEL={team_fee:'Team affiliation fee',athlete_fee:'Athlete certification fee',late_fee:'Late registration fee',invitational_fee:'Invitational fee',fine:'Fine'};
+const RULE_FINES=[['1500','Failure to host two track meets (II.B)'],['400','Failure to submit three hosting dates (II.B)'],['1000','Facility-relocation rule violation (II.D.16)'],['1000','Removing a majority of an age group from a VYC meet (IV.A.3.a) — +$100/day'],['500','Disrespecting a team rep or official (III.6)'],['500','High-school athlete competed (IV.A.2)'],['200','No help with set-up / clean-up at a Conference meet (IV.A.4)'],['25','Hiding athlete documentation during a review, per athlete (II.D.2)'],['200','Protest deposit (IV.A.5)']];
+const canFine=t=>COMM||isPresFor(t);
+async function showFeeNotice(){
+// Team admins: a notice at the top of the page when their team owes anything.
+if(SITE||!MYTEAM||!me.team_admin) return;
+const {data}=await sb.from('team_charges').select('kind,amount,due_on,description').eq('season_year',SEASON).eq('team_code',MYTEAM).eq('status','due');
+$('feeBadge').textContent=(data||[]).length+' due'; $('feeBadge').classList.toggle('hide',!(data&&data.length));
+if(!data||!data.length){ $('feeNotice').innerHTML=''; return; }
+const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
+const total=data.reduce((s,c)=>s+(+c.amount),0), fines=data.filter(c=>c.kind==='fine'), overdue=data.filter(c=>c.due_on&&c.due_on<today);
+$('feeNotice').innerHTML=`<div class="card" style="background:${overdue.length||fines.length?'#fef2f2;border:1px solid #dc2626':'#fffbeb;border:1px solid #f59e0b'}"><b>${teamName(MYTEAM)} owes ${money(total)}</b> for the ${SEASON} season${fines.length?` — including ${fines.length} fine${fines.length>1?'s':''}: ${fines.map(f=>esc(f.description)+' ('+money(f.amount)+(f.due_on?', due '+fmtD(f.due_on):'')+')').join('; ')}`:''}.${overdue.length?` <b>${overdue.length} item${overdue.length>1?'s are':' is'} past due.</b>`:''} Rule I.E: fines and fees must be paid before the IEC seeding meeting or your athletes can't be seeded. <button class="btn lite" onclick="show('fees')">See details</button></div>`;
+}
+async function paintFees(){
+$('pane').innerHTML='<p class="text-sm text-gray-500">Loading…</p>';
+try{
+  const [rows,{data:mts},{data:clr}]=await Promise.all([pageAll(()=>{ let q=sb.from('team_charges').select('*').eq('season_year',SEASON).order('team_code').order('assessed_at'); if(!SITE&&!COMM&&!TREAS&&!PRES) q=q.eq('team_code',MYTEAM); return q; }),
+    sb.from('meets').select('id,name,meet_date,is_invitational').eq('season_year',SEASON).order('meet_date'),
+    sb.from('team_fee_clearance').select('*').eq('season_year',SEASON)]);
+  feeRows=rows; feeMeets=mts||[]; feeClr={}; (clr||[]).forEach(c=>feeClr[c.team_code]=c);
+}catch(e){ $('pane').innerHTML='<p class="text-red-700">'+esc(e.message)+'</p>'; return; }
+const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
+const teamList=(SITE||COMM||TREAS)?teams.filter(t=>t.active!==false):PRES?teams.filter(t=>t.conference===PRES&&t.active!==false):teams.filter(t=>t.code===MYTEAM);
+const by={}; feeRows.forEach(c=>((by[c.team_code]??=[]).push(c)));
+const sum=(L,f)=>L.filter(f).reduce((s,c)=>s+(+c.amount),0);
+const gate=t=>{ const c=feeClr[t.code]||{}; const st=c.fees_paid?`<span class="pill ok">Fees paid ✓</span><div class="text-xs text-gray-500">${esc(c.paid_by||'')} ${esc(String(c.paid_at||'').slice(0,10))}</div>`:'<span class="pill bad">Entries locked</span>';
+  const ov=c.override?`<div class="text-xs" style="color:#6b21a8"><b>Overruled</b> by ${esc(c.override_by||'')}: ${esc(c.override_note||'')}</div>`:'';
+  const btn=(TREAS||SITE)?`<button class="btn ${c.fees_paid?'lite':'grn'}" data-gate="${c.fees_paid?'unpaid':'paid'}" data-team="${esc(t.code)}">${c.fees_paid?'Undo':'Confirm fees paid'}</button> `:'';
+  const ovb=(COMM||isPresFor(t.code))&&!c.fees_paid?`<button class="btn lite" data-gate="${c.override?'unoverride':'override'}" data-team="${esc(t.code)}">${c.override?'Remove override':'Overrule — allow entries'}</button>`:'';
+  return `${st}${ov}<div class="mt-1">${btn}${ovb}</div>`; };
+const totals=teamList.map(t=>{ const L=by[t.code]||[], due=L.filter(c=>c.status==='due'), ath=L.filter(c=>c.kind==='athlete_fee'&&c.status!=='void').length;
+  return `<tr><td>${esc(t.name)}<div class="mt-1">${gate(t)}</div></td><td>${ath}</td><td>${money(sum(L,c=>c.kind==='team_fee'&&c.status!=='void'))}</td><td>${money(sum(L,c=>c.kind==='athlete_fee'&&c.status!=='void'))}</td><td>${money(sum(L,c=>c.kind==='late_fee'&&c.status!=='void'))}</td><td>${money(sum(L,c=>c.kind==='invitational_fee'&&c.status!=='void'))}</td><td>${money(sum(L,c=>c.kind==='fine'&&c.status!=='void'))}</td><td>${money(sum(L,c=>c.status==='paid'))}</td><td class="font-bold ${due.length?'text-red-700':'text-green-800'}">${money(sum(due,()=>true))}${due.some(c=>c.due_on&&c.due_on<today)?' <span class="pill bad">past due</span>':''}</td></tr>`; }).join('');
+const grand=k=>money(sum(feeRows.filter(c=>teamList.some(t=>t.code===c.team_code)),k));
+$('pane').innerHTML=`<div class="card"><h3 class="font-bold mb-1">${SEASON} fees &amp; fines — ${SITE||COMM||TREAS?'all teams':PRES?CONF_NAME[PRES]+' Conference':teamName(MYTEAM)}</h3>
+<p class="text-xs text-gray-500 mb-1"><b>Meet entries are locked</b> for a team until the Treasurer confirms its certification fees are paid ("Confirm fees paid" also marks the team's due team, athlete and late fees as paid). Only the Commissioner or the team's Conference President can overrule the lock.</p>
+<p class="text-xs text-gray-500 mb-2">Charges add up automatically as athletes register: the team affiliation fee (rule II.A.7) once per season, the certification fee per athlete (rule X), the late fee for anyone registered after the certification date (rule I.C), and invitational fees per athlete entered (added per meet below). Rejected or removed athletes' unpaid fees are cancelled. Rule I.E: fines and invitational fees are due by League Finals; a team that hasn't paid before the IEC seeding meeting can't seed or compete at IECs. ${TREAS||SITE?'<b>You record payments.</b>':'Payments are recorded by the Treasurer.'}</p>
+<div class="scroll" style="max-height:none"><table class="t"><thead><tr><th>Team</th><th>Athletes</th><th>Team fee</th><th>Athlete fees</th><th>Late fees</th><th>Invitationals</th><th>Fines</th><th>Paid</th><th>Balance due</th></tr></thead><tbody>${totals}
+<tr class="font-bold" style="background:#f9fafb"><td>Total</td><td></td><td>${grand(c=>c.kind==='team_fee'&&c.status!=='void')}</td><td>${grand(c=>c.kind==='athlete_fee'&&c.status!=='void')}</td><td>${grand(c=>c.kind==='late_fee'&&c.status!=='void')}</td><td>${grand(c=>c.kind==='invitational_fee'&&c.status!=='void')}</td><td>${grand(c=>c.kind==='fine'&&c.status!=='void')}</td><td>${grand(c=>c.status==='paid')}</td><td>${grand(c=>c.status==='due')}</td></tr></tbody></table></div></div>
+${COMM||PRES?`<div class="card"><h3 class="font-bold mb-1">Assess a fine</h3><p class="text-xs text-gray-500 mb-2">Only the Commissioner or the team's Conference President can assess a fine (Code of Conduct; rule IX.2.g). The team sees it on their admin page with the due date.</p>
+<div class="flex flex-wrap gap-2 items-end"><div><label class="text-xs font-bold">Team</label><br><select id="fnTeam">${teams.filter(t=>t.active!==false&&canFine(t.code)).map(t=>`<option value="${esc(t.code)}">${esc(t.name)}</option>`).join('')}</select></div>
+<div><label class="text-xs font-bold">Rulebook fine</label><br><select id="fnPreset"><option value="">Custom…</option>${RULE_FINES.map(([a,d])=>`<option value="${a}|${esc(d)}">$${a} — ${esc(d)}</option>`).join('')}</select></div>
+<div><label class="text-xs font-bold">Amount $</label><br><input id="fnAmt" type="number" min="1" step="1" style="width:6rem"></div><div class="flex-1"><label class="text-xs font-bold">What for</label><br><input id="fnDesc" style="width:100%"></div>
+<div><label class="text-xs font-bold">Due by</label><br><input id="fnDue" type="date"></div><button class="btn red" id="fnAdd">Assess fine</button></div></div>`:''}
+${(COMM||TREAS||SITE)&&feeMeets.some(m=>m.is_invitational)?`<div class="card"><h3 class="font-bold mb-1">Invitational fees</h3><p class="text-xs text-gray-500 mb-2">Per athlete entered (League Setup sets the amount). Adds or refreshes one charge per team for the meet, based on the entries. Mark meets as invitationals on Meet Admin.</p>
+<div class="flex flex-wrap gap-2 items-end"><select id="invMeet">${feeMeets.filter(m=>m.is_invitational).map(m=>`<option value="${m.id}">${esc(m.name)} — ${esc(m.meet_date)}</option>`).join('')}</select><button class="btn pri" id="invAdd">Add invitational fees from entries</button></div></div>`:''}
+<div class="card"><h3 class="font-bold mb-2">All charges</h3>
+<div class="flex flex-wrap gap-2 mb-2"><select id="fTeam">${opts(teamList.map(t=>[t.code,t.name]),'','All teams')}</select><select id="fKind">${opts(Object.entries(KIND_LABEL),'','Any type')}</select><select id="fStat">${opts([['due','Due'],['paid','Paid'],['void','Cancelled']],'due','Any status')}</select></div>
+<div class="scroll"><table class="t"><thead><tr><th>Team</th><th>Type</th><th>Description</th><th>Amount</th><th>Due</th><th>Status</th><th></th></tr></thead><tbody id="fBody"></tbody></table></div></div>`;
+['fTeam','fKind','fStat'].forEach(i=>$(i).onchange=drawFees); drawFees();
+if($('fnPreset')) $('fnPreset').onchange=()=>{ const [a,d]=$('fnPreset').value.split('|'); if(a){ $('fnAmt').value=a; $('fnDesc').value=d; } };
+if($('fnAdd')) $('fnAdd').onclick=async()=>{ const team=$('fnTeam').value, amt=+$('fnAmt').value, desc=$('fnDesc').value.trim(), due=$('fnDue').value||null;
+  if(!amt||!desc){ toast('Enter the amount and what the fine is for.',true); return; }
+  if(!confirm(`Fine ${teamName(team)} ${money(amt)} for: ${desc}${due?' — due '+fmtD(due):''}?`)) return;
+  const rule=($('fnPreset').value.split('|')[1]||'').match(/\(([^)]+)\)\s*$/); const {error}=await sb.rpc('assess_fine',{p_team:team,p_amount:amt,p_description:desc,p_due:due,p_rule:rule?rule[1]:null});
+  if(error){ toast(error.message,true); return; } toast('Fine assessed — the team will see it'); paintFees(); };
+if($('invAdd')) $('invAdd').onclick=async()=>{ const id=$('invMeet').value, m=feeMeets.find(x=>x.id===id); if(!confirm(`Add invitational fees for "${m.name}" from its entries (one charge per team)?`)) return;
+  const {data,error}=await sb.rpc('add_invitational_fees',{p_meet:id}); if(error){ toast(error.message,true); return; } toast(`Added charges for ${data} team(s)`); paintFees(); };
+}
+function drawFees(){
+const t=$('fTeam').value, k=$('fKind').value, s=$('fStat').value, today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
+const L=feeRows.filter(c=>(!t||c.team_code===t)&&(!k||c.kind===k)&&(!s||c.status===s));
+const canSettle=TREAS||SITE;
+$('fBody').innerHTML=L.map(c=>`<tr data-id="${c.id}"><td>${esc(teamName(c.team_code))}</td><td>${esc(KIND_LABEL[c.kind]||c.kind)}${c.rule_ref?`<div class="text-xs text-gray-400">Rule ${esc(c.rule_ref)}</div>`:''}</td><td>${esc(c.description||'')}${c.kind==='fine'&&c.assessed_by?`<div class="text-xs text-gray-500">by ${esc(c.assessed_by)}</div>`:''}${c.paid_note?`<div class="text-xs text-gray-500">${esc(c.paid_note)}</div>`:''}</td><td class="font-mono">${money(c.amount)}</td><td>${c.due_on?esc(c.due_on):''}${c.status==='due'&&c.due_on&&c.due_on<today?' <span class="pill bad">past due</span>':''}</td>
+<td>${c.status==='paid'?`<span class="pill ok">Paid</span><div class="text-xs text-gray-500">${esc(c.paid_on||'')} · ${esc(c.paid_by||'')}</div>`:c.status==='void'?'<span class="pill gray">Cancelled</span>':'<span class="pill warn">Due</span>'}</td>
+<td class="whitespace-nowrap">${canSettle&&c.status==='due'?'<button class="btn grn" data-act="paid">Mark paid</button> ':''}${canSettle&&c.status==='paid'?'<button class="btn lite" data-act="due">Undo paid</button> ':''}${c.status==='due'&&(c.kind==='fine'?(COMM||SITE||c.assessed_by===me.email.toLowerCase()):canSettle)?'<button class="btn lite" data-act="void">Cancel</button>':''}</td></tr>`).join('')||'<tr><td colspan="7" class="p-3 text-gray-500">Nothing matches.</td></tr>';
+}
+document.addEventListener('click',async e=>{
+const g=e.target.closest('#pane button[data-gate]'); if(g&&tab==='fees'){ const team=g.dataset.team, act=g.dataset.gate; let note=null;
+  if(act==='paid'){ note=prompt(`Confirm ALL certification fees for ${teamName(team)} are paid? This unlocks meet entries and marks their due team/athlete/late fees as paid.\n\nNote (check #, etc.):`); if(note===null) return; }
+  if(act==='unpaid'&&!confirm(`Mark ${teamName(team)}'s certification fees as NOT paid? Their meet entries will be locked again (unless overruled).`)) return;
+  if(act==='override'){ note=prompt(`Overrule the fee lock for ${teamName(team)} — their athletes can be entered in meets while fees are outstanding. Reason (required):`); if(!note) return; }
+  if(act==='unoverride'&&!confirm(`Remove the override for ${teamName(team)}? Their entries will be locked until fees are confirmed paid.`)) return;
+  const fn=act==='paid'||act==='unpaid'?'set_team_fees_paid':'set_team_fee_override', args=fn==='set_team_fees_paid'?{p_team:team,p_season:SEASON,p_paid:act==='paid',p_note:note}:{p_team:team,p_season:SEASON,p_on:act==='override',p_note:note};
+  const {error}=await sb.rpc(fn,args); if(error){ toast(error.message,true); return; } toast('Saved'); paintFees(); return; }
+const b=e.target.closest('#fBody button[data-act]'); if(!b||tab!=='fees') return; const id=b.closest('tr').dataset.id, c=feeRows.find(x=>x.id===id), act=b.dataset.act;
+let note=null; if(act==='paid'){ note=prompt(`Mark ${money(c.amount)} (${c.description}) for ${teamName(c.team_code)} as PAID. How was it paid? (check #, cash, Zelle…)`); if(note===null) return; }
+if(act==='void'){ note=prompt('Cancel this charge? Reason:'); if(note===null) return; }
+if(act==='due'&&!confirm('Mark this charge as unpaid again?')) return;
+const {error}=await sb.rpc('settle_charge',{p_id:id,p_status:act,p_note:note}); if(error){ toast(error.message,true); return; } toast('Saved'); paintFees();
 });
 
 /* ============================ MEETS & RESULTS ============================ */
@@ -427,6 +731,8 @@ if(error){ toast(error.message,true); return; } toast('Saved'); if(!id&&data&&da
 /* ================================ LEAGUE SETUP ================================ */
 async function paintLeague(){
 await loadTeams(); const {data:st}=await sb.from('app_settings').select('*'); const S=Object.fromEntries((st||[]).map(x=>[x.key,x.value]));
+const fmtD=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}):'';
+const addDays=(d,n)=>{ const x=new Date(d+'T12:00:00'); x.setDate(x.getDate()+n); return x.toISOString().slice(0,10); };
 $('pane').innerHTML=`<div class="card"><h3 class="font-bold mb-2">Teams</h3>
 <p class="text-xs text-gray-500 mb-2">Full team name, Eastern or Western League, and whether the team is active. The team code (the short Hy-Tek code) can't be changed once created — add a new team instead. Changes show across the app the next time a page loads.</p>
 <div class="scroll"><table class="t"><thead><tr><th>Code</th><th>Team name</th><th>League</th><th>Active</th><th>Order</th><th></th></tr></thead><tbody id="tBody">
@@ -438,6 +744,13 @@ ${teams.map(t=>`<tr data-code="${esc(t.code)}"><td class="font-mono font-bold">$
 <div><label class="text-xs font-bold">League</label><br><select id="nConf"><option value="East">Eastern</option><option value="West">Western</option></select></div><button class="btn grn" id="nAdd">+ Add team</button></div></div>
 <div class="card"><h3 class="font-bold mb-2">Season</h3><div class="flex flex-wrap gap-2 items-end"><div><label class="text-xs font-bold">Season year</label><br><input id="sYear" type="number" value="${esc(S.season_year||CFG.SEASON_YEAR)}" style="width:7rem"></div><button class="btn pri" id="sSave">Save</button></div>
 <p class="text-xs text-gray-500 mt-2">Used for background-check expiry and similar year math.</p></div>
+<div class="card"><h3 class="font-bold mb-1">Roster certification date — ${esc(S.season_year||CFG.SEASON_YEAR)}</h3>
+<p class="text-xs text-gray-500 mb-2">Voted by the Board every season (rule X). Any athlete registered <b>after</b> this date is a late registration (+ late fee, rule I.C). Athletes can be added until <b>midnight of the 2nd meet</b> on the schedule (rule I.C; if no schedule is posted yet, 14 days after certification). After that, only a late pass — requested by the Conference President and approved by the Commissioner — lets an athlete in.</p>
+<div class="flex flex-wrap gap-2 items-end"><div><label class="text-xs font-bold">Certification date</label><br><input id="certDate" type="date" value="${esc(S['certification_date_'+(S.season_year||CFG.SEASON_YEAR)]||'')}"></div><button class="btn pri" id="certSave">Save</button>
+<span class="text-sm text-gray-600 self-center" id="certInfo"></span></div></div>
+<div class="card"><h3 class="font-bold mb-1">Fees — ${esc(S.season_year||CFG.SEASON_YEAR)}</h3>
+<p class="text-xs text-gray-500 mb-2">Set by the Board each season. The rulebook fixes the team affiliation fee at $25 (II.A.7) and the late fee at $10 per athlete (I.C); the per-athlete certification fee and the invitational fee are whatever the Board votes. Charges are added automatically as athletes register (Fees &amp; Fines tab).</p>
+<div class="flex flex-wrap gap-3 items-end">${[['team','Team affiliation fee'],['athlete','Per-athlete certification fee'],['late','Late fee per athlete'],['invitational','Invitational fee per athlete']].map(([k,l])=>`<div><label class="text-xs font-bold">${l}</label><br>$ <input id="fee_${k}" type="number" min="0" step="1" style="width:5rem" value="${esc(S['fee_'+k+'_'+(S.season_year||CFG.SEASON_YEAR)]||'')}"></div>`).join('')}<button class="btn pri" id="feeSave">Save fees</button></div></div>
 <div class="card"><h3 class="font-bold mb-1">Competition numbers — ${esc(S.season_year||CFG.SEASON_YEAR)}</h3>
 <p class="text-xs text-gray-500 mb-2">Teams in alphabetical order, starting at 100. Each team's block = its certified athletes last season + a 20-number cushion. New registrations get the lowest open number in their team's block automatically; if a block fills up, extras get numbers after the last team's block.</p>
 <div id="cbPane" class="text-sm text-gray-500">Loading…</div>
@@ -449,6 +762,11 @@ $('nAdd').onclick=async()=>{ const code=$('nCode').value.trim().toUpperCase(), n
 if(await run(sb.from('league_teams').insert({code,name,conference:$('nConf').value,active:true,sort_order:100}),'Team added')) paintLeague(); };
 $('sSave').onclick=()=>run(sb.from('app_settings').upsert({key:'season_year',value:String($('sYear').value)}),'Saved');
 const season=+(S.season_year||CFG.SEASON_YEAR);
+const {data:m2}=await sb.rpc('season_meet_date',{p_season:season,p_nth:2});
+const certInfo=()=>{ const d=$('certDate').value; $('certInfo').textContent=d?`Late registrations start ${fmtD(addDays(d,1))}; registration closes after ${m2?fmtD(m2)+' (2nd meet)':fmtD(addDays(d,14))+' (no schedule posted yet — 14-day fallback)'}.`:'Not set — nothing is marked late and registration never closes.'; };
+certInfo(); $('certDate').onchange=certInfo;
+$('certSave').onclick=()=>run(sb.from('app_settings').upsert({key:'certification_date_'+season,value:$('certDate').value||''}),'Certification date saved');
+$('feeSave').onclick=()=>run(sb.from('app_settings').upsert(['team','athlete','late','invitational'].map(k=>({key:'fee_'+k+'_'+season,value:$('fee_'+k).value||''}))),'Fees saved');
 const [{data:blocks},{data:used}]=await Promise.all([sb.from('comp_blocks').select('*').eq('season_year',season).order('sort_order'),
   sb.from('registrations').select('team_code,comp_number').eq('season_year',season).not('comp_number','is',null)]);
 const usedBy={}; (used||[]).forEach(u=>usedBy[u.team_code]=(usedBy[u.team_code]||0)+1);

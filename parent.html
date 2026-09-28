@@ -92,7 +92,7 @@ async function loadMyAthletes(){
         <div class="font-bold">${esc(r.first_name)} ${esc(r.last_name)} <span class="text-gray-500 font-normal text-sm">${esc(r.gender)} · ${esc(r.division)} · ${esc(r.sport)}</span></div>
         <div class="text-xs text-gray-500">Submitted ${fmtDate(r.created_at)}</div>
       </div>
-      <span class="pill ${pillCls[r.status]||'bg-gray-200'}">${r.status==='submitted'?'Awaiting review':r.status}</span>
+      <span class="pill ${pillCls[r.status]||'bg-gray-200'}">${({submitted:'Awaiting team review',reviewed:'Team reviewed — awaiting certification',verified:'Certified',rejected:'Rejected'})[r.status]||r.status}${r.is_late?' · late registration':''}</span>
     </div>`).join('');
 }
 

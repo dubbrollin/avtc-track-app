@@ -110,14 +110,16 @@
 
       <!-- ROSTER & INTAKE (head coaches only, opened from the Roster button) -->
       <div id="rosterView" class="hidden"><div class="max-w-5xl mx-auto">
+          <div id="feeBanner"></div>
           <div class="card">
             <div class="col-head"><h2 class="flex-1">Roster <span id="count" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
             <div class="flex flex-wrap items-center gap-2 mb-2">
-              <select id="filter" class="flex-1 min-w-0"><option value="">All</option><option value="submitted">Needs review</option><option value="verified">Verified</option><option value="rejected">Rejected</option></select>
+              <select id="filter" class="flex-1 min-w-0"><option value="">All</option><option value="submitted">Needs team review</option><option value="reviewed">Team reviewed — waiting for the president</option><option value="verified">Certified</option><option value="rejected">Rejected</option></select>
               <button id="runChecks" class="btn bg-gray-800 text-white">Run ID checks</button>
               <button id="exportCsv" class="btn bg-gray-200">Export CSV</button>
               <button id="exportHytek" class="btn bg-gray-200">Hy-Tek roster</button>
             </div>
+            <p class="text-xs text-gray-600 mb-2" id="certNote">You do the <b>first review</b>: check the proof of birth and details, then mark the athlete <b>Team reviewed</b>. Your Conference President gives the final <b>Certified</b> — only certified athletes can be entered in meets. Only the president can change an athlete's information.</p>
             <p id="rosterNote" class="text-xs text-gray-500 mb-2 hidden">You're seeing names, divisions and status only — full registration details (documents, contact info, medical info) are visible to team admins only.</p>
             <p id="msg" class="text-sm text-gray-600 mb-2"></p>
             <div id="list"></div>
@@ -129,7 +131,7 @@
           </div>
           <div class="card" id="clearCard">
             <div class="col-head"><h2 class="flex-1">Transfer requests <span id="clearCount" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
-            <p class="text-xs text-gray-500 mb-2">Athletes from your team last season who are registering with another team. Approve the transfer if there are no issues (for example, no fees owed from last season).</p>
+            <p class="text-xs text-gray-500 mb-2">Athletes from your team last season who are registering with another team. Confirm they're in good standing (no balance owed, no Code of Conduct issue — rule IV.A.3.c) or report the issue. The joining team and the Commissioner must also approve before the athlete can be certified.</p>
             <div id="clearList"></div>
           </div>
       </div></div>
@@ -275,7 +277,7 @@ async function loadMe(){
   $('runChecks').style.display=fullAccess?'':'none';
   $('exportCsv').style.display=fullAccess?'':'none';
   $('exportHytek').style.display=fullAccess?'':'none';
-  $('rosterNote').classList.toggle('hidden',fullAccess);
+  $('rosterNote').classList.toggle('hidden',fullAccess); $('certNote').classList.toggle('hidden',!fullAccess);
   $('coachesCard').style.display=fullAccess?'':'none';
   $('clearCard').style.display=fullAccess?'':'none';
   $('uploadCard').style.display=fullAccess?'':'none'; // uploading results = team admins (and timers), not regular coaches
@@ -305,7 +307,7 @@ async function load(){
     if(error){ $('msg').textContent='Could not load: '+error.message; return; }
     rows=data||[];
   }
-  if(fullAccess) await loadClearances();
+  if(fullAccess){ await loadClearances(); loadFeeNotice(); }
   render();
   const pending=rows.filter(r=>r.dob_check_status==='pending');
   if(fullAccess && pending.length) runChecks(pending);
@@ -337,8 +339,26 @@ function clearPill(c){
   if(!c) return '';
   const m=c.vus&&c.status==='pending'?['bg-purple-100 text-purple-800','Valley United move — waiting for approval (can\'t verify yet)']:
     c.flagged&&c.status==='pending'?['bg-orange-100 text-orange-800','Possible transfer — verifying']:
-    {pending:['bg-yellow-100 text-yellow-800','Transfer pending'],cleared:['bg-green-100 text-green-800','Transfer approved'],owes_fees:['bg-red-100 text-red-800','Transfer issue'],not_same:['bg-gray-200 text-gray-700','Not the same athlete']}[c.status];
+    c.status==='cleared'&&!c.to_team_approved_at?['bg-yellow-100 text-yellow-800','Transfer — needs our approval']:
+    c.status==='cleared'&&!c.commissioner_approved_at?['bg-yellow-100 text-yellow-800','Transfer — waiting for the Commissioner']:
+    {pending:['bg-yellow-100 text-yellow-800','Transfer — waiting for former team'],cleared:['bg-green-100 text-green-800','Transfer approved'],owes_fees:['bg-red-100 text-red-800','Transfer issue'],not_same:['bg-gray-200 text-gray-700','Not the same athlete']}[c.status];
   return `<span class="pill ${m[0]}" title="${c.flagged?'Parent said no other team — ':''}${esc(TEAM_NAME(c.from_team))}${c.note?' — '+esc(c.note):''}">${m[1]}</span>`;
+}
+// Rule IV.A.3.c: the joining team gives written approval too (then the Commissioner).
+async function approveJoining(cid){
+  const c=clearIn[Object.keys(clearIn).find(k=>clearIn[k].id===cid)]; if(!c) return;
+  if(!confirm(`${TEAM_NAME(myCoach.team_code)} approves accepting ${c.athlete_first} ${c.athlete_last} from ${TEAM_NAME(c.from_team)}? The Commissioner then gives final approval.`)) return;
+  const {error}=await sb.from('transfer_clearances').update({to_team_approved_at:new Date().toISOString()}).eq('id',cid);
+  if(error){ alert('Could not save: '+error.message); return; }
+  await loadClearances(); render();
+}
+// Fees & fines owed by this team (rule I.E: unpaid before the IEC seeding meeting = athletes can't be seeded).
+async function loadFeeNotice(){
+  const el=$('feeBanner'); if(!el) return;
+  const {data}=await sb.from('team_charges').select('kind,amount,due_on,description').eq('team_code',myCoach.team_code).eq('status','due');
+  if(!data||!data.length){ el.innerHTML=''; return; }
+  const total=data.reduce((s,c)=>s+(+c.amount),0), fines=data.filter(c=>c.kind==='fine');
+  el.innerHTML=`<div class="card" style="background:${fines.length?'#fef2f2;border:1px solid #dc2626':'#fffbeb;border:1px solid #f59e0b'}"><b>${esc(TEAM_NAME(myCoach.team_code))} owes $${total.toFixed(2).replace(/\.00$/,'')}</b> to the conference${fines.length?` — including ${fines.length} fine${fines.length>1?'s':''}: ${fines.map(f=>esc(f.description)+' ($'+(+f.amount).toFixed(0)+(f.due_on?', due '+fmtDate(f.due_on):'')+')').join('; ')}`:''}. <a class="underline" href="admin.html">Details on the Team Admin page →</a></div>`;
 }
 function renderClearances(){
   const pend=clearOut.filter(c=>c.status==='pending');
@@ -386,7 +406,7 @@ async function answerClearance(id,status,note){
 }
 function approveTransfer(id){
   const c=clearOut.find(x=>x.id===id); if(!c) return;
-  if(!confirm(`${c.flagged?'Confirm this is the same athlete and ':''}Approve ${c.athlete_first} ${c.athlete_last}'s transfer to ${TEAM_NAME(c.to_team)}? This tells them there are no issues.`)) return;
+  if(!confirm(`${c.flagged?'Confirm this is the same athlete and ':''}Confirm ${c.athlete_first} ${c.athlete_last} is in good standing with ${TEAM_NAME(c.from_team)} (no balance owed, no Code of Conduct issue) and OK to transfer to ${TEAM_NAME(c.to_team)}?`)) return;
   answerClearance(id,'cleared',null);
 }
 function flagTransfer(id){
@@ -396,6 +416,8 @@ function flagTransfer(id){
 }
 function xferFor(r){ return xferById[r.id]||xferByKey[xferKey(r.first_name,r.last_name,r.dob)]; }
 const xferLabel=x=>x.flagged?`Possible transfer to ${esc(TEAM_NAME(x.to_team))} — please verify`:`Requesting transfer to ${esc(TEAM_NAME(x.to_team))}`;
+const STATUS_LABEL={submitted:'needs team review',reviewed:'team reviewed',verified:'certified',rejected:'rejected',archived:'archived'};
+const statusPill=s=>`<span class="pill ${s==='verified'?'bg-green-600 text-white':s==='rejected'?'bg-red-600 text-white':s==='reviewed'?'bg-blue-100 text-blue-800':'bg-gray-200'}">${STATUS_LABEL[s]||s}</span>`;
 function pill(r){
   const s=r.dob_check_status;
   const c={match:'bg-green-100 text-green-800',mismatch:'bg-red-100 text-red-800',pending:'bg-yellow-100 text-yellow-800',unreadable:'bg-orange-100 text-orange-800',error:'bg-red-100 text-red-800'}[s];
@@ -411,7 +433,7 @@ function renderDashRoster(){
   const by={}; rows.forEach(r=>{ ((by[r.division]??={})[r.gender]??=[]).push(r); });
   const nm=r=>{ const x=fullAccess&&xferFor(r);
     if(x) return `<span class="xfer" onclick="showXfer('${x.id}')" title="Click to review this transfer">${esc(r.last_name)}, ${esc(r.first_name)}<small>${xferLabel(x)}</small></span>`;
-    return `<span>${r.comp_number?`<span class="text-blue-700 text-xs">#${r.comp_number}</span> `:''}${esc(r.last_name)}, ${esc(r.first_name)}${r.status==='verified'?'':` <span class="text-gray-400 text-xs">· ${esc(r.status)}</span>`}</span>`; };
+    return `<span>${r.comp_number?`<span class="text-blue-700 text-xs">#${r.comp_number}</span> `:''}${esc(r.last_name)}, ${esc(r.first_name)}${r.status==='verified'?'':` <span class="text-gray-400 text-xs">· ${esc(STATUS_LABEL[r.status]||r.status)}</span>`}</span>`; };
   const sortN=(p,q)=>(p.last_name+p.first_name).localeCompare(q.last_name+q.first_name);
   el.innerHTML=Object.keys(by).sort((x,y)=>order.indexOf(x)-order.indexOf(y)).map(d=>{
     const total=(by[d].Boy||[]).length+(by[d].Girl||[]).length;
@@ -431,7 +453,7 @@ function render(){
         <div class="flex-1 min-w-0">
           <div class="font-bold text-base">${r.comp_number?`<span class="text-blue-700">#${r.comp_number}</span> `:''}${esc(r.last_name)}, ${esc(r.first_name)} <span class="text-gray-500 font-normal text-sm">${r.gender} · ${r.division} · ${esc(r.sport)}</span></div>
         </div>
-        <span class="pill ${r.status==='verified'?'bg-green-600 text-white':r.status==='rejected'?'bg-red-600 text-white':'bg-gray-200'}">${r.status}</span>
+        ${statusPill(r.status)}
       </div>
     </div>`).join('');
     return;
@@ -439,22 +461,24 @@ function render(){
   $('list').innerHTML=shown.map(r=>{ const x=xferFor(r); return `
   <div class="card ${x?'xferCard':''}" data-id="${r.id}">
     ${x?`<div class="flex flex-wrap items-center gap-2 mb-2"><b class="text-amber-800 flex-1">${xferLabel(x)}</b>${x.flagged?`<button class="btn bg-amber-500 text-white" onclick="showXfer('${x.id}')">Review</button>`:`<button class="btn bg-green-600 text-white" onclick="approveTransfer('${x.id}')">✓ Yes, OK to transfer — no issues</button><button class="btn bg-gray-200 text-sm" onclick="flagTransfer('${x.id}')">There's an issue…</button>`}</div>`:''}
+    ${clearIn[r.id]&&clearIn[r.id].status==='cleared'&&!clearIn[r.id].to_team_approved_at?`<div class="flex flex-wrap items-center gap-2 mb-2"><span class="text-sm flex-1"><b>Transfer from ${esc(TEAM_NAME(clearIn[r.id].from_team))}</b> — their team confirmed good standing. Your team's written approval is needed too (rule IV.A.3.c).</span><button class="btn bg-green-600 text-white" onclick="approveJoining('${clearIn[r.id].id}')">✓ We accept this athlete</button></div>`:''}
     <div class="flex flex-wrap items-center gap-2">
       <div class="flex-1 min-w-0">
         <div class="font-bold text-base">${r.comp_number?`<span class="text-blue-700">#${r.comp_number}</span> `:''}${esc(r.last_name)}, ${esc(r.first_name)} <span class="text-gray-500 font-normal text-sm">${r.gender} · ${r.division} (${r.age_on_dec31}) · ${esc(r.sport)}</span></div>
         <div class="text-xs text-gray-500">DOB ${fmtDate(r.dob)} · submitted ${fmtDate(r.created_at)} · ${r.is_returning?'Returning':'New athlete'}${r.ran_for_other_team?' · last season: '+esc(r.prior_team||'another team'):''}${r.medical_option==='conditions'?' · <b class="text-red-700">Medical conditions noted</b>':''}</div>
       </div>
-      ${clearPill(clearIn[r.id])} ${pill(r)} <span class="pill ${r.status==='verified'?'bg-green-600 text-white':r.status==='rejected'?'bg-red-600 text-white':'bg-gray-200'}">${r.status}</span>
+      ${clearPill(clearIn[r.id])} ${pill(r)} ${r.is_late?'<span class="pill bg-red-100 text-red-800">Late registration</span>':''} ${statusPill(r.status)}
     </div>
     ${r.dob_check_note?`<div class="text-xs mt-1 ${r.dob_check_status==='match'?'text-green-700':'text-red-700'}">${esc(r.dob_check_note)}</div>`:''}
     <div class="flex flex-wrap gap-2 mt-3">
       ${r.proof_path?`<button class="btn bg-gray-200" onclick="viewProof('${r.id}')">View proof of birth</button>`:'<span class="pill bg-green-100 text-green-800">Returning — verified from last season\'s record (no proof needed)</span>'}
       <button class="btn bg-gray-200" onclick="details('${r.id}')">Details</button>
       <button class="btn bg-gray-200" onclick="makePdf('${r.id}')">Download forms PDF</button>
-      ${r.status!=='verified'?(clearIn[r.id]&&clearIn[r.id].vus&&!['cleared','not_same'].includes(clearIn[r.id].status)
-        ?`<span class="text-xs text-purple-800 font-semibold">Can't verify yet — waiting for ${esc(TEAM_NAME(clearIn[r.id].from_team))} to approve the Valley United move</span>`
-        :`<button class="btn bg-green-600 text-white" onclick="setStatus('${r.id}','verified')">✓ Verified</button>`):''}
-      ${r.status!=='rejected'?`<button class="btn bg-red-100 text-red-800" onclick="setStatus('${r.id}','rejected')">Reject</button>`:''}
+      ${r.status==='submitted'||r.status==='rejected'?(clearIn[r.id]&&clearIn[r.id].vus&&!['cleared','not_same'].includes(clearIn[r.id].status)
+        ?`<span class="text-xs text-purple-800 font-semibold">Can't review yet — waiting for ${esc(TEAM_NAME(clearIn[r.id].from_team))} to approve the Valley United move</span>`
+        :`<button class="btn bg-blue-600 text-white" onclick="setStatus('${r.id}','reviewed')">✓ Team reviewed</button>`):''}
+      ${r.status==='reviewed'?'<span class="text-xs text-blue-800 font-semibold self-center">Waiting for the Conference President to certify</span>':''}
+      ${r.status!=='rejected'&&r.status!=='verified'?`<button class="btn bg-red-100 text-red-800" onclick="setStatus('${r.id}','rejected')">Reject</button>`:''}
       ${r.dob_check_status!=='pending'&&r.proof_path?`<button class="btn bg-gray-100 text-sm" onclick="runChecks([rows.find(x=>x.id==='${r.id}')],true)">Re-run ID check</button>`:''}
     </div>
     <div id="proof-${r.id}" class="mt-2"></div>
@@ -519,17 +543,17 @@ function details(id){
     <div><b>Athlete signature (${r.athlete_signature_method}):</b><br><img src="${r.athlete_signature}" class="h-12 border rounded bg-white"></div>
     <div><b>Parent signature (${r.parent_signature_method}):</b><br><img src="${r.parent_signature}" class="h-12 border rounded bg-white"></div>
     ${r.name_extracted?`<div class="sm:col-span-2"><b>Name read from document:</b> ${esc(r.name_extracted)}${r.dob_extracted?` · DOB read: ${fmtDate(r.dob_extracted)}`:''}</div>`:''}
-    ${r.verified_by?`<div class="sm:col-span-2"><b>Verified by:</b> ${esc(r.verified_by)} on ${fmtDate(r.verified_at)}</div>`:''}
+    ${r.reviewed_by?`<div class="sm:col-span-2"><b>Team reviewed by:</b> ${esc(r.reviewed_by)} on ${fmtDate(r.reviewed_at)}</div>`:''}
+    ${r.verified_by?`<div class="sm:col-span-2"><b>Certified by:</b> ${esc(r.verified_by)} on ${fmtDate(r.verified_at)}</div>`:''}
   </div>`;
 }
 async function setStatus(id,status){
   const r=rows.find(x=>x.id===id);
-  if(status==='verified' && r.dob_check_status!=='match' && !confirm(`The automatic ID check did not come back as a match (${r.dob_check_status}). Have you compared the document by eye? Mark as verified anyway?`)) return;
+  if(status==='reviewed' && r.proof_path && r.dob_check_status!=='match' && !confirm(`The automatic ID check did not come back as a match (${r.dob_check_status}). Have you compared the document by eye? Mark as team reviewed anyway?`)) return;
   if(status==='rejected' && !confirm('Mark this registration as rejected?')) return;
-  const upd={status, verified_by:status==='verified'?user.email:null, verified_at:status==='verified'?new Date().toISOString():null};
-  const {error}=await sb.from('registrations').update(upd).eq('id',id);
+  const {error}=await sb.from('registrations').update({status}).eq('id',id);
   if(error){ alert('Could not save: '+error.message); return; }
-  Object.assign(r,upd); render();
+  r.status=status; if(status==='reviewed'){ r.reviewed_by=user.email; r.reviewed_at=new Date().toISOString(); } render();
 }
 async function runChecks(list,force){
   list=(list||[]).filter(r=>r&&r.proof_path); // returning athletes verified from last season's record have no document to check
@@ -555,7 +579,7 @@ async function makePdf(id){
 $('exportHytek').onclick=()=>{
   const f=$('filter').value; const shown=rows.filter(r=>!f||r.status===f);
   if(!shown.length){ alert('Nothing to export.'); return; }
-  if(f!=='verified' && !confirm(`This will include ${shown.length} athlete(s), some not yet verified. Tip: set the filter to "Verified" to export only verified athletes. Continue?`)) return;
+  if(f!=='verified' && !confirm(`This will include ${shown.length} athlete(s), some not yet certified. Tip: set the filter to "Certified" to export only certified athletes. Continue?`)) return;
   const txt=hytekRoster(shown, CFG);
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'})); a.download=`${myCoach.team_code||'roster'}_hytek_roster_${CFG.SEASON_YEAR}.txt`; a.click();
 };
@@ -581,6 +605,11 @@ function regMeetOpen(m){ return m.status==='open' && new Date()<=new Date(m.entr
 async function loadRegMeet(){
   const m=curRegMeet(); if(!m) return;
   $('regMeetInfo').textContent=`${m.location||''} · Entries ${regMeetOpen(m)?'close':'closed'} ${new Date(m.entries_close).toLocaleString()}`;
+  // Rule I.E gate: no meet entries until the Treasurer confirms the team's certification fees are paid (Commissioner / Conference President can overrule).
+  try{ const {data:ok}=await sb.rpc('team_fees_cleared',{p_team:myCoach.team_code,p_season:m.season_year||await window.currentSeason()});
+    let w=$('feeGateWarn'); if(!w){ w=document.createElement('div'); w.id='feeGateWarn'; $('regMeetInfo').after(w); }
+    w.innerHTML=ok?'':`<div class="rounded-lg border-2 border-red-500 bg-red-50 p-3 text-sm mb-2"><b>Meet entries are locked for ${esc(TEAM_NAME(myCoach.team_code))}.</b> The Treasurer hasn't confirmed that your team's certification fees are paid (VYC rule I.E). Once they do — or the Commissioner or your Conference President overrules it — you can enter athletes.</div>`;
+  }catch(e){}
   const [e,n]=await Promise.all([
     sb.from('meet_events').select('*').eq('meet_id',m.id),
     sb.from('entries').select('*').eq('meet_id',m.id)

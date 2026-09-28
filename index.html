@@ -70,6 +70,7 @@
 
   <!-- ================= PARENT / ATHLETE FORM ================= -->
   <form id="parentForm">
+  <div id="lateNotice" class="hidden"></div>
   <div class="card">
     <h2 class="font-bold text-lg mb-2">Team</h2>
     <label class="f req">Team</label>
@@ -92,6 +93,16 @@
       <div id="pastMatches" class="sm:col-span-2 hidden"></div>
       <div><label class="f req">Date of birth</label><input type="date" id="dob" required></div>
       <div><label class="f">Division (auto)</label><input id="divisionShow" disabled></div>
+      <div id="hsWrap" class="hidden sm:col-span-2 rounded-lg border border-amber-300 bg-amber-50 p-2">
+        <label class="f req">Is this athlete in high school?</label>
+        <div class="flex gap-4 text-sm mt-1"><label class="flex items-center gap-1"><input type="radio" name="inHs" value="no"> No</label><label class="flex items-center gap-1"><input type="radio" name="inHs" value="yes"> Yes</label></div>
+        <div id="hsTeamWrap" class="hidden mt-2">
+          <label class="f req">Are they running with their current high school track team (CIF or City)?</label>
+          <div class="flex gap-4 text-sm mt-1"><label class="flex items-center gap-1"><input type="radio" name="hsTrack" value="no"> No</label><label class="flex items-center gap-1"><input type="radio" name="hsTrack" value="yes"> Yes</label></div>
+          <p id="hsReject" class="hidden text-sm text-red-700 font-semibold mt-1">This athlete can't be registered: running for a high school track team and a VYC team in the same season is against California CIF rules (VYC rule IV.A.2).</p>
+        </div>
+        <p class="text-xs text-gray-600 mt-1">VYC rule IV.A.2: an athlete who trains or competes with a high school track team is not eligible for Valley Youth Conference competition this season.</p>
+      </div>
       <div><label class="f req">Address</label><input id="address" required></div>
       <div><label class="f req">City</label><input id="city" required></div>
       <div><label class="f req">Zip</label><input id="zip" required></div>
@@ -127,7 +138,8 @@
       ✓ <b>Not needed — returning athlete.</b> We'll confirm the name and birth date match last season's verified record. Make sure the date of birth above is correct.
     </div>
     <div id="proofNeeded">
-      <p class="text-xs text-gray-500 mb-2">Upload a birth certificate, passport, or other official proof of birth (PDF or photo).</p>
+      <p class="text-xs text-gray-500 mb-1">Upload one of the documents VYC accepts (PDF or photo): birth certificate (or a photocopy), military birth certificate, passport, foreign birth document or green card, school record showing the date of birth, court decree, or a valid California ID card.</p>
+      <p class="text-xs text-gray-500 mb-2">VYC rule: your team is responsible for this document being genuine. If the athlete's age is ever questioned during the season, you must produce the <b>original</b> within two weeks or the athlete is suspended until you do.</p>
       <p id="proofReturnHint" class="hidden text-sm text-amber-800 bg-amber-50 border border-amber-300 rounded-lg p-2 mb-2">Returning athlete? Type the athlete's last name above and tap <b>"Yes, this is my athlete"</b> — then proof of birth isn't needed.</p>
       <input type="file" id="proofFile" accept="image/*,.pdf" required>
     </div>
@@ -266,6 +278,9 @@
     <div id="cBgDateWrap"><label class="f">Date of last background check</label><input type="date" id="cBgDate"></div>
     <div id="cUsatfDateWrap" class="hidden"><label class="f req">Date of USATF certification</label><input type="date" id="cUsatfDate"></div>
     <div id="cBgWarn" class="text-sm text-amber-700 mt-2"></div>
+    <div class="mt-3"><label class="f">SafeSport training — date completed</label><input type="date" id="cSafeSport">
+      <p class="text-xs text-gray-500 mt-1">VYC rule IX.2.f.7: every coach completes SafeSport. If you completed it with another organization (for example USATF), that certificate counts — enter its date.</p></div>
+    <label id="cAge21Wrap" class="flex items-center gap-2 text-sm mt-3 hidden"><input type="checkbox" id="cAge21"> I am 21 years of age or older <span class="text-xs text-gray-500">(VYC rule II.D.9: the Head Coach must be 21 or older)</span></label>
   </div>
   <div class="card">
     <div class="legal"><p>By registering as a coach I agree to follow the Valley Youth Conference Code of Conduct and zero-tolerance policy for fighting, drugs, and alcohol, to complete a background check as required, and to submit results and meet entries only for my own team.</p></div>
@@ -296,7 +311,7 @@
   <form id="adminForm" class="hidden">
   <div class="card">
     <h2 class="font-bold text-lg mb-2">Team Admin registration</h2>
-    <p class="text-sm text-gray-600 mb-2">Team admins run their team in this app: they review and verify athlete registrations (including documents and medical information), approve the team's coaches, approve transfer requests, and manage meets. Your request is reviewed and approved by a VYC site admin or your team's existing team admin before access is granted.</p>
+    <p class="text-sm text-gray-600 mb-2">Team admins run their team in this app: they do the first review of athlete registrations (including documents and medical information) before their Conference President certifies them, approve the team's coaches, approve transfer requests, and manage meets. Your request is reviewed and approved by a VYC site admin or your team's existing team admin before access is granted.</p>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div><label class="f req">First name</label><input id="aFirst" required></div>
       <div><label class="f req">Last name</label><input id="aLast" required></div>
@@ -306,6 +321,15 @@
         <option value="">Select…</option><option>Head Coach</option><option>Team President / Director</option><option>Registrar / Team Manager</option><option>Other</option></select></div>
       <div id="aTitleOtherWrap" class="hidden"><label class="f req">Describe your role</label><input id="aTitleOther"></div>
     </div>
+  </div>
+  <div class="card">
+    <h2 class="font-bold text-lg mb-1">Do you hold any of these positions?</h2>
+    <p class="text-sm text-gray-600 mb-2">VYC board positions (elected every two years, confirmed in the app each season by a site admin). The two <b>Conference Presidents</b> certify the rosters — they are the only people who can certify or change an athlete, each for their own conference. The <b>Commissioner</b> approves transfers, late additions and fines. The <b>Treasurer</b> receives fees and records payments.</p>
+    <label class="flex items-center gap-2 text-sm mb-1"><input type="radio" name="aPres" value="" checked> No, none of these</label>
+    <label class="flex items-center gap-2 text-sm mb-1"><input type="radio" name="aPres" value="Commissioner"> VYC Track &amp; Field Commissioner</label>
+    <label class="flex items-center gap-2 text-sm mb-1"><input type="radio" name="aPres" value="East"> VYC Eastern Conference President</label>
+    <label class="flex items-center gap-2 text-sm mb-1"><input type="radio" name="aPres" value="West"> VYC Western Conference President</label>
+    <label class="flex items-center gap-2 text-sm"><input type="radio" name="aPres" value="Treasurer"> VYC Treasurer</label>
   </div>
   <div class="card">
     <h2 class="font-bold text-lg mb-2">Background check</h2>
@@ -501,14 +525,20 @@ function collectCoach(){
   }
   if(!$('cTeam').value) throw new Error('Please select a team.');
   if($('cUsatf').checked && !$('cUsatfDate').value) throw new Error('Please provide your USATF certification date.');
+  if(role==='head_coach' && !$('cAge21').checked) throw new Error('VYC rule II.D.9: the Head Coach must be 21 or older — please confirm your age.');
   return { first:$('cFirst').value.trim(), last:$('cLast').value.trim(), phone:$('cPhone').value.trim(), team:$('cTeam').value, role,
     division: divs, gender, events,
-    bg: $('cUsatf').checked ? null : ($('cBgDate').value||null), usatf:$('cUsatf').checked, usatfDate:$('cUsatf').checked?($('cUsatfDate').value||null):null };
+    bg: $('cUsatf').checked ? null : ($('cBgDate').value||null), usatf:$('cUsatf').checked, usatfDate:$('cUsatf').checked?($('cUsatfDate').value||null):null,
+    safesport:$('cSafeSport').value||null, age21:$('cAge21').checked };
 }
 async function saveCoachViaLogin(client, d){
-  return client.rpc('submit_coach_profile',{ p_first:d.first, p_last:d.last, p_phone:d.phone, p_team:d.team, p_role:d.role,
+  const r=await client.rpc('submit_coach_profile',{ p_first:d.first, p_last:d.last, p_phone:d.phone, p_team:d.team, p_role:d.role,
     p_division:d.division, p_gender:d.gender, p_events:d.events, p_bg_date:d.bg, p_usatf:d.usatf, p_usatf_date:d.usatfDate, p_contract:true });
+  // SafeSport date / 21+ are saved on the coach's own row right after (a coach may always update their own record).
+  if(!r.error && (d.safesport||d.age21)){ const {data:s}=await client.auth.getSession(); if(s&&s.session) await client.from('coaches').update({safesport_date:d.safesport, age_21_attested:d.age21}).eq('email',s.session.user.email); }
+  return r;
 }
+document.querySelectorAll('input[name=cRole]').forEach(r=>r.addEventListener('change',()=>$('cAge21Wrap').classList.toggle('hidden',r.value!=='head_coach'||!r.checked)));
 // When Google sends the person back, finish the registration with the answers we saved.
 let resumed=false;
 window.resumeGoogleCoach=resumeGoogleCoach;
@@ -542,11 +572,12 @@ function collectAdmin(){
   if(title==='Other'){ title=$('aTitleOther').value.trim(); if(!title) throw new Error('Please describe your role on the team.'); }
   if($('aUsatf').checked && !$('aUsatfDate').value) throw new Error('Please provide your USATF certification date.');
   return { first:$('aFirst').value.trim(), last:$('aLast').value.trim(), phone:$('aPhone').value.trim(), team:$('aTeam').value, title,
-    bg:$('aUsatf').checked?null:($('aBgDate').value||null), usatf:$('aUsatf').checked, usatfDate:$('aUsatf').checked?($('aUsatfDate').value||null):null };
+    bg:$('aUsatf').checked?null:($('aBgDate').value||null), usatf:$('aUsatf').checked, usatfDate:$('aUsatf').checked?($('aUsatfDate').value||null):null,
+    president:(document.querySelector('input[name=aPres]:checked')||{}).value||null };
 }
 function saveAdminViaLogin(client,d){
   return client.rpc('submit_team_admin_request',{ p_first:d.first, p_last:d.last, p_phone:d.phone, p_team:d.team, p_title:d.title,
-    p_bg_date:d.bg, p_usatf:d.usatf, p_usatf_date:d.usatfDate, p_contract:true });
+    p_bg_date:d.bg, p_usatf:d.usatf, p_usatf_date:d.usatfDate, p_contract:true, p_president:d.president });
 }
 const ADMIN_DONE='Team admin request submitted! A site admin or your team\'s team admin will review and approve it.';
 $('adminGoogleBtn').onclick=async()=>{
@@ -585,6 +616,7 @@ $('adminForm').addEventListener('submit', async(e)=>{
       const {error}=await sb.from('coaches').insert({
         season_year:CFG.SEASON_YEAR, first_name:d.first, last_name:d.last, email, phone:d.phone, team_code:d.team,
         role_type:d.title==='Head Coach'?'head_coach':'team_staff', admin_title:d.title, requested_team_admin:true,
+        requested_president_conference:d.president,
         background_check_date:d.bg, usatf_certified:d.usatf, usatf_cert_date:d.usatfDate,
         approved:false, contract_signed_at:new Date().toISOString(), contract_version:'VYC-2026' });
       if(error) throw /duplicate key/i.test(error.message)?new Error('You already have a coach or team admin request on file. Ask your site admin to update it.'):error;
@@ -669,6 +701,21 @@ function fillAllTeams(){
   sels.forEach((sel,i)=>{ sel.innerHTML='<option value="">Select…</option>'+act.map(lab).join(''); sel.value=keep[i]||''; });
 }
 fillAllTeams(); if(window.leagueReady) window.leagueReady.then(fillAllTeams);
+// Late-registration notice: after the season's certification date every new registration is "late"; two weeks after it,
+// registration is closed unless the Conference President has given the athlete a late pass (checked by the database on submit).
+(async()=>{ try{
+  const season=await window.currentSeason();
+  const {data}=await sb.from('app_settings').select('value').eq('key','certification_date_'+season).maybeSingle();
+  const cd=data&&data.value; if(!cd) return;
+  const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
+  const plus=(d,n)=>{ const x=new Date(d+'T12:00:00'); x.setDate(x.getDate()+n); return x; };
+  const nice=d=>d.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  const cut=plus(cd,14).toISOString().slice(0,10);
+  const el=document.getElementById('lateNotice'); el.classList.remove('hidden');
+  if(today<=cd) el.innerHTML=`<div class="card" style="background:#fffbeb;border:1px solid #f59e0b"><p class="text-sm"><b>Register by ${nice(plus(cd,0))}.</b> Rosters are certified on that date — registrations after it are late, and registration closes after ${nice(plus(cd,14))}.</p></div>`;
+  else if(today<=cut) el.innerHTML=`<div class="card" style="background:#fffbeb;border:1px solid #f59e0b"><p class="text-sm"><b>Late registration.</b> Rosters were certified on ${nice(plus(cd,0))}, so this registration will be marked late. Registration closes after ${nice(plus(cd,14))}.</p></div>`;
+  else el.innerHTML=`<div class="card" style="background:#fef2f2;border:1px solid #dc2626"><p class="text-sm"><b>Registration for the ${season} season is closed</b> (it closed ${nice(plus(cd,14))}). A late registration can only be allowed by your Conference President — ask your team, and once the president gives your athlete a late pass you can submit this form.</p></div>`;
+}catch(e){} })();
 
 // ---- signature widget (draw or type cursive) ----
 function makeSig(container){
@@ -882,8 +929,18 @@ function updateDivision(){
   const age=window.ageOnDec31(dob, CFG.SEASON_YEAR);
   const div=window.divisionFor(age);
   $('divisionShow').value = div ? `${div} (age ${age} on 12/31)` : 'Out of age range';
+  // High-school rule question (VYC IV.A.2) only for athletes old enough to be in 9th grade.
+  const hs=age>=13; $('hsWrap').classList.toggle('hidden',!hs); document.querySelectorAll('input[name=inHs]').forEach(r=>r.required=hs); hsQuestions();
 }
 $('dob').addEventListener('change',updateDivision);
+// Two questions, one after the other: in high school? -> if yes, running for the high school track team? (yes = can't register, CIF rules)
+function hsQuestions(){
+  const inHs=(document.querySelector('input[name=inHs]:checked')||{}).value, hsTeam=(document.querySelector('input[name=hsTrack]:checked')||{}).value;
+  const ask=!$('hsWrap').classList.contains('hidden')&&inHs==='yes';
+  $('hsTeamWrap').classList.toggle('hidden',!ask); document.querySelectorAll('input[name=hsTrack]').forEach(r=>r.required=ask);
+  $('hsReject').classList.toggle('hidden',!(ask&&hsTeam==='yes'));
+}
+document.querySelectorAll('input[name=inHs],input[name=hsTrack]').forEach(r=>r.addEventListener('change',hsQuestions));
 
 // physical exam validity: must be on/after May 30 of prior calendar year
 function physicalCutoff(){ return new Date(Date.UTC(CFG.SEASON_YEAR-1,4,30)); } // month 4 = May
@@ -1001,11 +1058,15 @@ $('parentForm').addEventListener('submit', async(e)=>{
     const skipProof=returningVerified();
     const file=skipProof?null:$('proofFile').files[0]; if(!skipProof&&!file) throw new Error('Please upload proof of birth.');
     const dob=$('dob').value, age=window.ageOnDec31(dob,CFG.SEASON_YEAR), division=window.divisionFor(age);
+    const inHs=(document.querySelector('input[name=inHs]:checked')||{}).value, hsAns=(document.querySelector('input[name=hsTrack]:checked')||{}).value;
+    if(age>=13 && !inHs) throw new Error('Please answer: is this athlete in high school?');
+    if(inHs==='yes' && !hsAns) throw new Error('Please answer: are they running with their current high school track team?');
+    if(inHs==='yes' && hsAns==='yes') throw new Error('This athlete can\'t be registered: running for a high school track team and a VYC team in the same season is against California CIF rules (VYC rule IV.A.2).');
     const proofPath=skipProof?null:await uploadProof(file,'registrations');
     const row={
       season_year:CFG.SEASON_YEAR, sport:$('sport').value, gender:$('gender').value,
       first_name:$('firstName').value.trim(), last_name:$('lastName').value.trim(), dob,
-      age_on_dec31:age, division,
+      age_on_dec31:age, division, in_high_school: age>=13 ? inHs==='yes' : null, hs_track_this_season: age>=13 ? (inHs==='yes' && hsAns==='yes') : null,
       address:$('address').value.trim(), city:$('city').value.trim(), zip:$('zip').value.trim(),
       phone:$('phone').value.trim(), email:$('email').value.trim(),
       emergency_name:$('emergencyName').value.trim(), emergency_phone:$('emergencyPhone').value.trim(),
@@ -1082,7 +1143,7 @@ $('coachForm').addEventListener('submit', async(e)=>{
     const row={
       season_year:CFG.SEASON_YEAR, first_name:d.first, last_name:d.last, email, phone:d.phone, team_code:d.team,
       role_type:d.role, division_or_age_group:d.division, coach_gender:d.gender, event_specialty:d.events,
-      background_check_date:d.bg, usatf_certified:d.usatf, usatf_cert_date:d.usatfDate,
+      background_check_date:d.bg, usatf_certified:d.usatf, usatf_cert_date:d.usatfDate, safesport_date:d.safesport, age_21_attested:d.age21,
       approved:false, contract_signed_at:new Date().toISOString(), contract_version:'VYC-2026'
     };
     const {error}=await sb.from('coaches').insert(row);
