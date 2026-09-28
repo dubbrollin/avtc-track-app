@@ -528,7 +528,7 @@ async function viewProof(id){
   if(!r.proof_path){ box.textContent='No proof of birth on file — returning athlete verified from last season\'s record.'; return; }
   const {data,error}=await sb.storage.from('proof-of-birth').createSignedUrl(r.proof_path,300);
   if(error){ box.textContent='Could not open file: '+error.message; return; }
-  box.innerHTML=r.proof_path.toLowerCase().endsWith('.pdf')?`<a class="text-blue-600 underline" target="_blank" href="${data.signedUrl}">Open PDF (link valid 5 min)</a>`:`<img src="${data.signedUrl}" class="max-h-96 rounded border" alt="proof of birth">`;
+  box.innerHTML=r.proof_path.toLowerCase().endsWith('.pdf')?`<iframe src="${data.signedUrl}" title="proof of birth" class="rounded border bg-white" style="width:100%;min-width:min(520px,80vw);height:70vh"></iframe>`:`<img src="${data.signedUrl}" class="max-h-96 rounded border" alt="proof of birth">`;
 }
 function details(id){
   const r=rows.find(x=>x.id===id); const d=$('det-'+id);

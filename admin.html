@@ -508,7 +508,7 @@ const tr=b.closest('tr[data-id]'); if(!tr) return; const r=cRows.find(x=>x.id===
 if(act==='edit') return editAthlete(r.id,paintCert);
 if(act==='proof'){ const box=tr.querySelector('.proofBox'); if(box.innerHTML){ box.innerHTML=''; return; }
   const {data,error}=await sb.storage.from('proof-of-birth').createSignedUrl(r.proof_path,300); if(error){ toast('Could not open file: '+error.message,true); return; }
-  box.innerHTML=r.proof_path.toLowerCase().endsWith('.pdf')?`<a class="text-blue-600 underline" target="_blank" href="${data.signedUrl}">Open PDF (link valid 5 min)</a>`:`<img src="${data.signedUrl}" class="max-h-72 rounded border mt-1" alt="proof of birth">`; return; }
+  box.innerHTML=r.proof_path.toLowerCase().endsWith('.pdf')?`<iframe src="${data.signedUrl}" title="proof of birth" class="rounded border bg-white" style="width:100%;min-width:min(520px,80vw);height:70vh"></iframe>`:`<img src="${data.signedUrl}" class="max-h-72 rounded border mt-1" alt="proof of birth">`; return; }
 if(act==='cert'){ if(r.status!=='reviewed'&&!confirm(`${r.first_name} ${r.last_name} hasn't been team reviewed yet (${STATUS_LABEL[r.status]}). Certify anyway?`)) return;
   if(cRows.some(x=>x.id!==r.id&&x.status==='rejected'&&x.team_code!==r.team_code&&x.dob===r.dob&&(x.first_name+x.last_name).toLowerCase()===(r.first_name+r.last_name).toLowerCase())){ toast('Bylaws III.C.2: this athlete was dropped by another VYC team this season and can\'t be certified again this season.',true); return; }
   if(r.proof_path&&r.dob_check_status!=='match'&&!confirm(`The automatic ID check did not come back as a match (${r.dob_check_status}). Have you compared the birth certificate by eye? Certify anyway?`)) return;
