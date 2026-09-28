@@ -342,12 +342,11 @@
   <form id="timerForm" class="hidden">
   <div class="card">
     <h2 class="font-bold text-lg mb-2">Timer registration</h2>
-    <p class="text-sm text-gray-600 mb-2">Timers download each meet's entries (the Hy-Tek file for Meet Manager) and upload the meet's results. That's all a timer account can do — no team rosters, athlete records or entering athletes into meets. Your registration is reviewed and approved by a VYC site admin or your team's team admin.</p>
+    <p class="text-sm text-gray-600 mb-2">Timers download each meet's entries (the Hy-Tek file for Meet Manager) and upload the meet's results. That's all a timer account can do — no team rosters, athlete records or entering athletes into meets. Timers work across teams, so there's no team to pick — your registration is reviewed and approved by a VYC site admin.</p>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div><label class="f req">First name</label><input id="tFirst" required></div>
       <div><label class="f req">Last name</label><input id="tLast" required></div>
       <div><label class="f req">Phone</label><input id="tPhone" required></div>
-      <div><label class="f req">Team you time for</label><select id="tTeam" required></select></div>
     </div>
   </div>
   <div class="card">
@@ -600,11 +599,10 @@ async function ensureAccount(email, password, msgEl){
 
 // ---- TIMER registration (its own tab). An approved timer can only upload results to existing meets. ----
 function collectTimer(){
-  if(!$('tTeam').value) throw new Error('Please select the team you time for.');
-  return { first:$('tFirst').value.trim(), last:$('tLast').value.trim(), phone:$('tPhone').value.trim(), team:$('tTeam').value };
+  return { first:$('tFirst').value.trim(), last:$('tLast').value.trim(), phone:$('tPhone').value.trim() };
 }
-const saveTimerViaLogin=(client,d)=>client.rpc('submit_timer_request',{ p_first:d.first, p_last:d.last, p_phone:d.phone, p_team:d.team, p_contract:true });
-const TIMER_DONE='Timer registration submitted! A site admin or your team admin will review and approve it. Once approved, sign in on Meet Admin to upload results.';
+const saveTimerViaLogin=(client,d)=>client.rpc('submit_timer_request',{ p_first:d.first, p_last:d.last, p_phone:d.phone, p_team:null, p_contract:true });
+const TIMER_DONE='Timer registration submitted! A VYC site admin will review and approve it. Once approved, sign in on Meet Admin to download entries and upload results for any meet.';
 $('timerGoogleBtn').onclick=async()=>{
   const msg=$('timerMsg'); if(!$('timerForm').reportValidity()) return;
   try{ sessionStorage.setItem('vycTimerPending', JSON.stringify(collectTimer())); }
@@ -637,7 +635,7 @@ $('timerForm').addEventListener('submit', async(e)=>{
       if(p1.length<6) throw new Error('Password must be at least 6 characters.');
       if(p1!==p2) throw new Error('Passwords do not match.');
       const {error}=await sb.from('coaches').insert({ season_year:CFG.SEASON_YEAR, first_name:d.first, last_name:d.last, email, phone:d.phone,
-        team_code:d.team, role_type:'timer', approved:false, contract_signed_at:new Date().toISOString(), contract_version:'VYC-2026' });
+        team_code:null, role_type:'timer', approved:false, contract_signed_at:new Date().toISOString(), contract_version:'VYC-2026' });
       if(error) throw /duplicate key/i.test(error.message)?new Error('You already have a registration on file with this email. Ask your site admin to update it.'):error;
       await ensureAccount(email, p1, msg);
     }
@@ -659,7 +657,7 @@ function fillTeams(sel){
   sel.innerHTML='<option value="">Select…</option>'+window.VYC_TEAMS.map(t=>`<option value="${t.code}">${t.name} (${t.conference})</option>`).join('');
 }
 function fillAllTeams(){
-  const act=window.VYC_TEAMS.filter(t=>t.active!==false); const sels=['teamCode','cTeam','vHomeTeam','aTeam','tTeam'].map($); const keep=sels.map(s=>s.value);
+  const act=window.VYC_TEAMS.filter(t=>t.active!==false); const sels=['teamCode','cTeam','vHomeTeam','aTeam'].map($); const keep=sels.map(s=>s.value);
   const lab=t=>`<option value="${t.code}">${t.name} (${t.conference==='West'?'Western':'Eastern'})</option>`;
   sels.forEach((sel,i)=>{ sel.innerHTML='<option value="">Select…</option>'+act.map(lab).join(''); sel.value=keep[i]||''; });
 }
