@@ -159,6 +159,9 @@ window.leagueReady = (async function(){
     if(Array.isArray(st)){ const y=st.find(x=>x.key==='season_year'); if(y&&+y.value) C.SEASON_YEAR=+y.value; }
   }catch(e){}
 })();
+// ---- Current season (from Site Admin > League Setup). Working meet lists show only this season's meets;
+// past seasons are locked history (results still show on the Results page). ----
+window.currentSeason = async function(){ try{ if(window.leagueReady) await window.leagueReady; }catch(e){} return (window.APP_CONFIG||{}).SEASON_YEAR; };
 // ---- "Site Admin" link in the top menu, only for signed-in site admins (flag is set by admin.html / coach.html) ----
 document.addEventListener('DOMContentLoaded',function(){ try{
   if(localStorage.getItem('vyc_admin')==='1'){ const nav=document.querySelector('.topnav nav'); if(nav&&!nav.querySelector('a[href="admin.html"]')){ const a=document.createElement('a'); a.href='admin.html'; a.textContent='Site Admin'; nav.appendChild(a); } }

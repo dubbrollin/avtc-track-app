@@ -549,7 +549,7 @@ $('exportCsv').onclick=()=>{
 // ---- Meet Register (own page) (race-first: pick a meet, division, gender, race, then check off athletes) ----
 let regMeets=[], regEvents=[], regEntries=[], regDiv=null, regGender='Boy', regEventId=null;
 async function loadMeetsForReg(){
-  const {data}=await sb.from('meets').select('*').neq('status','archived').order('meet_date');
+  const {data}=await sb.from('meets').select('*').eq('season_year',await window.currentSeason()).neq('status','archived').order('meet_date');
   regMeets=data||[];
   const {data:evc}=await sb.from('meet_events').select('meet_id'); const evCount={}; (evc||[]).forEach(x=>evCount[x.meet_id]=(evCount[x.meet_id]||0)+1);
   $('regMeet').innerHTML=regMeets.map(m=>`<option value="${m.id}">${m.name} — ${fmtDate(m.meet_date)}${evCount[m.id]?'':' (no events set up yet)'}</option>`).join('')||'<option value="">No meets posted yet</option>';
