@@ -118,8 +118,14 @@
 
   <div class="card">
     <h2 class="font-bold text-lg mb-2">Proof of Birth</h2>
-    <p class="text-xs text-gray-500 mb-2">Upload a birth certificate, passport, or other official proof of birth (PDF or photo).</p>
-    <input type="file" id="proofFile" accept="image/*,.pdf" required>
+    <div id="proofNotNeeded" class="hidden rounded-lg border-2 border-green-500 bg-green-50 p-3 text-sm">
+      ✓ <b>Not needed — returning athlete.</b> We'll confirm the name and birth date match last season's verified record. Make sure the date of birth above is correct.
+    </div>
+    <div id="proofNeeded">
+      <p class="text-xs text-gray-500 mb-2">Upload a birth certificate, passport, or other official proof of birth (PDF or photo).</p>
+      <p id="proofReturnHint" class="hidden text-sm text-amber-800 bg-amber-50 border border-amber-300 rounded-lg p-2 mb-2">Returning athlete? Type the athlete's last name above and tap <b>"Yes, this is my athlete"</b> — then proof of birth isn't needed.</p>
+      <input type="file" id="proofFile" accept="image/*,.pdf" required>
+    </div>
   </div>
 
   <div class="card">
@@ -727,7 +733,7 @@ function showPastPicked(){
     <span class="flex-1">✓ Linked to last season's athlete <b>${esc(p.first_name)} ${esc(p.last_name)}</b> — ${esc(teamLabel(p.team_code))}${p.division?' · '+esc(p.division):''}</span>
     <button type="button" class="btn bg-gray-200 text-xs" id="pastUndo">Not this athlete</button></div>`;
   box.classList.remove('hidden');
-  $('pastUndo').onclick=()=>{ pastPick=null; setRadio('returning','no'); setRadio('otherTeam','no'); findPast(); };
+  $('pastUndo').onclick=()=>{ pastPick=null; setRadio('returning','no'); setRadio('otherTeam','no'); updateProofNeed(); findPast(); };
 }
 async function findPast(){
   if(pastPick) return;
@@ -748,12 +754,21 @@ async function findPast(){
   box.querySelectorAll('button[data-i]').forEach(b=>b.onclick=()=>{
     pastPick=list[+b.dataset.i];
     $('firstName').value=pastPick.first_name; $('lastName').value=pastPick.last_name;
-    applyPastPick(); showPastPicked();
+    applyPastPick(); showPastPicked(); updateProofNeed();
   });
 }
+// Returning athlete linked to last season's verified record -> no proof of birth (the database re-checks name + birth date).
+const returningVerified=()=>!!pastPick && document.querySelector('input[name=returning]:checked').value==='yes';
+function updateProofNeed(){
+  const skip=returningVerified();
+  $('proofNotNeeded').classList.toggle('hidden',!skip); $('proofNeeded').classList.toggle('hidden',skip);
+  $('proofFile').required=!skip;
+  $('proofReturnHint').classList.toggle('hidden', skip || document.querySelector('input[name=returning]:checked').value!=='yes');
+}
+document.querySelectorAll('input[name=returning]').forEach(r=>r.addEventListener('change',updateProofNeed));
 $('lastName').addEventListener('input',()=>{ clearTimeout(pastTimer); pastTimer=setTimeout(findPast,300); });
 $('firstName').addEventListener('input',()=>{ if(!pastPick&&!$('pastMatches').classList.contains('hidden')){ clearTimeout(pastTimer); pastTimer=setTimeout(findPast,300); } });
-$('teamCode').addEventListener('change',applyPastPick);
+$('teamCode').addEventListener('change',()=>{ applyPastPick(); updateProofNeed(); });
 function updateDivision(){
   const dob=$('dob').value; if(!dob) return;
   const age=window.ageOnDec31(dob, CFG.SEASON_YEAR);
@@ -862,9 +877,10 @@ $('parentForm').addEventListener('submit', async(e)=>{
     if(pCode==='__OTHER' && !$('priorTeam').value.trim()) throw new Error('Please type the name of the previous team.');
     const priorVyc=pCode && pCode!=='__OTHER' ? pCode : null;
     const priorName=!otherTeam?null:priorVyc?(window.VYC_TEAMS.find(t=>t.code===priorVyc)||{}).name||priorVyc:$('priorTeam').value.trim();
-    const file=$('proofFile').files[0]; if(!file) throw new Error('Please upload proof of birth.');
+    const skipProof=returningVerified();
+    const file=skipProof?null:$('proofFile').files[0]; if(!skipProof&&!file) throw new Error('Please upload proof of birth.');
     const dob=$('dob').value, age=window.ageOnDec31(dob,CFG.SEASON_YEAR), division=window.divisionFor(age);
-    const proofPath=await uploadProof(file,'registrations');
+    const proofPath=skipProof?null:await uploadProof(file,'registrations');
     const row={
       season_year:CFG.SEASON_YEAR, sport:$('sport').value, gender:$('gender').value,
       first_name:$('firstName').value.trim(), last_name:$('lastName').value.trim(), dob,
@@ -894,7 +910,7 @@ $('parentForm').addEventListener('submit', async(e)=>{
     msg.textContent='Registration submitted! Your team will review it shortly.'; msg.className='text-sm mt-2 text-green-700 font-semibold';
     if(wantsAcct) await ensureAccount($('email').value.trim(), p1, msg);
     e.target.reset(); $('priorTeamWrap').classList.add('hidden'); $('priorTeam').classList.add('hidden');
-    pastPick=null; $('pastMatches').classList.add('hidden'); $('pastMatches').innerHTML='';
+    pastPick=null; $('pastMatches').classList.add('hidden'); $('pastMatches').innerHTML=''; updateProofNeed();
   }catch(err){ msg.textContent='Error: '+(err.message||err); msg.className='text-sm mt-2 text-red-600'; }
 });
 

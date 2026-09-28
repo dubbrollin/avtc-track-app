@@ -431,12 +431,12 @@ function render(){
     </div>
     ${r.dob_check_note?`<div class="text-xs mt-1 ${r.dob_check_status==='match'?'text-green-700':'text-red-700'}">${esc(r.dob_check_note)}</div>`:''}
     <div class="flex flex-wrap gap-2 mt-3">
-      <button class="btn bg-gray-200" onclick="viewProof('${r.id}')">View proof of birth</button>
+      ${r.proof_path?`<button class="btn bg-gray-200" onclick="viewProof('${r.id}')">View proof of birth</button>`:'<span class="pill bg-green-100 text-green-800">Returning — verified from last season\'s record (no proof needed)</span>'}
       <button class="btn bg-gray-200" onclick="details('${r.id}')">Details</button>
       <button class="btn bg-gray-200" onclick="makePdf('${r.id}')">Download forms PDF</button>
       ${r.status!=='verified'?`<button class="btn bg-green-600 text-white" onclick="setStatus('${r.id}','verified')">✓ Verified</button>`:''}
       ${r.status!=='rejected'?`<button class="btn bg-red-100 text-red-800" onclick="setStatus('${r.id}','rejected')">Reject</button>`:''}
-      ${r.dob_check_status!=='pending'?`<button class="btn bg-gray-100 text-sm" onclick="runChecks([rows.find(x=>x.id==='${r.id}')],true)">Re-run ID check</button>`:''}
+      ${r.dob_check_status!=='pending'&&r.proof_path?`<button class="btn bg-gray-100 text-sm" onclick="runChecks([rows.find(x=>x.id==='${r.id}')],true)">Re-run ID check</button>`:''}
     </div>
     <div id="proof-${r.id}" class="mt-2"></div>
     <div id="det-${r.id}" class="mt-2 text-sm hidden"></div>
@@ -482,6 +482,7 @@ $('filter').onchange=render;
 async function viewProof(id){
   const r=rows.find(x=>x.id===id); const box=$('proof-'+id);
   if(box.innerHTML){ box.innerHTML=''; return; }
+  if(!r.proof_path){ box.textContent='No proof of birth on file — returning athlete verified from last season\'s record.'; return; }
   const {data,error}=await sb.storage.from('proof-of-birth').createSignedUrl(r.proof_path,300);
   if(error){ box.textContent='Could not open file: '+error.message; return; }
   box.innerHTML=r.proof_path.toLowerCase().endsWith('.pdf')?`<a class="text-blue-600 underline" target="_blank" href="${data.signedUrl}">Open PDF (link valid 5 min)</a>`:`<img src="${data.signedUrl}" class="max-h-96 rounded border" alt="proof of birth">`;
@@ -512,6 +513,7 @@ async function setStatus(id,status){
   Object.assign(r,upd); render();
 }
 async function runChecks(list,force){
+  list=(list||[]).filter(r=>r&&r.proof_path); // returning athletes verified from last season's record have no document to check
   if(!list.length){ $('msg').textContent='Nothing to check.'; return; }
   $('msg').textContent=`Running ID check on ${list.length} registration(s)…`;
   for(const r of list){
