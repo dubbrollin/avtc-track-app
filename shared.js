@@ -88,7 +88,7 @@ window.hytekRoster = function(rows, cfg){
     "",                                              // fax
     "",                                              // shirt size
     "",                                              // registration #
-    "",                                              // competitor #
+    String(r.comp_number ?? ""),                     // competitor # (VYC competition number)
     clean(r.email, 30),
     ""                                               // disabled classification
   ].join(";"));

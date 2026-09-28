@@ -218,7 +218,7 @@ if(await run(sb.from('coaches').delete().eq('email',email),'Deleted')){ coaches=
 
 /* ================================ ATHLETES ================================ */
 let aRows=[], aFrom=0, aTotal=0;
-const A_FIELDS=[['first_name','First name'],['last_name','Last name'],['gender','Gender','sel',['Boy','Girl']],['dob','Date of birth','date'],['division','Division','sel',DIVS],['team_code','Team','team'],['status','Status','sel',['submitted','verified','rejected']],['sport','Sport'],['age_on_dec31','Age on Dec 31','num'],['parent1_name','Parent 1'],['parent1_relationship','Parent 1 relationship'],['parent2_name','Parent 2'],['phone','Phone'],['email','Email'],['address','Address'],['city','City'],['zip','ZIP'],['emergency_name','Emergency contact'],['emergency_phone','Emergency phone'],['coach_note','Coach note']];
+const A_FIELDS=[['first_name','First name'],['last_name','Last name'],['gender','Gender','sel',['Boy','Girl']],['dob','Date of birth','date'],['division','Division','sel',DIVS],['team_code','Team','team'],['status','Status','sel',['submitted','verified','rejected']],['sport','Sport'],['age_on_dec31','Age on Dec 31','num'],['comp_number','Competition #','num'],['parent1_name','Parent 1'],['parent1_relationship','Parent 1 relationship'],['parent2_name','Parent 2'],['phone','Phone'],['email','Email'],['address','Address'],['city','City'],['zip','ZIP'],['emergency_name','Emergency contact'],['emergency_phone','Emergency phone'],['coach_note','Coach note']];
 function paintAthletes(){
 $('pane').innerHTML=`<div class="card">
 <div class="flex flex-wrap gap-2 mb-2">
@@ -229,7 +229,7 @@ $('pane').innerHTML=`<div class="card">
 <button class="btn pri" id="aGo">Search</button>
 </div>
 <p class="text-xs text-gray-500 mb-2" id="aInfo"></p>
-<div class="scroll"><table class="t"><thead><tr><th>Athlete</th><th>Team</th><th>Division</th><th>Status</th><th>Actions</th></tr></thead><tbody id="aBody"></tbody></table></div>
+<div class="scroll"><table class="t"><thead><tr><th>Comp #</th><th>Athlete</th><th>Team</th><th>Division</th><th>Status</th><th>Actions</th></tr></thead><tbody id="aBody"></tbody></table></div>
 <div class="mt-2"><button class="btn lite hide" id="aMore">Load more</button></div>
 </div>
 <div class="card border border-red-200 ${SITE?'':'hide'}"><h3 class="font-bold text-red-800 mb-1">Test data cleanup</h3>
@@ -240,16 +240,16 @@ aLoad(true);
 }
 async function aLoad(reset){
 if(reset){ aRows=[]; aFrom=0; }
-let q=sb.from('registrations').select('id,first_name,last_name,gender,division,team_code,status,dob,age_on_dec31,contract_version,created_at',{count:'exact'}).order('last_name').order('first_name').range(aFrom,aFrom+99);
+let q=sb.from('registrations').select('id,first_name,last_name,gender,division,team_code,status,dob,age_on_dec31,contract_version,created_at,comp_number,season_year',{count:'exact'}).order('last_name').order('first_name').range(aFrom,aFrom+99);
 const t=SITE?$('aTeam').value:MYTEAM, s=$('aStat').value, d=$('aDiv').value, qq=$('aQ').value.trim();
 if(t) q=q.eq('team_code',t); if(s) q=q.eq('status',s); if(d) q=q.eq('division',d);
 if(qq) q=q.or(`last_name.ilike.%${qq.replace(/[%,()]/g,'')}%,first_name.ilike.%${qq.replace(/[%,()]/g,'')}%`);
 const {data,error,count}=await q; if(error){ toast(error.message,true); return; }
 aRows=aRows.concat(data||[]); aFrom=aRows.length; aTotal=count||0;
 $('aInfo').textContent=`Showing ${aRows.length} of ${aTotal} athletes`; $('aMore').classList.toggle('hide',aRows.length>=aTotal);
-$('aBody').innerHTML=aRows.map(r=>`<tr data-id="${r.id}"><td><b>${esc(r.last_name)}</b>, ${esc(r.first_name)} <span class="text-xs text-gray-500">${r.gender==='Girl'?'F':'M'}${r.dob?' · '+esc(r.dob):''}</span></td><td>${esc(teamName(r.team_code))}</td><td>${esc(r.division||'')}</td>
+$('aBody').innerHTML=aRows.map(r=>`<tr data-id="${r.id}"><td class="font-mono">${r.comp_number??''}<span class="text-xs text-gray-400"> ${r.season_year??''}</span></td><td><b>${esc(r.last_name)}</b>, ${esc(r.first_name)} <span class="text-xs text-gray-500">${r.gender==='Girl'?'F':'M'}${r.dob?' · '+esc(r.dob):''}</span></td><td>${esc(teamName(r.team_code))}</td><td>${esc(r.division||'')}</td>
 <td><span class="pill ${r.status==='verified'?'ok':r.status==='rejected'?'bad':'warn'}">${esc(r.status||'')}</span></td>
-<td class="whitespace-nowrap"><button class="btn lite" data-act="edit">Edit</button> <button class="btn red" data-act="del">Delete</button></td></tr>`).join('')||'<tr><td colspan="5" class="p-3 text-gray-500">No athletes match.</td></tr>';
+<td class="whitespace-nowrap"><button class="btn lite" data-act="edit">Edit</button> <button class="btn red" data-act="del">Delete</button></td></tr>`).join('')||'<tr><td colspan="6" class="p-3 text-gray-500">No athletes match.</td></tr>';
 }
 document.addEventListener('click',async e=>{
 const b=e.target.closest('#aBody button'); if(!b) return; const id=b.closest('tr').dataset.id; const r=aRows.find(x=>x.id===id);
@@ -417,10 +417,21 @@ ${teams.map(t=>`<tr data-code="${esc(t.code)}"><td class="font-mono font-bold">$
 <div><label class="text-xs font-bold">League</label><br><select id="nConf"><option value="East">Eastern</option><option value="West">Western</option></select></div><button class="btn grn" id="nAdd">+ Add team</button></div></div>
 <div class="card"><h3 class="font-bold mb-2">Season</h3><div class="flex flex-wrap gap-2 items-end"><div><label class="text-xs font-bold">Season year</label><br><input id="sYear" type="number" value="${esc(S.season_year||CFG.SEASON_YEAR)}" style="width:7rem"></div><button class="btn pri" id="sSave">Save</button></div>
 <p class="text-xs text-gray-500 mt-2">Used for background-check expiry and similar year math.</p></div>
+<div class="card"><h3 class="font-bold mb-1">Competition numbers — ${esc(S.season_year||CFG.SEASON_YEAR)}</h3>
+<p class="text-xs text-gray-500 mb-2">Teams in alphabetical order, starting at 100. Each team's block = its certified athletes last season + a 20-number cushion. New registrations get the lowest open number in their team's block automatically; if a block fills up, extras get numbers after the last team's block.</p>
+<div id="cbPane" class="text-sm text-gray-500">Loading…</div>
+<button class="btn lite mt-2" id="cbRebuild">Rebuild blocks from last season</button></div>
 <div class="card"><h3 class="font-bold mb-1">Event list</h3><p class="text-sm text-gray-600">The standard event list (which events each division runs) still lives in the app's code, copied from Team Manager. To change it, tell Claude — it isn't editable here yet.</p></div>`;
 $('nAdd').onclick=async()=>{ const code=$('nCode').value.trim().toUpperCase(), name=$('nName').value.trim(); if(!code||!name){ toast('Enter a code and a name.',true); return; }
 if(await run(sb.from('league_teams').insert({code,name,conference:$('nConf').value,active:true,sort_order:100}),'Team added')) paintLeague(); };
 $('sSave').onclick=()=>run(sb.from('app_settings').upsert({key:'season_year',value:String($('sYear').value)}),'Saved');
+const season=+(S.season_year||CFG.SEASON_YEAR);
+const [{data:blocks},{data:used}]=await Promise.all([sb.from('comp_blocks').select('*').eq('season_year',season).order('sort_order'),
+  sb.from('registrations').select('team_code,comp_number').eq('season_year',season).not('comp_number','is',null)]);
+const usedBy={}; (used||[]).forEach(u=>usedBy[u.team_code]=(usedBy[u.team_code]||0)+1);
+$('cbPane').innerHTML=(blocks&&blocks.length)?`<div class="scroll" style="max-height:none"><table class="t"><thead><tr><th>Team</th><th>Last season</th><th>Numbers</th><th>Cushion</th><th>Handed out</th></tr></thead><tbody>${blocks.map(b=>{ const rosterEnd=b.start_no+Math.max(b.last_season_count,20)-1; return `<tr><td>${esc(teamName(b.team_code))}</td><td>${b.last_season_count}</td><td class="font-mono">${b.start_no}–${rosterEnd}</td><td class="font-mono">${rosterEnd+1}–${b.end_no}</td><td>${usedBy[b.team_code]||0}</td></tr>`; }).join('')}</tbody></table></div>`:'No blocks yet — they are built automatically with the first registration of the season, or click Rebuild.';
+$('cbRebuild').onclick=async()=>{ if((used||[]).length&&!confirm(`${used.length} numbers are already handed out this season. Rebuilding changes the blocks for new registrations only — numbers already given out stay the same. Continue?`)) return;
+  const {error}=await sb.rpc('build_comp_blocks',{p_season:season}); if(error){ toast(error.message,true); return; } toast('Blocks rebuilt'); paintLeague(); };
 viewOnly($('pane'));
 }
 document.addEventListener('click',async e=>{
