@@ -1,6 +1,7 @@
 -- 2026-09-27: returning athletes don't upload proof of birth; they're verified against the system instead.
 -- A registration may skip proof of birth ONLY if it is marked returning AND linked (prior_registration_id)
--- to a VERIFIED earlier registration with the same first name, last name and birth date. Anything else
+-- to a VERIFIED earlier registration ON THE SAME TEAM with the same first name, last name and birth date.
+-- Transfers (record on another team) are new athletes to the new team and must upload proof. Anything else
 -- without proof is refused. A qualifying registration's birth-date check is marked 'match' with a note.
 begin;
 
@@ -21,6 +22,10 @@ begin
   if public.name_key(p.first_name) <> public.name_key(new.first_name)
      or public.name_key(p.last_name) <> public.name_key(new.last_name) then
     raise exception 'The athlete''s name doesn''t match last season''s record. Please upload proof of birth.';
+  end if;
+  -- A transfer is a new athlete to the new team: proof of birth is required even if verified elsewhere.
+  if p.team_code is distinct from new.team_code then
+    raise exception 'This athlete was on a different team last season, so they count as a new athlete to this team. Please upload proof of birth.';
   end if;
   if p.dob is distinct from new.dob then
     raise exception 'The birth date doesn''t match last season''s record for this athlete. Check the date, or upload proof of birth.';
