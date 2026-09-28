@@ -265,7 +265,7 @@
     <label class="flex items-center gap-2 text-sm mb-2"><input type="checkbox" id="cUsatf"> I am a USA Track &amp; Field certified coach (certification is valid 3 years).</label>
     <div id="cBgDateWrap"><label class="f">Date of last background check</label><input type="date" id="cBgDate"></div>
     <div id="cUsatfDateWrap" class="hidden"><label class="f req">Date of USATF certification</label><input type="date" id="cUsatfDate"></div>
-    <p id="cBgWarn" class="text-sm text-amber-700 mt-2"></p>
+    <div id="cBgWarn" class="text-sm text-amber-700 mt-2"></div>
   </div>
   <div class="card">
     <div class="legal"><p>By registering as a coach I agree to follow the Valley Youth Conference Code of Conduct and zero-tolerance policy for fighting, drugs, and alcohol, to complete a background check as required, and to submit results and meet entries only for my own team.</p></div>
@@ -313,6 +313,7 @@
     <label class="flex items-center gap-2 text-sm mb-2"><input type="checkbox" id="aUsatf"> I am a USA Track &amp; Field certified coach (certification is valid 3 years).</label>
     <div id="aBgDateWrap"><label class="f">Date of last background check</label><input type="date" id="aBgDate"></div>
     <div id="aUsatfDateWrap" class="hidden"><label class="f req">Date of USATF certification</label><input type="date" id="aUsatfDate"></div>
+    <div id="aBgWarn" class="text-sm text-amber-700 mt-2"></div>
   </div>
   <div class="card">
     <div class="legal"><p>By registering as a team admin I agree to follow the Valley Youth Conference Code of Conduct and zero-tolerance policy for fighting, drugs, and alcohol, to complete a background check as required, to keep athletes' and families' private information confidential and use it only for team business, and to act only for my own team.</p></div>
@@ -521,14 +522,20 @@ async function resumeGoogleCoach(){
   const c2=supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth:{ lock:(n,t,f)=>f() } }); // fresh client — the first one can hang after a Google redirect
   const {error}=await saveCoachViaLogin(c2,d);
   if(error){ msg.textContent='Could not finish: '+error.message; msg.className='text-sm mt-2 text-red-600'; return; }
-  msg.innerHTML=`Registration submitted, and you're signed in as ${authSession.user.email}. Your team admin (or a VYC site admin) will review and approve you. <a class="underline" href="coach.html">Check your status</a>`; msg.className='text-sm mt-2 text-green-700 font-semibold';
+  msg.innerHTML=`Registration submitted, and you're signed in as ${authSession.user.email}. Your team admin (or a VYC site admin) will review and approve you. <a class="underline" href="coach.html">Check your status</a>${coachNeedsBgCheck(d)?window.bgCheckLinkHtml('<b class="text-gray-900">Next step: your background check.</b> You don\'t have a current one on file — start it now so your access isn\'t paused.'):''}`; msg.className='text-sm mt-2 text-green-700 font-semibold';
 }
 if(new URLSearchParams(location.search).get('role')==='coach') document.querySelector('#roleTabs .roletab[data-role=coach]').click();
 
 // ---- TEAM ADMIN registration (its own tab). Saved as a pending request; a site admin or the team's
 // existing team admin approves it, which grants team-admin access. ----
 $('aTitle').onchange=()=>$('aTitleOtherWrap').classList.toggle('hidden',$('aTitle').value!=='Other');
-$('aUsatf').onchange=()=>{ $('aUsatfDateWrap').classList.toggle('hidden',!$('aUsatf').checked); $('aBgDateWrap').classList.toggle('hidden',$('aUsatf').checked); };
+const adminBgNext=d=>coachNeedsBgCheck({usatf:d.usatf,bg:d.bg,usatfDate:d.usatfDate})?window.bgCheckLinkHtml('<b class="text-gray-900">Next step: your background check.</b> You don\'t have a current one on file — start it now.'):'';
+function adminBgHint(){
+  const d={usatf:$('aUsatf').checked, bg:$('aBgDate').value||null, usatfDate:$('aUsatfDate').value||null};
+  $('aBgWarn').innerHTML=coachNeedsBgCheck(d)&&!(d.usatf&&!d.usatfDate)?window.bgCheckLinkHtml(d.bg||d.usatfDate?"This isn't current for this season — renew your background check:":"No background check on file? Team admins need a current one. Start it now:"):(d.bg||d.usatfDate?'Background check looks current for this season.':'');
+}
+$('aUsatf').onchange=()=>{ $('aUsatfDateWrap').classList.toggle('hidden',!$('aUsatf').checked); $('aBgDateWrap').classList.toggle('hidden',$('aUsatf').checked); adminBgHint(); };
+['aBgDate','aUsatfDate'].forEach(id=>$(id).addEventListener('change',adminBgHint));
 function collectAdmin(){
   if(!$('aTeam').value) throw new Error('Please select a team.');
   let title=$('aTitle').value; if(!title) throw new Error('Please choose your role on the team.');
@@ -560,7 +567,7 @@ window.resumeGoogleAdmin=async function(){
   const c2=supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth:{ lock:(n,t,f)=>f() } });
   const {error}=await saveAdminViaLogin(c2,d);
   if(error){ msg.textContent='Could not finish: '+error.message; msg.className='text-sm mt-2 text-red-600'; return; }
-  msg.innerHTML=`${ADMIN_DONE} You're signed in as ${authSession.user.email}. <a class="underline" href="coach.html">Check your status</a>`; msg.className='text-sm mt-2 text-green-700 font-semibold';
+  msg.innerHTML=`${ADMIN_DONE} You're signed in as ${authSession.user.email}. <a class="underline" href="coach.html">Check your status</a>${adminBgNext(d)}`; msg.className='text-sm mt-2 text-green-700 font-semibold';
 };
 $('adminForm').addEventListener('submit', async(e)=>{
   e.preventDefault();
@@ -583,7 +590,7 @@ $('adminForm').addEventListener('submit', async(e)=>{
       if(error) throw /duplicate key/i.test(error.message)?new Error('You already have a coach or team admin request on file. Ask your site admin to update it.'):error;
       await ensureAccount(email, p1, msg);
     }
-    msg.textContent=ADMIN_DONE; msg.className='text-sm mt-2 text-green-700 font-semibold';
+    msg.innerHTML=ADMIN_DONE+adminBgNext(d); msg.className='text-sm mt-2 text-green-700 font-semibold'; $('aBgWarn').innerHTML='';
     e.target.reset(); $('aTitleOtherWrap').classList.add('hidden'); $('aUsatfDateWrap').classList.add('hidden'); $('aBgDateWrap').classList.remove('hidden');
   }catch(err){ msg.textContent='Error: '+(err.message||err); msg.className='text-sm mt-2 text-red-600'; }
 });// Creates the login account for `email` if the user filled in a password (skipped if they already have a Google session).
@@ -903,13 +910,20 @@ function bgCheckHint(){
     const d=$('cUsatfDate').value;
     if(!d){ warn.textContent=''; return; }
     const years=(CFG.SEASON_YEAR - new Date(d).getFullYear());
-    warn.textContent = years>3 ? 'This USATF certification is more than 3 years old and will be flagged for re-verification.' : 'USATF certification looks current — we\'ll verify against the official list.';
+    if(years>3){ warn.innerHTML=window.bgCheckLinkHtml('This USATF certification is more than 3 years old and will be flagged for re-verification. If it has lapsed, complete a VYC background check:'); return; }
+    warn.textContent='USATF certification looks current — we\'ll verify against the official list.';
   } else {
     const d=$('cBgDate').value;
-    if(!d){ warn.textContent="No date provided — you'll have 90 days from approval to complete a background check, or access will be paused until you do."; return; }
+    if(!d){ warn.innerHTML=window.bgCheckLinkHtml("No background check date? You'll have 90 days from approval to complete one, or coach access will be paused until you do. Start it now:"); return; }
     const years=(CFG.SEASON_YEAR - new Date(d).getFullYear());
-    warn.textContent = years>2 ? 'This background check is more than 2 years old and will not be valid for this season — you\'ll have 90 days to renew it.' : 'Background check looks current for this season.';
+    if(years>2){ warn.innerHTML=window.bgCheckLinkHtml("This background check is more than 2 years old and isn't valid for this season. You'll have 90 days to renew it — start now:"); return; }
+    warn.textContent='Background check looks current for this season.';
   }
+}
+// True when the coach has no current background check (no date, or older than 2 years; USATF = 3 years).
+function coachNeedsBgCheck(d){
+  if(d.usatf) return !d.usatfDate || (CFG.SEASON_YEAR-new Date(d.usatfDate).getFullYear())>3;
+  return !d.bg || (CFG.SEASON_YEAR-new Date(d.bg).getFullYear())>2;
 }
 $('cUsatf').addEventListener('change',bgCheckHint);
 $('cBgDate').addEventListener('change',bgCheckHint);
@@ -1051,7 +1065,7 @@ $('coachForm').addEventListener('submit', async(e)=>{
     if(authSession){
       // already signed in (e.g. Google) — save through the signed-in route, no password needed
       const {error}=await saveCoachViaLogin(sb,d); if(error) throw error;
-      msg.textContent='Coach registration submitted! Your team admin (or a VYC site admin) will review and approve you.'; msg.className='text-sm mt-2 text-green-700 font-semibold';
+      msg.innerHTML=`Coach registration submitted! Your team admin (or a VYC site admin) will review and approve you.${coachNeedsBgCheck(d)?window.bgCheckLinkHtml('<b class="text-gray-900">Next step: your background check.</b> You don\'t have a current one on file — start it now so your access isn\'t paused.'):''}`; msg.className='text-sm mt-2 text-green-700 font-semibold';
       e.target.reset(); bgCheckHint(); return;
     }
     const email=$('cEmail').value.trim(), cp1=$('cPass').value, cp2=$('cPass2').value;
@@ -1067,7 +1081,7 @@ $('coachForm').addEventListener('submit', async(e)=>{
     };
     const {error}=await sb.from('coaches').insert(row);
     if(error) throw error;
-    msg.textContent='Coach registration submitted! Your club will review and approve access — you will be notified once approved.'; msg.className='text-sm mt-2 text-green-700 font-semibold';
+    msg.innerHTML=`Coach registration submitted! Your team admin (or a VYC site admin) will review and approve access — you will be notified once approved.${coachNeedsBgCheck(d)?window.bgCheckLinkHtml('<b class="text-gray-900">Next step: your background check.</b> You don\'t have a current one on file — start it now so your access isn\'t paused.'):''}`; msg.className='text-sm mt-2 text-green-700 font-semibold';
     await ensureAccount(email, cp1, msg);
     e.target.reset(); bgCheckHint();
   }catch(err){ msg.textContent='Error: '+(err.message||err); msg.className='text-sm mt-2 text-red-600'; }

@@ -159,6 +159,13 @@ window.leagueReady = (async function(){
     if(Array.isArray(st)){ const y=st.find(x=>x.key==='season_year'); if(y&&+y.value) C.SEASON_YEAR=+y.value; }
   }catch(e){}
 })();
+// ---- VYC background screening: the league's official link (valleyconference.org > Background Screening, provider TCLogiQ) ----
+window.VYC_BG_CHECK_URL = 'https://www.tclogiq.com/valleyyouth';
+window.bgCheckLinkHtml = function(lead){
+  return `<div class="mt-2 rounded-lg border-2 border-amber-400 bg-amber-50 p-3 text-sm text-gray-800">${lead||'You need a current background check to coach in the VYC.'}
+    <a href="${window.VYC_BG_CHECK_URL}" target="_blank" rel="noopener" class="inline-block mt-2 px-4 py-2 rounded-lg bg-amber-600 text-white font-semibold no-underline">Start your VYC background check →</a>
+    <span class="block text-xs text-gray-600 mt-1">Opens TCLogiQ, the league's official background-screening partner (the same link as valleyconference.org → Background Screening).</span></div>`;
+};
 // ---- Current season (from Site Admin > League Setup). Working meet lists show only this season's meets;
 // past seasons are locked history (results still show on the Results page). ----
 window.currentSeason = async function(){ try{ if(window.leagueReady) await window.leagueReady; }catch(e){} return (window.APP_CONFIG||{}).SEASON_YEAR; };
