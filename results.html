@@ -49,6 +49,8 @@
       <button id="modeRecords" class="seg">🏆 All-Time Records</button>
     </div>
 
+    <div id="yearPick" class="flex flex-wrap items-center gap-3 mb-2 text-sm"></div>
+
     <div id="meetPicker" class="hidden flex flex-wrap items-center gap-2 mb-2">
       <select id="meet" class="border rounded p-2 flex-1"></select>
       <label class="text-xs text-gray-600 flex items-center gap-1"><input type="checkbox" id="meetRecord"> meet record (best ever, all years)</label>
@@ -85,21 +87,37 @@ function setMode(m){
   mode=m;
   ['modeSeason','modeMeet','modeRecords'].forEach(id=>$(id).classList.toggle('active', id==='mode'+m[0].toUpperCase()+m.slice(1)));
   $('meetPicker').classList.toggle('hidden', mode!=='meet');
+  $('yearPick').classList.toggle('hidden', mode==='records');
   $('qOnlyWrap').classList.toggle('hidden', mode!=='season');
   $('conf').classList.toggle('hidden', mode==='records');
   render();
 }
 
 sb.auth.onAuthStateChange(async(_e,s)=>{ if(!s||window.__authDone===s.user.id) return; window.__authDone=s.user.id; sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } } /* rebuild: original client can wedge after an OAuth redirect */); $('login').classList.add('hidden'); $('app').classList.remove('hidden');
-  const {data:m}=await sb.from('meets').select('id,name,meet_date,is_championship').order('meet_date',{ascending:false});
+  const {data:m}=await sb.from('meets').select('id,name,meet_date,is_championship,season_year').order('meet_date',{ascending:false});
   meets=m||[];
-  $('meet').innerHTML='<option value="">All meets — each in its own window</option>'+meets.map(m=>`<option value="${m.id}">${m.name} — ${fmtDate(m.meet_date)}</option>`).join('');
-  const want=new URLSearchParams(location.search).get('meet'); if(want){ $('meet').value=want; mode='meet'; }
   await loadAll();
+  buildYearPicker();
+  const want=new URLSearchParams(location.search).get('meet'); if(want){ const wm=meets.find(x=>x.id===want); if(wm&&wm.season_year){ const cb=document.querySelector(`#yearPick input[value="${wm.season_year}"]`); if(cb) cb.checked=true; } fillMeetSelect(); $('meet').value=want; mode='meet'; }
   setMode(mode);
   ['meet','meetRecord','evt','div','gen','conf','qOnly'].forEach(i=>$(i).onchange=render); $('q').oninput=render;
 });
 
+// ---- Season (year) checkboxes: one per season that has results; the latest is checked to start ----
+const meetYear=id=>{ const m=meets.find(x=>x.id===id); return m?m.season_year:null; };
+const selYears=()=>new Set([...document.querySelectorAll('#yearPick input:checked')].map(x=>+x.value));
+function buildYearPicker(){
+  const years=[...new Set(allResults.map(r=>r.season_year).filter(Boolean))].sort((a,b)=>b-a);
+  $('yearPick').innerHTML=years.length?`<span class="font-semibold text-gray-700">Season:</span>`+years.map((y,i)=>`<label class="flex items-center gap-1 bg-white border rounded-full px-3 py-1 cursor-pointer"><input type="checkbox" value="${y}" ${i===0?'checked':''}> ${y}</label>`).join(''):'';
+  document.querySelectorAll('#yearPick input').forEach(cb=>cb.onchange=()=>{ fillMeetSelect(); render(); });
+  fillMeetSelect();
+}
+function fillMeetSelect(){
+  const ys=selYears(), keep=$('meet').value;
+  const list=meets.filter(m=>ys.has(m.season_year)&&allResults.some(r=>r.meet_id===m.id));
+  $('meet').innerHTML='<option value="">All meets — each in its own window</option>'+list.map(m=>`<option value="${m.id}">${m.name} — ${fmtDate(m.meet_date)}</option>`).join('');
+  if(list.some(m=>m.id===keep)) $('meet').value=keep;
+}
 async function pageAll(mk){ const all=[]; for(let f=0;;f+=1000){ const {data,error}=await mk().range(f,f+999); if(error){ console.error(error); break; } all.push(...(data||[])); if(!data||data.length<1000) break; } return all; }
 let stds=[], recs=[];
 async function loadAll(){
@@ -118,15 +136,17 @@ async function loadAll(){
   let regsById={};
   const chunks=[]; for(let i=0;i<missing.length;i+=150) chunks.push(missing.slice(i,i+150));
   (await Promise.all(chunks.map(c=>sb.from('registrations').select('id,team_code').in('id',c)))).forEach(({data:regs})=>(regs||[]).forEach(r=>regsById[r.id]=r)); // in parallel — sequential lookups made the page take ~20 seconds
-  allResults=attachConference(rr.map(r=>({...r,meet_name:r.meets?.name,meet_date:r.meets?.meet_date})),regsById);
+  allResults=attachConference(rr.map(r=>({...r,meet_name:r.meets?.name,meet_date:r.meets?.meet_date,season_year:meetYear(r.meet_id)})),regsById);
   seasonBest=attachConference(sb2,regsById);
 }
 
 // Rows for the currently selected mode, before the division/gender/event/conference/search filters.
 function baseRows(){
-  if(mode==='season'||mode==='records') return seasonBest;
-  const m=meets.find(x=>x.id===$('meet').value); if(!m) return allResults;
-  if($('meetRecord').checked) return allResults.filter(r=>r.meet_name===m.name);
+  const ys=selYears(), inYears=allResults.filter(r=>ys.has(r.season_year));
+  if(mode==='records') return seasonBest;
+  if(mode==='season') return inYears.filter(r=>r.mark_value!=null); // ranked best-per-athlete within the checked season(s)
+  const m=meets.find(x=>x.id===$('meet').value); if(!m) return inYears;
+  if($('meetRecord').checked) return allResults.filter(r=>r.meet_name===m.name); // meet record looks at every year
   return allResults.filter(r=>r.meet_id===m.id);
 }
 
@@ -277,8 +297,8 @@ function fillMeetWindow(det,d,g,ev,q,conf){
 function renderAllMeets(d,g,ev,q,conf){
   lastGroups=[];
   $('hint').textContent='Every meet, each in its own window — open one to see its results by heat. Filters above apply to all of them.';
-  const withResults=meets.filter(m=>allResults.some(r=>r.meet_id===m.id));
-  if(!withResults.length){ $('list').innerHTML='<p class="text-gray-500">No results have been uploaded for any meet yet.</p>'; return; }
+  const ys=selYears(); const withResults=meets.filter(m=>ys.has(m.season_year)&&allResults.some(r=>r.meet_id===m.id));
+  if(!withResults.length){ $('list').innerHTML=`<p class="text-gray-500">${ys.size?'No results for the checked season(s).':'Check at least one season above.'}</p>`; return; }
   $('list').innerHTML=withResults.map(m=>{ const n=meetRows(m,d,g,ev,q).filter(r=>!conf||r.conference===conf).length; return `<details class="meetwin" data-m="${m.id}" ${openMeets.has(m.id)?'open':''}><summary><span class="font-bold">${m.name}</span> ${m.is_championship?'<span class="bdg bcr">Conference Championship</span>':''} <span class="text-gray-500 text-sm">— ${fmtDate(m.meet_date)} · ${n} results</span></summary><div class="meetbody"></div></details>`; }).join('');
   document.querySelectorAll('#list details.meetwin').forEach(det=>{
     if(det.open) fillMeetWindow(det,d,g,ev,q,conf);
