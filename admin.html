@@ -420,7 +420,9 @@ ${teams.map(t=>`<tr data-code="${esc(t.code)}"><td class="font-mono font-bold">$
 <div class="card"><h3 class="font-bold mb-1">Competition numbers — ${esc(S.season_year||CFG.SEASON_YEAR)}</h3>
 <p class="text-xs text-gray-500 mb-2">Teams in alphabetical order, starting at 100. Each team's block = its certified athletes last season + a 20-number cushion. New registrations get the lowest open number in their team's block automatically; if a block fills up, extras get numbers after the last team's block.</p>
 <div id="cbPane" class="text-sm text-gray-500">Loading…</div>
-<button class="btn lite mt-2" id="cbRebuild">Rebuild blocks from last season</button></div>
+<div class="flex flex-wrap gap-2 mt-2"><button class="btn lite" id="cbRebuild">Rebuild blocks from last season</button>
+<button class="btn pri" id="cbReassign">Reassign numbers from the certified roster</button></div>
+<p class="text-xs text-gray-500 mt-1"><b>Reassign</b> is for when certification is finished: every team's block is resized to its roster now (+20 cushion), and each team's athletes are renumbered alphabetically — certified athletes first, then any still under review. This changes numbers already handed out.</p></div>
 <div class="card"><h3 class="font-bold mb-1">Event list</h3><p class="text-sm text-gray-600">The standard event list (which events each division runs) still lives in the app's code, copied from Team Manager. To change it, tell Claude — it isn't editable here yet.</p></div>`;
 $('nAdd').onclick=async()=>{ const code=$('nCode').value.trim().toUpperCase(), name=$('nName').value.trim(); if(!code||!name){ toast('Enter a code and a name.',true); return; }
 if(await run(sb.from('league_teams').insert({code,name,conference:$('nConf').value,active:true,sort_order:100}),'Team added')) paintLeague(); };
@@ -429,9 +431,13 @@ const season=+(S.season_year||CFG.SEASON_YEAR);
 const [{data:blocks},{data:used}]=await Promise.all([sb.from('comp_blocks').select('*').eq('season_year',season).order('sort_order'),
   sb.from('registrations').select('team_code,comp_number').eq('season_year',season).not('comp_number','is',null)]);
 const usedBy={}; (used||[]).forEach(u=>usedBy[u.team_code]=(usedBy[u.team_code]||0)+1);
-$('cbPane').innerHTML=(blocks&&blocks.length)?`<div class="scroll" style="max-height:none"><table class="t"><thead><tr><th>Team</th><th>Last season</th><th>Numbers</th><th>Cushion</th><th>Handed out</th></tr></thead><tbody>${blocks.map(b=>{ const rosterEnd=b.start_no+Math.max(b.last_season_count,20)-1; return `<tr><td>${esc(teamName(b.team_code))}</td><td>${b.last_season_count}</td><td class="font-mono">${b.start_no}–${rosterEnd}</td><td class="font-mono">${rosterEnd+1}–${b.end_no}</td><td>${usedBy[b.team_code]||0}</td></tr>`; }).join('')}</tbody></table></div>`:'No blocks yet — they are built automatically with the first registration of the season, or click Rebuild.';
+$('cbPane').innerHTML=(blocks&&blocks.length)?`<div class="scroll" style="max-height:none"><table class="t"><thead><tr><th>Team</th><th>${blocks[0].basis==='certified roster'?'Certified roster':'Last season'}</th><th>Numbers</th><th>Cushion</th><th>Handed out</th></tr></thead><tbody>${blocks.map(b=>{ const rosterEnd=b.start_no+(b.basis==='certified roster'?b.last_season_count:Math.max(b.last_season_count,20))-1; return `<tr><td>${esc(teamName(b.team_code))}</td><td>${b.last_season_count}</td><td class="font-mono">${b.start_no}–${rosterEnd}</td><td class="font-mono">${rosterEnd+1}–${b.end_no}</td><td>${usedBy[b.team_code]||0}</td></tr>`; }).join('')}</tbody></table></div>`:'No blocks yet — they are built automatically with the first registration of the season, or click Rebuild.';
 $('cbRebuild').onclick=async()=>{ if((used||[]).length&&!confirm(`${used.length} numbers are already handed out this season. Rebuilding changes the blocks for new registrations only — numbers already given out stay the same. Continue?`)) return;
   const {error}=await sb.rpc('build_comp_blocks',{p_season:season}); if(error){ toast(error.message,true); return; } toast('Blocks rebuilt'); paintLeague(); };
+$('cbReassign').onclick=async()=>{
+  if(prompt(`Reassign EVERY ${season} competition number from the certified roster?\n\nEach team's block is resized to its current roster (+20 cushion), and athletes are renumbered alphabetically. Numbers already handed out will change.\n\nType REASSIGN to continue.`)!=='REASSIGN') return;
+  const {data,error}=await sb.rpc('reassign_comp_numbers',{p_season:season}); if(error){ toast(error.message,true); return; }
+  toast(`Renumbered ${data} athletes`); paintLeague(); };
 viewOnly($('pane'));
 }
 document.addEventListener('click',async e=>{
