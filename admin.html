@@ -275,6 +275,10 @@ ${SITE?'':'<select id="cDir"><option value="">Both directions</option><option va
 }
 // Evidence from the database's comparison with the old team: first + last name, birth date, parent/guardian name.
 function matchPills(c){
+if(c.vus) return `<div class="text-xs font-semibold mt-1" style="color:#6b21a8">Valley United move request${c.vus_detected?' (detected — parent didn\'t say)':''}: new team can't verify until ${esc(teamName(c.from_team))} approves.</div>`+matchPillsBase(c);
+return matchPillsBase(c);
+}
+function matchPillsBase(c){
 if(!c.match_registration_id) return c.flagged?'':'<div class="text-xs text-gray-500">No same-name athlete found on that team</div>';
 const t=(ok,lab)=>`<span class="pill ${ok?'ok':'gray'}">${ok?'✓':'✗'} ${lab}</span>`;
 return `<div class="mt-1">${t(true,'Name')} ${t(c.match_dob,'Birth date')} ${t(c.match_parent,'Parent')}</div>`;

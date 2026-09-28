@@ -321,7 +321,8 @@ const xferKey=(f,l,d)=>[f,l,d].map(x=>String(x||'').trim().toLowerCase()).join('
 let xferByKey={}, xferById={};
 function clearPill(c){
   if(!c) return '';
-  const m=c.flagged&&c.status==='pending'?['bg-orange-100 text-orange-800','Possible transfer — verifying']:
+  const m=c.vus&&c.status==='pending'?['bg-purple-100 text-purple-800','Valley United move — waiting for approval (can\'t verify yet)']:
+    c.flagged&&c.status==='pending'?['bg-orange-100 text-orange-800','Possible transfer — verifying']:
     {pending:['bg-yellow-100 text-yellow-800','Transfer pending'],cleared:['bg-green-100 text-green-800','Transfer approved'],owes_fees:['bg-red-100 text-red-800','Transfer issue'],not_same:['bg-gray-200 text-gray-700','Not the same athlete']}[c.status];
   return `<span class="pill ${m[0]}" title="${c.flagged?'Parent said no other team — ':''}${esc(TEAM_NAME(c.from_team))}${c.note?' — '+esc(c.note):''}">${m[1]}</span>`;
 }
@@ -340,6 +341,7 @@ function xferCardHtml(c){
       <div class="flex-1 min-w-0"><div class="font-bold">${esc(c.athlete_last)}, ${esc(c.athlete_first)} <span class="text-gray-500 font-normal text-sm">DOB ${fmtDate(c.dob)} · ${esc(c.division||'')}</span></div>
       ${c.flagged?`<div class="text-sm text-orange-800"><b>Possible transfer to ${esc(TEAM_NAME(c.to_team))}.</b> The parent said this athlete was <b>not</b> on another team, but the first and last name, birthday and parent name all match ${mine?`<b>${esc(mine.first_name)} ${esc(mine.last_name)}</b> on your roster`:'an athlete on your roster'}. Is it the same athlete?</div>`
         :`<div class="text-sm">Requesting a transfer to <b>${esc(TEAM_NAME(c.to_team))}</b></div>`}
+      ${c.vus?`<div class="text-sm text-purple-800 mt-1"><b>Valley United move request.</b> This athlete ran for Valley United last season${c.vus_detected?' (found in last season\'s Valley United sign-ups — the parent did not say so)':''}. Under the Valley United rule they return to your team unless you approve this move. <b>${esc(TEAM_NAME(c.to_team))} can't verify them until you decide.</b>${c.vus_plans_to_return===true?' On their Valley United sign-up they said they planned to return to your team.':c.vus_plans_to_return===false?' On their Valley United sign-up they said they were NOT returning to your team.':''}</div>`:''}
       ${matchLine(c)}
       <div class="text-xs text-gray-500">Requested ${fmtDate(c.created_at)}${c.responded_at?` · answered ${fmtDate(c.responded_at)} by ${esc(c.responded_by||'')}`:''}${c.note?' · '+esc(c.note):''}</div></div>
       ${clearPill(c)}
@@ -434,7 +436,9 @@ function render(){
       ${r.proof_path?`<button class="btn bg-gray-200" onclick="viewProof('${r.id}')">View proof of birth</button>`:'<span class="pill bg-green-100 text-green-800">Returning — verified from last season\'s record (no proof needed)</span>'}
       <button class="btn bg-gray-200" onclick="details('${r.id}')">Details</button>
       <button class="btn bg-gray-200" onclick="makePdf('${r.id}')">Download forms PDF</button>
-      ${r.status!=='verified'?`<button class="btn bg-green-600 text-white" onclick="setStatus('${r.id}','verified')">✓ Verified</button>`:''}
+      ${r.status!=='verified'?(clearIn[r.id]&&clearIn[r.id].vus&&!['cleared','not_same'].includes(clearIn[r.id].status)
+        ?`<span class="text-xs text-purple-800 font-semibold">Can't verify yet — waiting for ${esc(TEAM_NAME(clearIn[r.id].from_team))} to approve the Valley United move</span>`
+        :`<button class="btn bg-green-600 text-white" onclick="setStatus('${r.id}','verified')">✓ Verified</button>`):''}
       ${r.status!=='rejected'?`<button class="btn bg-red-100 text-red-800" onclick="setStatus('${r.id}','rejected')">Reject</button>`:''}
       ${r.dob_check_status!=='pending'&&r.proof_path?`<button class="btn bg-gray-100 text-sm" onclick="runChecks([rows.find(x=>x.id==='${r.id}')],true)">Re-run ID check</button>`:''}
     </div>

@@ -114,6 +114,15 @@
         <p class="text-xs text-gray-500 mt-1">If it was a VYC team, that team will be asked to approve the transfer (for example, confirming no fees are owed from last season). Your registration still goes through while they review it.</p>
       </div>
     </div>
+    <div class="mt-3">
+      <label class="f req">Did this athlete run for Valley United Striders last season?</label>
+      <div class="flex gap-4 text-sm"><label class="flex items-center gap-1"><input type="radio" name="vusLast" value="no" checked> No</label><label class="flex items-center gap-1"><input type="radio" name="vusLast" value="yes"> Yes</label></div>
+      <div id="vusWrap" class="hidden mt-2">
+        <label class="f req">Athlete's original VYC team (the team they ran for before Valley United)</label>
+        <select id="vusTeam"></select>
+        <p id="vusNote" class="text-sm mt-2 rounded-lg p-2 hidden"></p>
+      </div>
+    </div>
   </div>
 
   <div class="card">
@@ -654,7 +663,7 @@ function fillTeams(sel){
   sel.innerHTML='<option value="">Select…</option>'+window.VYC_TEAMS.map(t=>`<option value="${t.code}">${t.name} (${t.conference})</option>`).join('');
 }
 function fillAllTeams(){
-  const act=window.VYC_TEAMS.filter(t=>t.active!==false); const sels=['teamCode','cTeam','vHomeTeam','aTeam','tTeam'].map($); const keep=sels.map(s=>s.value);
+  const act=window.VYC_TEAMS.filter(t=>t.active!==false); const sels=['teamCode','cTeam','vHomeTeam','aTeam','tTeam','vusTeam'].map($); const keep=sels.map(s=>s.value);
   const lab=t=>`<option value="${t.code}">${t.name} (${t.conference==='West'?'Western':'Eastern'})</option>`;
   sels.forEach((sel,i)=>{ sel.innerHTML='<option value="">Select…</option>'+act.map(lab).join(''); sel.value=keep[i]||''; });
 }
@@ -763,9 +772,25 @@ async function findPast(){
 }
 // Returning athlete linked to last season's verified record -> no proof of birth (the database re-checks name + birth date).
 // Only when returning to the SAME team — a transfer is a new athlete to the new team and needs proof.
-const returningVerified=()=>!!pastPick && pastPick.team_code===$('teamCode').value && document.querySelector('input[name=returning]:checked').value==='yes';
+const returningVerified=()=>!vusMove() && !!pastPick && pastPick.team_code===$('teamCode').value && document.querySelector('input[name=returning]:checked').value==='yes';
+// ---- Valley United rule: a VUS athlete must return to their ORIGINAL team; moving elsewhere needs that team's approval ----
+const vusYes=()=>document.querySelector('input[name=vusLast]:checked').value==='yes';
+const vusMove=()=>vusYes() && !!$('vusTeam').value && !!$('teamCode').value && $('vusTeam').value!==$('teamCode').value;
+function updateVus(){
+  $('vusWrap').classList.toggle('hidden',!vusYes()); $('vusTeam').required=vusYes();
+  const n=$('vusNote'), o=$('vusTeam').value, mine=$('teamCode').value;
+  if(!vusYes()||!o||!mine){ n.classList.add('hidden'); return; }
+  n.classList.remove('hidden');
+  if(o===mine){ n.className='text-sm mt-2 rounded-lg p-2 bg-green-50 border border-green-400'; n.innerHTML=`✓ Returning to their original team, ${esc(teamLabel(o))}.`; }
+  else { n.className='text-sm mt-2 rounded-lg p-2 bg-amber-50 border border-amber-400';
+    n.innerHTML=`<b>Valley United rule:</b> athletes who ran for Valley United go back to their original team. To register with <b>${esc(teamLabel(mine))}</b>, <b>${esc(teamLabel(o))}</b> must approve the move. Your registration is saved, but it can't be verified (or entered into meets) until they approve. Proof of birth is required.`; }
+}
+document.querySelectorAll('input[name=vusLast]').forEach(r=>r.addEventListener('change',()=>{ updateVus(); updateProofNeed(); }));
+$('vusTeam').addEventListener('change',()=>{ updateVus(); updateProofNeed(); });
+$('teamCode').addEventListener('change',updateVus);
 // A transfer (ran for a different team last season) is a NEW athlete to this team: lock "New athlete".
 function isTransfer(){
+  if(vusMove()) return true;
   const mine=$('teamCode').value;
   if(pastPick) return !!mine && pastPick.team_code!==mine;
   const other=document.querySelector('input[name=otherTeam]:checked').value==='yes', pc=$('priorTeamCode').value;
@@ -783,7 +808,7 @@ function updateProofNeed(){
   $('proofFile').required=!skip;
   const transfer=isTransfer();
   $('proofReturnHint').innerHTML = transfer
-    ? `This athlete ran for <b>${esc(teamLabel(pastPick?pastPick.team_code:$('priorTeamCode').value))}</b> last season, so they count as a <b>new athlete</b> to this team — proof of birth is required.`
+    ? `This athlete ran for <b>${esc(teamLabel(vusMove()?$('vusTeam').value:pastPick?pastPick.team_code:$('priorTeamCode').value))}</b> last season, so they count as a <b>new athlete</b> to this team — proof of birth is required.`
     : `Returning athlete? Make sure the athlete's <b>first name, last name and date of birth</b> above exactly match last season's registration — we check automatically, and proof of birth isn't needed once they match.`;
   $('proofReturnHint').classList.toggle('hidden', skip || !(transfer || document.querySelector('input[name=returning]:checked').value==='yes'));
 }
@@ -823,14 +848,19 @@ async function autoFillFromRecord(f,l,d,seq){
   const note=document.createElement('div'); note.className='w-full text-xs mt-1';
   if(!info.has_contact){ note.innerHTML='Filled in from last season: gender. Last season\'s records don\'t include family contact details, so please fill those in below.'; box.appendChild(note); return; }
   note.innerHTML=`<b>Fill in the rest from last season?</b> For privacy, enter the phone number or email on last season's registration:
-    <span class="flex flex-wrap gap-2 mt-1"><input id="fillContact" style="max-width:240px;min-height:36px;padding:6px" placeholder="Phone or email"><button type="button" class="btn bg-blue-600 text-white text-xs" id="fillGo" style="min-height:36px">Fill in</button></span><span id="fillMsg"></span>`;
+    <span class="flex flex-wrap gap-2 mt-1"><input id="fillContact" style="max-width:240px;min-height:36px;padding:6px" placeholder="Phone or email"></span>
+    <span class="block mt-1">Is your address the same as last season?</span>
+    <span class="flex flex-wrap gap-2 mt-1"><button type="button" class="btn bg-blue-600 text-white text-xs" data-same="1" style="min-height:36px">Yes, same address — fill in</button><button type="button" class="btn bg-gray-200 text-xs" data-same="0" style="min-height:36px">No, we moved — fill in the rest</button></span><span id="fillMsg"></span>`;
   box.appendChild(note);
-  $('fillGo').onclick=async()=>{
+  note.querySelectorAll('button[data-same]').forEach(btn=>btn.onclick=async()=>{
+    const sameAddr=btn.dataset.same==='1';
     const {data:x}=await sb.rpc('returning_details',{p_first:f,p_last:l,p_dob:d,p_contact:$('fillContact').value});
     if(!x||!x.contact_ok||!x.details){ $('fillMsg').innerHTML=' <span class="text-red-600">That doesn\'t match last season\'s phone or email.</span>'; return; }
-    let n=0; for(const [k,id] of Object.entries(FILL_MAP)){ const v=x.details[k]; if(v&&!$(id).value){ $(id).value=v; n++; } }
-    note.innerHTML=`✓ Filled in ${n} field${n===1?'':'s'} from last season — please check they're still correct.`;
-  };
+    let n=0; for(const [k,id] of Object.entries(FILL_MAP)){ if(!sameAddr&&['address','city','zip'].includes(k)) continue; const v=x.details[k]; if(v&&!$(id).value){ $(id).value=v; n++; } }
+    if(!sameAddr){ ['address','city','zip'].forEach(id=>$(id).value=''); }
+    note.innerHTML=`✓ Filled in ${n} field${n===1?'':'s'} from last season${sameAddr?'':' — please enter your new address'} and check everything is still correct.`;
+    if(!sameAddr) $('address').focus();
+  });
 }
 ['firstName','lastName','dob'].forEach(id=>$(id).addEventListener('input',()=>{ clearTimeout(autoTimer); autoTimer=setTimeout(autoMatch,400); }));
 $('dob').addEventListener('change',()=>{ clearTimeout(autoTimer); autoTimer=setTimeout(autoMatch,100); });
@@ -945,6 +975,7 @@ $('parentForm').addEventListener('submit', async(e)=>{
     const otherTeam=document.querySelector('input[name=otherTeam]:checked').value==='yes';
     const pCode=otherTeam?$('priorTeamCode').value:'';
     if(otherTeam && !pCode) throw new Error('Please select which team the athlete was on last season.');
+    if(vusYes() && !$('vusTeam').value) throw new Error("Please select the athlete's original VYC team (before Valley United).");
     if(pCode==='__OTHER' && !$('priorTeam').value.trim()) throw new Error('Please type the name of the previous team.');
     const priorVyc=pCode && pCode!=='__OTHER' ? pCode : null;
     const priorName=!otherTeam?null:priorVyc?(window.VYC_TEAMS.find(t=>t.code===priorVyc)||{}).name||priorVyc:$('priorTeam').value.trim();
@@ -960,7 +991,8 @@ $('parentForm').addEventListener('submit', async(e)=>{
       phone:$('phone').value.trim(), email:$('email').value.trim(),
       emergency_name:$('emergencyName').value.trim(), emergency_phone:$('emergencyPhone').value.trim(),
       is_returning: document.querySelector('input[name=returning]:checked').value==='yes',
-      ran_for_other_team: otherTeam, prior_team:priorName, prior_team_code:priorVyc,
+      ran_for_other_team: otherTeam||vusMove(), prior_team:vusMove()?teamLabel($('vusTeam').value):priorName, prior_team_code:vusMove()?$('vusTeam').value:priorVyc,
+      ran_vus_last_season: vusYes(),
       prior_registration_id: pastPick ? pastPick.id : null,
       proof_path:proofPath,
       insurance_carrier:$('insuranceCarrier').value.trim(),
@@ -998,7 +1030,7 @@ function clearAthleteFields(form, everything){
   const keep=everything?{}:Object.fromEntries(FAMILY_FIELDS.map(id=>[id,$(id).value])), keepLast=$('lastName').value;
   form.reset(); for(const [id,v] of Object.entries(keep)) $(id).value=v;
   if(!everything) $('lastName').value=keepLast; // siblings usually share a last name — easy to change
-  $('divisionShow').value=''; $('priorTeamWrap').classList.add('hidden'); $('priorTeam').classList.add('hidden');
+  $('divisionShow').value=''; $('priorTeamWrap').classList.add('hidden'); $('priorTeam').classList.add('hidden'); updateVus();
   pastPick=null; autoDismissed=''; $('pastMatches').classList.add('hidden'); $('pastMatches').innerHTML='';
   athleteSig.clear(); if(everything) parentSig.clear();
   $('parentAcctWrap')&&$('viaEmail')&&$('parentAcctWrap').classList.toggle('hidden',!$('viaEmail').checked);
