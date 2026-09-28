@@ -11,6 +11,14 @@ create or replace function public.reg_returning_verify() returns trigger
 language plpgsql security definer set search_path to 'public' as $$
 declare p record;
 begin
+  -- A transfer (declared prior team, or linked record on another team) is a NEW athlete to this team.
+  if (new.prior_team_code is not null and new.prior_team_code is distinct from new.team_code)
+     or exists (select 1 from public.registrations x where x.id = new.prior_registration_id and x.team_code is distinct from new.team_code) then
+    new.is_returning := false;
+    if coalesce(trim(new.proof_path),'') = '' then
+      raise exception 'This athlete was on a different team last season, so they count as a new athlete to this team. Please upload proof of birth.';
+    end if;
+  end if;
   if coalesce(trim(new.proof_path),'') <> '' then return new; end if;
   if not coalesce(new.is_returning,false) or new.prior_registration_id is null then
     raise exception 'Please upload proof of birth. (Only returning athletes matched to last season''s records can skip it.)';

@@ -760,17 +760,31 @@ async function findPast(){
 // Returning athlete linked to last season's verified record -> no proof of birth (the database re-checks name + birth date).
 // Only when returning to the SAME team — a transfer is a new athlete to the new team and needs proof.
 const returningVerified=()=>!!pastPick && pastPick.team_code===$('teamCode').value && document.querySelector('input[name=returning]:checked').value==='yes';
+// A transfer (ran for a different team last season) is a NEW athlete to this team: lock "New athlete".
+function isTransfer(){
+  const mine=$('teamCode').value;
+  if(pastPick) return !!mine && pastPick.team_code!==mine;
+  const other=document.querySelector('input[name=otherTeam]:checked').value==='yes', pc=$('priorTeamCode').value;
+  return other && !!pc && pc!==mine;
+}
+function lockNewIfTransfer(){
+  const t=isTransfer(), ret=document.querySelector('input[name=returning][value=yes]');
+  if(t && ret.checked){ document.querySelector('input[name=returning][value=no]').checked=true; }
+  ret.disabled=t; ret.closest('label').style.opacity=t?'.45':''; ret.closest('label').title=t?'Transfers count as new athletes to this team':'';
+}
 function updateProofNeed(){
+  lockNewIfTransfer();
   const skip=returningVerified();
   $('proofNotNeeded').classList.toggle('hidden',!skip); $('proofNeeded').classList.toggle('hidden',skip);
   $('proofFile').required=!skip;
-  const transfer=!!pastPick && pastPick.team_code!==$('teamCode').value;
+  const transfer=isTransfer();
   $('proofReturnHint').innerHTML = transfer
-    ? `This athlete ran for <b>${esc(teamLabel(pastPick.team_code))}</b> last season, so they count as a <b>new athlete</b> to this team — proof of birth is required.`
+    ? `This athlete ran for <b>${esc(teamLabel(pastPick?pastPick.team_code:$('priorTeamCode').value))}</b> last season, so they count as a <b>new athlete</b> to this team — proof of birth is required.`
     : `Returning athlete? Type the athlete's last name above and tap <b>"Yes, this is my athlete"</b> — then proof of birth isn't needed.`;
   $('proofReturnHint').classList.toggle('hidden', skip || !(transfer || document.querySelector('input[name=returning]:checked').value==='yes'));
 }
-document.querySelectorAll('input[name=returning]').forEach(r=>r.addEventListener('change',updateProofNeed));
+document.querySelectorAll('input[name=returning],input[name=otherTeam]').forEach(r=>r.addEventListener('change',updateProofNeed));
+$('priorTeamCode').addEventListener('change',updateProofNeed);
 $('lastName').addEventListener('input',()=>{ clearTimeout(pastTimer); pastTimer=setTimeout(findPast,300); });
 $('firstName').addEventListener('input',()=>{ if(!pastPick&&!$('pastMatches').classList.contains('hidden')){ clearTimeout(pastTimer); pastTimer=setTimeout(findPast,300); } });
 $('teamCode').addEventListener('change',()=>{ applyPastPick(); updateProofNeed(); });
