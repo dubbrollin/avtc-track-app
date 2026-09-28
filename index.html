@@ -780,9 +780,35 @@ function updateProofNeed(){
   const transfer=isTransfer();
   $('proofReturnHint').innerHTML = transfer
     ? `This athlete ran for <b>${esc(teamLabel(pastPick?pastPick.team_code:$('priorTeamCode').value))}</b> last season, so they count as a <b>new athlete</b> to this team — proof of birth is required.`
-    : `Returning athlete? Type the athlete's last name above and tap <b>"Yes, this is my athlete"</b> — then proof of birth isn't needed.`;
+    : `Returning athlete? Make sure the athlete's <b>first name, last name and date of birth</b> above exactly match last season's registration — we check automatically, and proof of birth isn't needed once they match.`;
   $('proofReturnHint').classList.toggle('hidden', skip || !(transfer || document.querySelector('input[name=returning]:checked').value==='yes'));
 }
+// ---- Automatic returning-athlete check from the athlete section (first + last name + date of birth) ----
+// Exact match to last season's verified records: same team -> returning (no proof); other team -> transfer (new athlete, proof).
+let autoTimer=null, autoSeq=0, autoDismissed='';
+const autoKey=()=>[$('firstName').value,$('lastName').value,$('dob').value,$('teamCode').value].map(s=>String(s).trim().toLowerCase()).join('|');
+function clearAutoPick(){ if(pastPick&&pastPick.auto){ pastPick=null; $('pastMatches').classList.add('hidden'); $('pastMatches').innerHTML=''; setRadio('returning','no'); setRadio('otherTeam','no'); } }
+async function autoMatch(){
+  if(pastPick && !pastPick.auto) return; // a parent's own pick from the list wins
+  const f=$('firstName').value.trim(), l=$('lastName').value.trim(), d=$('dob').value, team=$('teamCode').value, key=autoKey(), seq=++autoSeq;
+  if(!f||!l||!d||key===autoDismissed){ clearAutoPick(); updateProofNeed(); return; }
+  const {data}=await sb.rpc('find_athlete_record',{p_first:f,p_last:l,p_dob:d});
+  if(seq!==autoSeq) return;
+  const rec=(data||[]).find(x=>x.team_code===team)||(data||[])[0];
+  if(!rec){ clearAutoPick(); updateProofNeed(); return; }
+  pastPick={...rec, first_name:f, last_name:l, auto:true};
+  applyPastPick();
+  const same=rec.team_code===team, box=$('pastMatches');
+  box.innerHTML=same
+    ? `<div class="rounded-lg border-2 border-green-500 bg-green-50 p-2 text-sm flex flex-wrap items-center gap-2"><span class="flex-1">✓ <b>Returning athlete</b> — ${esc(f)} ${esc(l)} is in last season's verified records for ${esc(teamLabel(rec.team_code))}${rec.division?' ('+esc(rec.division)+')':''}. No proof of birth needed.</span><button type="button" class="btn bg-gray-200 text-xs" id="autoUndo">Not this athlete</button></div>`
+    : `<div class="rounded-lg border-2 border-amber-400 bg-amber-50 p-2 text-sm flex flex-wrap items-center gap-2"><span class="flex-1">${esc(f)} ${esc(l)} ran for <b>${esc(teamLabel(rec.team_code))}</b> last season, so they'll register as a <b>new athlete</b> to this team (a transfer). ${esc(teamLabel(rec.team_code))} will be asked to approve the transfer, and proof of birth is required.</span><button type="button" class="btn bg-gray-200 text-xs" id="autoUndo">Not this athlete</button></div>`;
+  box.classList.remove('hidden');
+  $('autoUndo').onclick=()=>{ autoDismissed=autoKey(); clearAutoPick(); updateProofNeed(); };
+  updateProofNeed();
+}
+['firstName','lastName','dob'].forEach(id=>$(id).addEventListener('input',()=>{ clearTimeout(autoTimer); autoTimer=setTimeout(autoMatch,400); }));
+$('dob').addEventListener('change',()=>{ clearTimeout(autoTimer); autoTimer=setTimeout(autoMatch,100); });
+$('teamCode').addEventListener('change',()=>{ clearTimeout(autoTimer); autoTimer=setTimeout(autoMatch,100); });
 document.querySelectorAll('input[name=returning],input[name=otherTeam]').forEach(r=>r.addEventListener('change',updateProofNeed));
 $('priorTeamCode').addEventListener('change',updateProofNeed);
 $('lastName').addEventListener('input',()=>{ clearTimeout(pastTimer); pastTimer=setTimeout(findPast,300); });
