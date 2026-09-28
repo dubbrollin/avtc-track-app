@@ -697,7 +697,8 @@ function makeSig(container){
       }
       if(!hasDrawn) return null;
       return {png:canvas.toDataURL('image/png'), method:'drawn'};
-    }
+    },
+    clear(){ ctx.clearRect(0,0,canvas.width,canvas.height); hasDrawn=false; wrap.querySelector('.sigtypeinput').value=''; wrap.querySelector('.sigpreview').textContent=''; }
   };
 }
 const athleteSig=makeSig($('athleteSigWrap'));
@@ -749,12 +750,15 @@ async function findPast(){
     <div class="flex flex-col gap-1">${list.map((a,i)=>`<button type="button" class="text-left bg-white border rounded p-2 text-sm hover:bg-amber-100" data-i="${i}">
       <b>${esc(a.first_name)} ${esc(a.last_name)}</b> <span class="text-gray-600">— ${esc(teamLabel(a.team_code))}${a.division?' · '+esc(a.division):''} (${a.season_year})</span>
       <span class="float-right text-green-700 font-semibold">Yes, this is my athlete</span></button>`).join('')}</div>
-    <p class="text-xs text-gray-500 mt-1">Not listed? Just keep filling out the form.</p></div>`;
+    <p class="text-xs text-gray-500 mt-1">Not listed? Just keep filling out the form. (Entering the athlete's first name, last name and date of birth also finds them automatically.)</p></div>`;
   box.classList.remove('hidden');
   box.querySelectorAll('button[data-i]').forEach(b=>b.onclick=()=>{
-    pastPick=list[+b.dataset.i];
-    $('firstName').value=pastPick.first_name; $('lastName').value=pastPick.last_name;
-    applyPastPick(); showPastPicked(); updateProofNeed();
+    const p=list[+b.dataset.i];
+    $('firstName').value=p.first_name; $('lastName').value=p.last_name;
+    if($('dob').value){ pastPick=null; autoDismissed=''; autoMatch(); return; } // name + birth date -> full automatic check and fill
+    pastPick=p; applyPastPick(); showPastPicked(); updateProofNeed();
+    const hint=document.createElement('p'); hint.className='text-xs mt-1 text-gray-700'; hint.textContent='Now enter the date of birth — we\'ll confirm the athlete and fill in what we have from last season.';
+    $('pastMatches').appendChild(hint);
   });
 }
 // Returning athlete linked to last season's verified record -> no proof of birth (the database re-checks name + birth date).
@@ -789,7 +793,7 @@ let autoTimer=null, autoSeq=0, autoDismissed='';
 const autoKey=()=>[$('firstName').value,$('lastName').value,$('dob').value,$('teamCode').value].map(s=>String(s).trim().toLowerCase()).join('|');
 function clearAutoPick(){ if(pastPick&&pastPick.auto){ pastPick=null; $('pastMatches').classList.add('hidden'); $('pastMatches').innerHTML=''; setRadio('returning','no'); setRadio('otherTeam','no'); } }
 async function autoMatch(){
-  if(pastPick && !pastPick.auto) return; // a parent's own pick from the list wins
+  if(pastPick && !pastPick.auto){ if(!$('dob').value) return; pastPick=null; } // a list pick becomes a full check once the birth date is in
   const f=$('firstName').value.trim(), l=$('lastName').value.trim(), d=$('dob').value, team=$('teamCode').value, key=autoKey(), seq=++autoSeq;
   if(!f||!l||!d||key===autoDismissed){ clearAutoPick(); updateProofNeed(); return; }
   const {data}=await sb.rpc('find_athlete_record',{p_first:f,p_last:l,p_dob:d});
@@ -805,6 +809,28 @@ async function autoMatch(){
   box.classList.remove('hidden');
   $('autoUndo').onclick=()=>{ autoDismissed=autoKey(); clearAutoPick(); updateProofNeed(); };
   updateProofNeed();
+  autoFillFromRecord(f,l,d,seq);
+}
+// Fill the form from last season's record. Gender comes right away; family/contact details only after the
+// parent confirms the phone or email from last season (the database checks it — see returning_details()).
+const FILL_MAP={address:'address',city:'city',zip:'zip',phone:'phone',email:'email',emergency_name:'emergencyName',emergency_phone:'emergencyPhone',
+  parent1_name:'parent1Name',parent1_relationship:'parent1Rel',parent2_name:'parent2Name',parent2_relationship:'parent2Rel',insurance_carrier:'insuranceCarrier',doctor_name:'doctorName'};
+async function autoFillFromRecord(f,l,d,seq){
+  const {data:info}=await sb.rpc('returning_details',{p_first:f,p_last:l,p_dob:d,p_contact:null});
+  if(seq!==autoSeq||!info) return;
+  if(info.gender) $('gender').value=info.gender;
+  const box=$('pastMatches').firstElementChild; if(!box) return;
+  const note=document.createElement('div'); note.className='w-full text-xs mt-1';
+  if(!info.has_contact){ note.innerHTML='Filled in from last season: gender. Last season\'s records don\'t include family contact details, so please fill those in below.'; box.appendChild(note); return; }
+  note.innerHTML=`<b>Fill in the rest from last season?</b> For privacy, enter the phone number or email on last season's registration:
+    <span class="flex flex-wrap gap-2 mt-1"><input id="fillContact" style="max-width:240px;min-height:36px;padding:6px" placeholder="Phone or email"><button type="button" class="btn bg-blue-600 text-white text-xs" id="fillGo" style="min-height:36px">Fill in</button></span><span id="fillMsg"></span>`;
+  box.appendChild(note);
+  $('fillGo').onclick=async()=>{
+    const {data:x}=await sb.rpc('returning_details',{p_first:f,p_last:l,p_dob:d,p_contact:$('fillContact').value});
+    if(!x||!x.contact_ok||!x.details){ $('fillMsg').innerHTML=' <span class="text-red-600">That doesn\'t match last season\'s phone or email.</span>'; return; }
+    let n=0; for(const [k,id] of Object.entries(FILL_MAP)){ const v=x.details[k]; if(v&&!$(id).value){ $(id).value=v; n++; } }
+    note.innerHTML=`✓ Filled in ${n} field${n===1?'':'s'} from last season — please check they're still correct.`;
+  };
 }
 ['firstName','lastName','dob'].forEach(id=>$(id).addEventListener('input',()=>{ clearTimeout(autoTimer); autoTimer=setTimeout(autoMatch,400); }));
 $('dob').addEventListener('change',()=>{ clearTimeout(autoTimer); autoTimer=setTimeout(autoMatch,100); });
@@ -952,12 +978,38 @@ $('parentForm').addEventListener('submit', async(e)=>{
     };
     const {error}=await sb.from('registrations').insert(row);
     if(error) throw error;
-    msg.textContent='Registration submitted! Your team will review it shortly.'; msg.className='text-sm mt-2 text-green-700 font-semibold';
+    const who=`${row.first_name} ${row.last_name}`; familyDone.push(who);
+    msg.innerHTML=`<div class="rounded-lg border-2 border-green-500 bg-green-50 p-3">
+      <p class="font-semibold text-green-800">✓ ${esc(who)} is registered! Your team will review it shortly.</p>
+      ${familyDone.length>1?`<p class="text-xs text-gray-700 mt-1">Registered so far: ${familyDone.map(esc).join(', ')}</p>`:''}
+      <p class="text-sm text-gray-700 mt-2">Have another child to register? We'll keep your family's information (address, phone, parents, emergency contact, insurance) so you only fill in the new athlete.</p>
+      <div class="flex flex-wrap gap-2 mt-2"><button type="button" class="btn bg-blue-600 text-white" id="nextChild">+ Register another child</button><button type="button" class="btn bg-gray-200" id="familyDoneBtn">I'm done</button></div></div>`;
+    msg.className='text-sm mt-2';
     if(wantsAcct) await ensureAccount($('email').value.trim(), p1, msg);
-    e.target.reset(); $('priorTeamWrap').classList.add('hidden'); $('priorTeam').classList.add('hidden');
-    pastPick=null; $('pastMatches').classList.add('hidden'); $('pastMatches').innerHTML=''; updateProofNeed();
+    $('nextChild').onclick=()=>startNextChild(e.target);
+    $('familyDoneBtn').onclick=()=>{ familyDone=[]; clearAthleteFields(e.target,true); msg.innerHTML='<p class="text-green-700 font-semibold">All set — thank you! You can close this page.</p>'; window.scrollTo(0,0); };
   }catch(err){ msg.textContent='Error: '+(err.message||err); msg.className='text-sm mt-2 text-red-600'; }
 });
+
+// ---- Several children: after one registration goes through, keep the family's info and clear only the athlete ----
+let familyDone=[];
+const FAMILY_FIELDS=['teamCode','sport','address','city','zip','phone','email','emergencyName','emergencyPhone','parent1Name','parent1Rel','parent2Name','parent2Rel','insuranceCarrier'];
+function clearAthleteFields(form, everything){
+  const keep=everything?{}:Object.fromEntries(FAMILY_FIELDS.map(id=>[id,$(id).value])), keepLast=$('lastName').value;
+  form.reset(); for(const [id,v] of Object.entries(keep)) $(id).value=v;
+  if(!everything) $('lastName').value=keepLast; // siblings usually share a last name — easy to change
+  $('divisionShow').value=''; $('priorTeamWrap').classList.add('hidden'); $('priorTeam').classList.add('hidden');
+  pastPick=null; autoDismissed=''; $('pastMatches').classList.add('hidden'); $('pastMatches').innerHTML='';
+  athleteSig.clear(); if(everything) parentSig.clear();
+  $('parentAcctWrap')&&$('viaEmail')&&$('parentAcctWrap').classList.toggle('hidden',!$('viaEmail').checked);
+  updateProofNeed();
+}
+function startNextChild(form){
+  clearAthleteFields(form,false);
+  $('parentMsg').innerHTML=`<p class="text-sm text-gray-700">Registering your next child. Already registered: ${familyDone.map(esc).join(', ')}</p>`;
+  const h=[...form.querySelectorAll('h2')].find(x=>/Athlete Information/.test(x.textContent));
+  (h||form).scrollIntoView({behavior:'smooth',block:'start'}); setTimeout(()=>$('firstName').focus(),400);
+}
 
 // ================= COACH SUBMIT =================
 $('coachForm').addEventListener('submit', async(e)=>{
