@@ -117,11 +117,7 @@
     <div class="mt-3">
       <label class="f req">Did this athlete run for Valley United Striders last season?</label>
       <div class="flex gap-4 text-sm"><label class="flex items-center gap-1"><input type="radio" name="vusLast" value="no" checked> No</label><label class="flex items-center gap-1"><input type="radio" name="vusLast" value="yes"> Yes</label></div>
-      <div id="vusWrap" class="hidden mt-2">
-        <label class="f req">Athlete's original VYC team (the team they ran for before Valley United)</label>
-        <select id="vusTeam"></select>
-        <p id="vusNote" class="text-sm mt-2 rounded-lg p-2 hidden"></p>
-      </div>
+      <p id="vusNote" class="text-sm mt-2 rounded-lg p-2 hidden"></p>
     </div>
   </div>
 
@@ -663,7 +659,7 @@ function fillTeams(sel){
   sel.innerHTML='<option value="">Select…</option>'+window.VYC_TEAMS.map(t=>`<option value="${t.code}">${t.name} (${t.conference})</option>`).join('');
 }
 function fillAllTeams(){
-  const act=window.VYC_TEAMS.filter(t=>t.active!==false); const sels=['teamCode','cTeam','vHomeTeam','aTeam','tTeam','vusTeam'].map($); const keep=sels.map(s=>s.value);
+  const act=window.VYC_TEAMS.filter(t=>t.active!==false); const sels=['teamCode','cTeam','vHomeTeam','aTeam','tTeam'].map($); const keep=sels.map(s=>s.value);
   const lab=t=>`<option value="${t.code}">${t.name} (${t.conference==='West'?'Western':'Eastern'})</option>`;
   sels.forEach((sel,i)=>{ sel.innerHTML='<option value="">Select…</option>'+act.map(lab).join(''); sel.value=keep[i]||''; });
 }
@@ -774,19 +770,25 @@ async function findPast(){
 // Only when returning to the SAME team — a transfer is a new athlete to the new team and needs proof.
 const returningVerified=()=>!vusMove() && !!pastPick && pastPick.team_code===$('teamCode').value && document.querySelector('input[name=returning]:checked').value==='yes';
 // ---- Valley United rule: a VUS athlete must return to their ORIGINAL team; moving elsewhere needs that team's approval ----
+// The original team is simply last season's team: the matched record's team, or the team they said they ran for.
+// The database checks last season's Valley United roster in the background (see reg_make_clearance / vus_roster).
 const vusYes=()=>document.querySelector('input[name=vusLast]:checked').value==='yes';
-const vusMove=()=>vusYes() && !!$('vusTeam').value && !!$('teamCode').value && $('vusTeam').value!==$('teamCode').value;
-function updateVus(){
-  $('vusWrap').classList.toggle('hidden',!vusYes()); $('vusTeam').required=vusYes();
-  const n=$('vusNote'), o=$('vusTeam').value, mine=$('teamCode').value;
-  if(!vusYes()||!o||!mine){ n.classList.add('hidden'); return; }
-  n.classList.remove('hidden');
-  if(o===mine){ n.className='text-sm mt-2 rounded-lg p-2 bg-green-50 border border-green-400'; n.innerHTML=`✓ Returning to their original team, ${esc(teamLabel(o))}.`; }
-  else { n.className='text-sm mt-2 rounded-lg p-2 bg-amber-50 border border-amber-400';
-    n.innerHTML=`<b>Valley United rule:</b> athletes who ran for Valley United go back to their original team. To register with <b>${esc(teamLabel(mine))}</b>, <b>${esc(teamLabel(o))}</b> must approve the move. Your registration is saved, but it can't be verified (or entered into meets) until they approve. Proof of birth is required.`; }
+function lastSeasonTeam(){
+  if(pastPick&&pastPick.team_code) return pastPick.team_code;
+  const pc=$('priorTeamCode').value; return document.querySelector('input[name=otherTeam]:checked').value==='yes'&&pc&&pc!=='__OTHER'?pc:null;
 }
-document.querySelectorAll('input[name=vusLast]').forEach(r=>r.addEventListener('change',()=>{ updateVus(); updateProofNeed(); }));
-$('vusTeam').addEventListener('change',()=>{ updateVus(); updateProofNeed(); });
+const vusMove=()=>vusYes() && !!lastSeasonTeam() && !!$('teamCode').value && lastSeasonTeam()!==$('teamCode').value;
+function updateVus(){
+  const n=$('vusNote'), o=lastSeasonTeam(), mine=$('teamCode').value;
+  if(!vusYes()||!mine){ n.classList.add('hidden'); return; }
+  n.classList.remove('hidden');
+  if(!o||o===mine){ n.className='text-sm mt-2 rounded-lg p-2 bg-gray-50 border border-gray-300';
+    n.innerHTML=`Thanks — we'll check last season's Valley United roster.${o?` ${esc(teamLabel(o))} is the athlete's team from last season, so they're returning to their team.`:''}`; }
+  else { n.className='text-sm mt-2 rounded-lg p-2 bg-amber-50 border border-amber-400';
+    n.innerHTML=`<b>Valley United rule:</b> this athlete ran for <b>${esc(teamLabel(o))}</b> last season, and Valley United athletes return to their team — unless they told ${esc(teamLabel(o))} before joining Valley United that they weren't coming back. Unless the Valley United roster shows that, <b>${esc(teamLabel(o))}</b> must approve this move before the registration can be verified or entered into meets. Proof of birth is required.`; }
+}
+document.querySelectorAll('input[name=vusLast],input[name=otherTeam]').forEach(r=>r.addEventListener('change',()=>{ updateVus(); updateProofNeed(); }));
+$('priorTeamCode').addEventListener('change',updateVus);
 $('teamCode').addEventListener('change',updateVus);
 // A transfer (ran for a different team last season) is a NEW athlete to this team: lock "New athlete".
 function isTransfer(){
@@ -802,13 +804,13 @@ function lockNewIfTransfer(){
   ret.disabled=t; ret.closest('label').style.opacity=t?'.45':''; ret.closest('label').title=t?'Transfers count as new athletes to this team':'';
 }
 function updateProofNeed(){
-  lockNewIfTransfer();
+  updateVus(); lockNewIfTransfer();
   const skip=returningVerified();
   $('proofNotNeeded').classList.toggle('hidden',!skip); $('proofNeeded').classList.toggle('hidden',skip);
   $('proofFile').required=!skip;
   const transfer=isTransfer();
   $('proofReturnHint').innerHTML = transfer
-    ? `This athlete ran for <b>${esc(teamLabel(vusMove()?$('vusTeam').value:pastPick?pastPick.team_code:$('priorTeamCode').value))}</b> last season, so they count as a <b>new athlete</b> to this team — proof of birth is required.`
+    ? `This athlete ran for <b>${esc(teamLabel(vusMove()?lastSeasonTeam():pastPick?pastPick.team_code:$('priorTeamCode').value))}</b> last season, so they count as a <b>new athlete</b> to this team — proof of birth is required.`
     : `Returning athlete? Make sure the athlete's <b>first name, last name and date of birth</b> above exactly match last season's registration — we check automatically, and proof of birth isn't needed once they match.`;
   $('proofReturnHint').classList.toggle('hidden', skip || !(transfer || document.querySelector('input[name=returning]:checked').value==='yes'));
 }
@@ -975,7 +977,6 @@ $('parentForm').addEventListener('submit', async(e)=>{
     const otherTeam=document.querySelector('input[name=otherTeam]:checked').value==='yes';
     const pCode=otherTeam?$('priorTeamCode').value:'';
     if(otherTeam && !pCode) throw new Error('Please select which team the athlete was on last season.');
-    if(vusYes() && !$('vusTeam').value) throw new Error("Please select the athlete's original VYC team (before Valley United).");
     if(pCode==='__OTHER' && !$('priorTeam').value.trim()) throw new Error('Please type the name of the previous team.');
     const priorVyc=pCode && pCode!=='__OTHER' ? pCode : null;
     const priorName=!otherTeam?null:priorVyc?(window.VYC_TEAMS.find(t=>t.code===priorVyc)||{}).name||priorVyc:$('priorTeam').value.trim();
@@ -991,7 +992,7 @@ $('parentForm').addEventListener('submit', async(e)=>{
       phone:$('phone').value.trim(), email:$('email').value.trim(),
       emergency_name:$('emergencyName').value.trim(), emergency_phone:$('emergencyPhone').value.trim(),
       is_returning: document.querySelector('input[name=returning]:checked').value==='yes',
-      ran_for_other_team: otherTeam||vusMove(), prior_team:vusMove()?teamLabel($('vusTeam').value):priorName, prior_team_code:vusMove()?$('vusTeam').value:priorVyc,
+      ran_for_other_team: otherTeam||vusMove(), prior_team:vusMove()?teamLabel(lastSeasonTeam()):priorName, prior_team_code:vusMove()?lastSeasonTeam():priorVyc,
       ran_vus_last_season: vusYes(),
       prior_registration_id: pastPick ? pastPick.id : null,
       proof_path:proofPath,
