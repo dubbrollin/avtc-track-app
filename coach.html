@@ -225,8 +225,12 @@ sb.auth.onAuthStateChange(async(_e,session)=>{
 });
 
 // background-check status, given season year rules: 2yr window normally, 3yr if USATF certified
+// USATF-certified coaches are verified against USATF's public Safe Sport Compliance list (valid USATF background
+// screen + SafeSport) by the usatf-verify function; its answer wins over the date the coach typed.
 function bgStatus(c){
   if(c.usatf_certified){
+    if(c.usatf_registry_status==='verified') return {label:'USATF background screen verified — current', cls:'bg-green-100 text-green-800'};
+    if(c.usatf_registry_status==='not_current'||c.usatf_registry_status==='not_found') return {label:'Not on USATF\'s Safe Sport Compliance list — background check not verified', cls:'bg-red-100 text-red-800'};
     if(!c.usatf_cert_date) return {label:'USATF — no date on file', cls:'bg-yellow-100 text-yellow-800'};
     const years=CFG.SEASON_YEAR - new Date(c.usatf_cert_date).getFullYear();
     return years>3 ? {label:'USATF cert expired (3yr) — flagged', cls:'bg-red-100 text-red-800'} : {label:'USATF cert current', cls:'bg-green-100 text-green-800'};
@@ -246,6 +250,7 @@ async function loadMe(){
     if(any && any.length){
       const t=window.VYC_TEAMS.find(x=>x.code===any[0].team_code);
       $('pendingInfo').textContent=`Signed in as ${user.email}`+(t?` · ${t.name}`:'')+` · ${roleLabel(any[0])}`;
+      if(any[0].usatf_certified&&!any[0].usatf_registry_checked_at){ try{ const {data:v}=await sb.functions.invoke('usatf-verify',{body:{email:any[0].email}}); if(v&&v.status) any[0].usatf_registry_status=v.status; }catch(e){} }
       const pst=bgStatus(any[0]); $('pendingBg').innerHTML=/current/.test(pst.label)?'':window.bgCheckLinkHtml('<b>While you wait:</b> you don\'t have a current background check on file. Start it now so it\'s ready when you\'re approved.');
       $('pendingBox').style.display='block';
     } else { $('ncEmail').textContent=user.email||''; $('notCoachBox').style.display='block'; }
@@ -253,6 +258,10 @@ async function loadMe(){
   }
   myCoach=data;
   if(myCoach.role_type==='timer' && !myCoach.is_admin && !myCoach.team_admin){ $('timerBox').style.display='block'; return; }
+  // USATF coaches: verify against USATF's public lists if never checked, or last checked 30+ days ago.
+  if(myCoach.usatf_certified && (!myCoach.usatf_registry_checked_at || Date.now()-new Date(myCoach.usatf_registry_checked_at)>30*864e5)){
+    try{ const {data:v}=await sb.functions.invoke('usatf-verify',{body:{email:myCoach.email}}); if(v&&v.status){ myCoach.usatf_registry_status=v.status; myCoach.usatf_registry_checked_at=new Date().toISOString(); } }catch(e){}
+  }
   try{ localStorage.setItem('vyc_admin', (myCoach.is_admin||myCoach.team_admin)?'1':'0'); }catch(e){}
   fullAccess=isFullAccess(myCoach);
   $('notCoachBox').style.display='none'; $('coachApp').style.display='block';
@@ -260,7 +269,9 @@ async function loadMe(){
   $('teamLabel').textContent = (team ? `— ${team.name}${team.conference?' ('+team.conference+')':''} · ${roleLabel(myCoach)}${myCoach.is_admin?' · Site admin':myCoach.team_admin?' · Team admin':''}` : `— ${roleLabel(myCoach)}`);
   const st=bgStatus(myCoach);
   $('bgStatusLine').innerHTML = `Your background-check status: <span class="pill ${st.cls}">${st.label}</span>`
-    + (/current/.test(st.label)?'':window.bgCheckLinkHtml('Your background check isn\'t current for this season. Coaches without one lose access after the 90-day grace period.'));
+    + (/current/.test(st.label)?'':window.bgCheckLinkHtml(myCoach.usatf_certified&&myCoach.usatf_registry_status&&myCoach.usatf_registry_status!=='verified'
+        ?'You said you\'re USATF certified, but your name isn\'t on USATF\'s Safe Sport Compliance list (current background screen + SafeSport). If your USATF screening has lapsed, renew it with USATF — or complete the VYC background check:'
+        :'Your background check isn\'t current for this season. Coaches without one lose access after the 90-day grace period.'));
   $('runChecks').style.display=fullAccess?'':'none';
   $('exportCsv').style.display=fullAccess?'':'none';
   $('exportHytek').style.display=fullAccess?'':'none';

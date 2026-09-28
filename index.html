@@ -520,7 +520,7 @@ async function resumeGoogleCoach(){
   document.querySelector('#roleTabs .roletab[data-role=coach]').click();
   const msg=$('coachMsg'); msg.textContent='Finishing your registration…'; msg.className='text-sm mt-2 text-gray-600';
   const c2=supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth:{ lock:(n,t,f)=>f() } }); // fresh client — the first one can hang after a Google redirect
-  const {error}=await saveCoachViaLogin(c2,d);
+  const {error}=await saveCoachViaLogin(c2,d); if(!error) verifyUsatfAfterSignup(d,c2);
   if(error){ msg.textContent='Could not finish: '+error.message; msg.className='text-sm mt-2 text-red-600'; return; }
   msg.innerHTML=`Registration submitted, and you're signed in as ${authSession.user.email}. Your team admin (or a VYC site admin) will review and approve you. <a class="underline" href="coach.html">Check your status</a>${coachNeedsBgCheck(d)?window.bgCheckLinkHtml('<b class="text-gray-900">Next step: your background check.</b> You don\'t have a current one on file — start it now so your access isn\'t paused.'):''}`; msg.className='text-sm mt-2 text-green-700 font-semibold';
 }
@@ -565,7 +565,7 @@ window.resumeGoogleAdmin=async function(){
   document.querySelector('#roleTabs .roletab[data-role=admin]').click();
   const msg=$('adminMsg'); msg.textContent='Finishing your request…'; msg.className='text-sm mt-2 text-gray-600';
   const c2=supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth:{ lock:(n,t,f)=>f() } });
-  const {error}=await saveAdminViaLogin(c2,d);
+  const {error}=await saveAdminViaLogin(c2,d); if(!error) verifyUsatfAfterSignup(d,c2);
   if(error){ msg.textContent='Could not finish: '+error.message; msg.className='text-sm mt-2 text-red-600'; return; }
   msg.innerHTML=`${ADMIN_DONE} You're signed in as ${authSession.user.email}. <a class="underline" href="coach.html">Check your status</a>${adminBgNext(d)}`; msg.className='text-sm mt-2 text-green-700 font-semibold';
 };
@@ -575,7 +575,7 @@ $('adminForm').addEventListener('submit', async(e)=>{
   try{
     const d=collectAdmin();
     if(authSession){
-      const {error}=await saveAdminViaLogin(sb,d); if(error) throw error;
+      const {error}=await saveAdminViaLogin(sb,d); if(error) throw error; verifyUsatfAfterSignup(d);
     } else {
       const email=$('aEmail').value.trim(), p1=$('aPass').value, p2=$('aPass2').value;
       if(!email) throw new Error('Please enter your email, or use "Finish with Google."');
@@ -588,7 +588,7 @@ $('adminForm').addEventListener('submit', async(e)=>{
         background_check_date:d.bg, usatf_certified:d.usatf, usatf_cert_date:d.usatfDate,
         approved:false, contract_signed_at:new Date().toISOString(), contract_version:'VYC-2026' });
       if(error) throw /duplicate key/i.test(error.message)?new Error('You already have a coach or team admin request on file. Ask your site admin to update it.'):error;
-      await ensureAccount(email, p1, msg);
+      await ensureAccount(email, p1, msg); verifyUsatfAfterSignup(d);
     }
     msg.innerHTML=ADMIN_DONE+adminBgNext(d); msg.className='text-sm mt-2 text-green-700 font-semibold'; $('aBgWarn').innerHTML='';
     e.target.reset(); $('aTitleOtherWrap').classList.add('hidden'); $('aUsatfDateWrap').classList.add('hidden'); $('aBgDateWrap').classList.remove('hidden');
@@ -920,6 +920,12 @@ function bgCheckHint(){
     warn.textContent='Background check looks current for this season.';
   }
 }
+// USATF-certified sign-ups: check USATF's public Safe Sport Compliance list right away (needs a signed-in session;
+// if there isn't one yet, the Coach Dashboard runs the same check at their first sign-in).
+async function verifyUsatfAfterSignup(d, client){
+  if(!d||!d.usatf) return;
+  try{ const c=client||sb; const {data:s}=await c.auth.getSession(); if(s&&s.session) await c.functions.invoke('usatf-verify',{body:{}}); }catch(e){}
+}
 // True when the coach has no current background check (no date, or older than 2 years; USATF = 3 years).
 function coachNeedsBgCheck(d){
   if(d.usatf) return !d.usatfDate || (CFG.SEASON_YEAR-new Date(d.usatfDate).getFullYear())>3;
@@ -1064,7 +1070,7 @@ $('coachForm').addEventListener('submit', async(e)=>{
     const d=collectCoach();
     if(authSession){
       // already signed in (e.g. Google) — save through the signed-in route, no password needed
-      const {error}=await saveCoachViaLogin(sb,d); if(error) throw error;
+      const {error}=await saveCoachViaLogin(sb,d); if(error) throw error; verifyUsatfAfterSignup(d);
       msg.innerHTML=`Coach registration submitted! Your team admin (or a VYC site admin) will review and approve you.${coachNeedsBgCheck(d)?window.bgCheckLinkHtml('<b class="text-gray-900">Next step: your background check.</b> You don\'t have a current one on file — start it now so your access isn\'t paused.'):''}`; msg.className='text-sm mt-2 text-green-700 font-semibold';
       e.target.reset(); bgCheckHint(); return;
     }
@@ -1082,7 +1088,7 @@ $('coachForm').addEventListener('submit', async(e)=>{
     const {error}=await sb.from('coaches').insert(row);
     if(error) throw error;
     msg.innerHTML=`Coach registration submitted! Your team admin (or a VYC site admin) will review and approve access — you will be notified once approved.${coachNeedsBgCheck(d)?window.bgCheckLinkHtml('<b class="text-gray-900">Next step: your background check.</b> You don\'t have a current one on file — start it now so your access isn\'t paused.'):''}`; msg.className='text-sm mt-2 text-green-700 font-semibold';
-    await ensureAccount(email, cp1, msg);
+    await ensureAccount(email, cp1, msg); verifyUsatfAfterSignup(d);
     e.target.reset(); bgCheckHint();
   }catch(err){ msg.textContent='Error: '+(err.message||err); msg.className='text-sm mt-2 text-red-600'; }
 });

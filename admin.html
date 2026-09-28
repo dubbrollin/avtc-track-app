@@ -146,11 +146,16 @@ $('pane').innerHTML=`${SITE?`<div class="card"><h3 class="font-bold mb-1">Add a 
 <select id="pStat"><option value="">All</option><option value="pending">Waiting for approval</option><option value="approved">Approved</option><option value="tadmin">Team admins</option>${SITE?'<option value="admin">Site admins</option>':''}</select>
 <input id="pQ" class="flex-1" placeholder="Search name or email">
 <span class="text-xs text-gray-500 self-center" id="pCount"></span>
+<button class="btn lite" id="pUsatfAll" title="Re-check every USATF-certified coach on this list against USATF's public lists">Check all USATF coaches</button>
 </div>
 <div class="scroll"><table class="t"><thead><tr><th>Coach</th><th>Team</th><th>Role</th><th>Division</th><th>Status</th><th>Access level</th><th>Actions</th></tr></thead><tbody id="pBody"></tbody></table></div>
 <p class="text-xs text-gray-500 mt-2">Parents don't have accounts to manage here — they show up through their athletes (Athletes tab).</p></div>`;
 ['pTeam','pStat'].forEach(i=>$(i).onchange=drawPeople); $('pQ').oninput=drawPeople; drawPeople();
 if(SITE) $('saAdd').onclick=addSiteAdmin;
+$('pUsatfAll').onclick=async()=>{ const list=coaches.filter(c=>c.usatf_certified); if(!list.length){ toast('No USATF-certified coaches on this list.'); return; }
+  $('pUsatfAll').disabled=true; let ok=0; for(const c of list){ $('pUsatfAll').textContent=`Checking ${ok+1} of ${list.length}…`; if(await checkUsatf(c)) ok++; }
+  $('pUsatfAll').disabled=false; $('pUsatfAll').textContent='Check all USATF coaches'; drawPeople();
+  toast(`Checked ${ok} of ${list.length}: ${list.filter(c=>c.usatf_registry_status==='verified').length} verified`); };
 }
 async function addSiteAdmin(){
 const email=$('saEmail').value.trim().toLowerCase(), first=$('saFirst').value.trim()||null, last=$('saLast').value.trim()||null;
@@ -162,6 +167,20 @@ const ok=existing
 ? await run(sb.from('coaches').update({is_admin:true,approved:true}).eq('email',existing.email),'Site admin added')
 : await run(sb.from('coaches').insert({email,first_name:first,last_name:last,approved:true,is_admin:true,season_year:CFG.SEASON_YEAR}),'Site admin added');
 if(ok) paintPeople();
+}
+// USATF-certified coaches: result of checking USATF's public Safe Sport Compliance list (valid background screen + SafeSport).
+function usatfPill(c){
+if(!c.usatf_certified) return '';
+const when=c.usatf_registry_checked_at?' · checked '+String(c.usatf_registry_checked_at).slice(0,10):'';
+const reg=c.usatf_registry_detail&&c.usatf_registry_detail.coaches_registry&&c.usatf_registry_detail.coaches_registry.found?' · on Coaches Registry':'';
+const m={verified:['ok','USATF background screen verified'],not_current:['bad','USATF: not on Safe Sport list'],not_found:['bad','USATF: not found'],error:['warn','USATF check failed — retry']}[c.usatf_registry_status]||['warn','USATF: not checked yet'];
+return `<div class="mt-1"><span class="pill ${m[0]}" title="Searched USATF's public Safe Sport Compliance list${reg}${when}">${m[1]}</span><div class="text-xs text-gray-500">${reg.slice(3)}${when}</div></div>`;
+}
+async function checkUsatf(c){
+const {data,error}=await sb.functions.invoke('usatf-verify',{body:{email:c.email}});
+if(error||!data||data.error){ toast('USATF check failed: '+((data&&data.error)||(error&&error.message)||'unknown'),true); return false; }
+Object.assign(c,{usatf_registry_status:data.status,usatf_registry_checked_at:new Date().toISOString(),usatf_registry_detail:data.detail});
+return true;
 }
 // One clear "Access level" per person: Regular / Team admin / Site admin (site admins only can grant site admin).
 const accessOf=c=>c.is_admin?'site':c.team_admin?'team':'regular';
@@ -175,13 +194,14 @@ $('pBody').innerHTML=rows.map(c=>{ const self=c.email.toLowerCase()===me.email.t
 <td><select data-f="team_code" ${SITE?'':'disabled title="Only a site admin can move a coach to another team"'}>${teamOpts(c.team_code,'(none)')}</select></td>
 <td><select data-f="role_type" ${lock?'disabled':''}>${opts(ROLES,(c.role_type==='head_age_group'||!c.role_type)?'head_coach':c.role_type)}</select></td>
 <td><input data-f="division_or_age_group" value="${esc(c.division_or_age_group||'')}" style="width:9rem" placeholder="e.g. Bantam"></td>
-<td><span class="pill ${c.approved?'ok':'warn'}">${c.approved?'Approved':'Pending'}</span></td>
+<td><span class="pill ${c.approved?'ok':'warn'}">${c.approved?'Approved':'Pending'}</span>${usatfPill(c)}</td>
 <td><select data-access="1" ${self||(!SITE&&c.is_admin)?'disabled title="'+(self?'You can\'t change your own access':'Only a site admin can change a site admin')+'"':''} style="font-weight:600;${c.is_admin?'color:#991b1b':c.team_admin?'color:#1e40af':''}">
 <option value="regular" ${accessOf(c)==='regular'?'selected':''}>Regular (no admin)</option>
 <option value="team" ${accessOf(c)==='team'?'selected':''}>Team admin</option>
 ${SITE||c.is_admin?`<option value="site" ${accessOf(c)==='site'?'selected':''}>Site admin</option>`:''}
 </select></td>
 <td class="whitespace-nowrap">${lock?'<span class="text-xs text-gray-500">(you)</span>':`${c.approved?'<button class="btn lite" data-act="revoke">Revoke</button>':c.requested_team_admin?'<button class="btn grn" data-act="tadmin">Approve as team admin</button> <button class="btn lite" data-act="approve">Approve as coach only</button>':'<button class="btn grn" data-act="approve">Approve</button>'}
+${c.usatf_certified?'<button class="btn lite" data-act="usatf" title="Search USATF\'s public Safe Sport Compliance list and Coaches Registry">Check USATF</button>':''}
 ${SITE&&!self?'<button class="btn red" data-act="del">Delete</button>':''}`}</td></tr>`; }).join('')||'<tr><td colspan="7" class="text-gray-500 p-3">No coaches match.</td></tr>';
 }
 document.addEventListener('change',async e=>{
@@ -204,6 +224,7 @@ const patch={[el.dataset.f]:v}; if(await run(sb.from('coaches').update(patch).eq
 document.addEventListener('click',async e=>{
 const b=e.target.closest('#pBody button'); if(!b) return; const email=b.closest('tr').dataset.id, c=coaches.find(x=>x.email===email); const act=b.dataset.act;
 const nm=(c.first_name||c.name||c.email);
+if(act==='usatf'){ b.disabled=true; b.textContent='Checking…'; if(await checkUsatf(c)) toast(`${nm}: ${({verified:'USATF background screen verified',not_current:'not on the Safe Sport list',not_found:'not found on USATF lists',error:'check failed'})[c.usatf_registry_status]||c.usatf_registry_status}`); drawPeople(); return; }
 if(act==='approve'||act==='revoke'){ if(act==='revoke'&&!confirm(`Revoke access for ${nm}? They will lose the Coach Dashboard until approved again.`)) return;
 if(await run(sb.from('coaches').update({approved:act==='approve'}).eq('email',email),act==='approve'?'Approved':'Access revoked')){ c.approved=act==='approve'; paintPeople(); } }
 if(act==='tadmin'){ if(!confirm(c.team_admin?`Remove team-admin access from ${nm}?`:`Make ${nm} a TEAM ADMIN for ${teamName(c.team_code)}? They'll see private registration details and can approve coaches for that team.`)) return;
