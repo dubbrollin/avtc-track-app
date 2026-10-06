@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pay Team Fee</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script><script src="shared.js"></script><script src="payments.js"></script>
+<style>
+.btn{padding:.6rem 1rem;border-radius:.5rem;font-weight:600}
+.card{background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.pill{font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px}
+</style>
+</head><body class="text-gray-900"><header class="topnav"><div class="topnav-inner">
+  <a class="brand" href="home.html">VYC <b>Track &amp; Field</b></a>
+  <nav>
+    <a href="home.html">Home</a>
+    <a href="index.html">Register</a>
+    <a href="parent.html">Parent Dashboard</a>
+    <a href="results.html">Results</a>
+  </nav>
+</div></header>
+<div class="max-w-2xl mx-auto p-4">
+  <h1 class="text-2xl font-bold">Team fee</h1>
+  <p class="text-gray-600 mb-4">Pay your team's fee for your athlete — by card, or another way your team accepts.</p>
+  <div id="done" class="hidden rounded-lg border-2 border-green-500 bg-green-50 p-3 mb-3 text-sm"><b>Thank you!</b> Your card payment is being confirmed — this page updates on its own in a moment.</div>
+  <div id="ask" class="card hidden">
+    <p class="text-sm mb-2">Enter the email address you used on the registration form so we can find your athlete.</p>
+    <div class="flex gap-2"><input id="askEmail" type="email" class="border rounded p-2 flex-1" placeholder="you@example.com" autocomplete="email"><button class="btn bg-blue-600 text-white" id="askGo">Continue</button></div>
+    <p id="askMsg" class="text-sm text-red-700 mt-2"></p>
+  </div>
+  <div id="fee" class="card hidden"></div>
+  <p class="text-xs text-gray-500">Registered more than one child? Each athlete has their own fee — open the link from each confirmation, or sign in to the <a class="underline" href="parent.html">Parent Dashboard</a> to see them all in one place.</p>
+</div>
+<script>
+const $=id=>document.getElementById(id), CFG=window.APP_CONFIG;
+const sb=supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{auth:{lock:(n,t,fn)=>fn()}});
+const q=new URLSearchParams(location.search), reg=q.get('reg'), done=q.get('done')==='1';
+let email=(q.get('email')||'').trim().toLowerCase();
+if(!reg){ $('ask').classList.remove('hidden'); $('ask').innerHTML='<p class="text-sm">This link is missing the athlete. Open the pay link from your registration confirmation, or sign in to the <a class="underline" href="parent.html">Parent Dashboard</a>.</p>'; }
+else if(!email){ $('ask').classList.remove('hidden'); $('askGo').onclick=()=>{ const e=$('askEmail').value.trim().toLowerCase(); if(!e){ $('askMsg').textContent='Enter your email.'; return; } email=e; $('ask').classList.add('hidden'); start(); }; }
+else start();
+async function start(){
+  $('fee').classList.remove('hidden');
+  if(done){ $('done').classList.remove('hidden'); history.replaceState(null,'',location.pathname+'?reg='+encodeURIComponent(reg)+'&email='+encodeURIComponent(email)); }
+  await window.renderFeeCard($('fee'),{sb,regId:reg,email});
+  if(done){ // Stripe's webhook records the payment a moment after the redirect — refresh a few times so the parent sees it land.
+    let tries=0; const t=setInterval(async()=>{ tries++; await window.renderFeeCard($('fee'),{sb,regId:reg,email}); if(tries>=6||/Paid in full|Payment plan/.test($('fee').textContent)){ clearInterval(t); $('done').classList.add('hidden'); } },3000); }
+}
+</script>
+</body></html>

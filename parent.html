@@ -7,7 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="theme.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="config.js"></script><script src="shared.js"></script><script src="events.js"></script>
+<script src="config.js"></script><script src="shared.js"></script><script src="events.js"></script><script src="payments.js"></script>
 <style>
 .btn{padding:.6rem 1rem;border-radius:.5rem;font-weight:600}
 .card{background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
@@ -51,7 +51,7 @@
 
     <div class="card" id="registerCard">
       <h2 class="font-bold mb-1">Meet sign-up</h2>
-      <p class="text-xs text-gray-500 mb-2">Pick a meet, then check off which races your verified athlete(s) are running.</p>
+      <p class="text-xs text-gray-500 mb-2" id="signupHint">Pick a meet, then check off which races your verified athlete(s) are running.</p>
       <div class="flex flex-wrap items-center gap-2 mb-2">
         <select id="meet" class="border rounded p-2 flex-1"></select>
       </div>
@@ -67,7 +67,7 @@ const CFG=window.APP_CONFIG;
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 $('club').textContent=CFG.CLUB_NAME;
 let sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } });
-let me=null, myRegs=[], meets=[], athletes=[], events=[], entries=[];
+let me=null, myRegs=[], meets=[], athletes=[], events=[], entries=[], attendance=[], teamSettings={};
 
 window.mountLoginWidget(sb, $('loginWidget'), {hint:"Sign in with the email you used to register your athlete."});
 $('logout').onclick=()=>sb.auth.signOut().then(()=>location.reload());
@@ -84,6 +84,8 @@ async function loadMyAthletes(){
   const {data,error}=await sb.from('registrations').select('*').eq('email',me).order('created_at',{ascending:false});
   myRegs=data||[];
   if(error){ $('myAthletes').innerHTML='<p class="text-sm text-red-700">Could not load: '+error.message+'</p>'; return; }
+  // Per-team switch: may parents enter meet events themselves, or do they answer "are you coming?" for the coaches?
+  try{ const codes=[...new Set(myRegs.map(r=>r.team_code).filter(Boolean))]; if(codes.length){ const {data:ts}=await sb.from('team_settings').select('*').in('team_code',codes); teamSettings={}; (ts||[]).forEach(t=>teamSettings[t.team_code]=t); } }catch(e){}
   if(!myRegs.length){ $('myAthletes').innerHTML='<p class="text-sm text-gray-500">No athletes registered with this email yet.</p>'; return; }
   const pillCls={verified:'bg-green-600 text-white',rejected:'bg-red-600 text-white',submitted:'bg-gray-200'};
   $('myAthletes').innerHTML=myRegs.map(r=>`
@@ -93,7 +95,10 @@ async function loadMyAthletes(){
         <div class="text-xs text-gray-500">Submitted ${fmtDate(r.created_at)}</div>
       </div>
       <span class="pill ${pillCls[r.status]||'bg-gray-200'}">${({submitted:'Awaiting team review',reviewed:'Team reviewed — awaiting certification',verified:'Certified',rejected:'Rejected'})[r.status]||r.status}${r.is_late?' · late registration':''}</span>
+      ${r.status!=='rejected'?`<div class="w-full rounded-lg bg-gray-50 border p-2 mt-1" data-fee="${r.id}"></div>`:''}
     </div>`).join('');
+  // Team fee for each athlete (card through the team's Stripe, or Zelle / Cash App / Venmo / check)
+  myRegs.filter(r=>r.status!=='rejected').forEach(r=>{ const el=document.querySelector(`[data-fee="${r.id}"]`); if(el) window.renderFeeCard(el,{sb,regId:r.id,email:me,compact:true}); });
 }
 
 async function loadMyResults(){
@@ -124,7 +129,8 @@ async function loadMeets(){
   meets=data||[];
   const {data:evc}=await sb.from('meet_events').select('meet_id'); const evCount={}; (evc||[]).forEach(x=>evCount[x.meet_id]=(evCount[x.meet_id]||0)+1);
   $('meet').innerHTML=meets.map(m=>`<option value="${m.id}">${m.name} — ${fmtDate(m.meet_date)}${evCount[m.id]?'':' (no events set up yet)'}</option>`).join('')||'<option value="">No meets posted yet</option>';
-  const pick=meets.find(m=>evCount[m.id]&&isOpen(m))||meets.find(m=>evCount[m.id]); if(pick) $('meet').value=pick.id; // start on a meet that has events, not an empty one
+  const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
+  const pick=meets.find(m=>evCount[m.id]&&m.meet_date>=today)||meets.find(m=>evCount[m.id]&&isOpen(m))||meets.find(m=>evCount[m.id]); if(pick) $('meet').value=pick.id; // start on the current/next meet that has events
   $('meet').onchange=loadMeet; if(meets.length) await loadMeet(); else $('meetInfo').textContent='';
 }
 const cur=()=>meets.find(m=>m.id===$('meet').value);
@@ -133,20 +139,25 @@ function isOpen(m){ return m.status==='open' && new Date()<=new Date(m.entries_c
 async function loadMeet(){
   const m=cur(); if(!m) return;
   $('meetInfo').textContent=`${m.location||''} · Entries ${isOpen(m)?'close':'closed'} ${new Date(m.entries_close).toLocaleString()}`;
-  const [e,n]=await Promise.all([
+  const [e,n,t]=await Promise.all([
     sb.from('meet_events').select('*').eq('meet_id',m.id),
-    sb.from('entries').select('*').eq('meet_id',m.id)
+    sb.from('entries').select('*').eq('meet_id',m.id),
+    sb.from('meet_attendance').select('*').eq('meet_id',m.id)
   ]);
   athletes=myRegs.filter(r=>r.status==='verified');
-  events=e.data||[]; entries=n.data||[];
+  events=e.data||[]; entries=n.data||[]; attendance=t.data||[];
   $('none').classList.toggle('hidden',athletes.length>0);
   render();
 }
 
+const parentEntryOn=a=>{ const t=teamSettings[a.team_code]; return !t||t.parent_entry_enabled!==false; };
 function render(){
   if(!athletes.length){ $('athletes').innerHTML=''; return; }
   const m=cur(), open=isOpen(m);
+  const anyAsk=athletes.some(a=>!parentEntryOn(a)), anyEnter=athletes.some(parentEntryOn);
+  $('signupHint').textContent=anyAsk&&!anyEnter?"Pick a meet and tell your coaches whether your athlete is coming — and, if you like, which two events they'd like to compete in. The coaches do the actual entering.":'Pick a meet, then check off which races your verified athlete(s) are running.';
   $('athletes').innerHTML=athletes.map(a=>{
+    if(!parentEntryOn(a)) return renderAsk(a,m);
     const mine=entries.filter(x=>x.registration_id===a.id);
     const myEvs=mine.map(x=>events.find(v=>v.id===x.meet_event_id)).filter(Boolean).map(v=>({relay:v.is_relay}));
     const opts=events.filter(v=>(v.division===a.division||v.division==='ALL')&&(v.gender===a.gender||v.gender==='Mixed')).sort((x,y)=>((x.event_number??9999)-(y.event_number??9999))||x.name.localeCompare(y.name));
@@ -166,6 +177,38 @@ function render(){
   }).join('');
   document.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.onchange=toggle);
 }
+
+// "Are you coming?" — shown instead of the event checkboxes when the team has switched parent entries off.
+function renderAsk(a,m){
+  const ans=attendance.find(x=>x.registration_id===a.id)||null;
+  const mine=entries.filter(x=>x.registration_id===a.id).map(x=>events.find(v=>v.id===x.meet_event_id)).filter(Boolean);
+  const opts=events.filter(v=>(v.division===a.division||v.division==='ALL')&&(v.gender===a.gender||v.gender==='Mixed')).sort((x,y)=>((x.event_number??9999)-(y.event_number??9999))||x.name.localeCompare(y.name));
+  const evName=id=>{ const v=events.find(x=>x.id===id); return v?v.name:''; };
+  const sel=(n,val)=>`<select data-ev="${n}" class="border rounded p-1 text-sm"><option value="">— pick an event —</option>${opts.map(v=>`<option value="${v.id}" ${v.id===val?'selected':''}>${v.event_number?'#'+v.event_number+' ':''}${esc(v.name)}${v.is_relay?' (relay)':''}</option>`).join('')}</select>`;
+  const past=m.status==='archived'||(m.meet_date&&m.meet_date<new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'}));
+  const saved=ans?`<div class="text-sm rounded-lg p-2 mb-2 ${ans.attending?'bg-green-50 border border-green-300':'bg-gray-100 border'}">${ans.attending?`<b class="text-green-800">✓ You said ${esc(a.first_name)} is coming.</b>${ans.event_1||ans.event_2?` Requested: ${[ans.event_1,ans.event_2].map(evName).filter(Boolean).map(esc).join(' and ')}.`:''}`:`<b>You said ${esc(a.first_name)} is not coming.</b>`}${ans.note?` <span class="text-gray-600">Note: ${esc(ans.note)}</span>`:''}
+    <div class="text-xs text-gray-500 mt-1">${mine.length?`Entered by the coaches so far: ${mine.map(v=>esc(v.name)).join(', ')}.`:ans.attending?'Your coaches will enter the events — check back here to see them.':''} Answered ${new Date(ans.updated_at||ans.answered_at).toLocaleDateString()}.</div></div>`:'';
+  return `<div class="bg-white rounded-xl border p-3 mb-3" data-ask="${a.id}">
+    <div class="font-bold">${esc(a.first_name)} ${esc(a.last_name)} <span class="text-sm font-normal text-gray-500">${esc(a.division)} · ${esc(a.gender)}</span></div>
+    ${saved}
+    ${past?'<p class="text-sm text-gray-500">This meet has passed.</p>':`<div class="text-sm font-semibold mb-1">Is ${esc(a.first_name)} coming to ${esc(m.name)}?</div>
+    <div class="flex gap-3 mb-2 text-sm"><label class="flex items-center gap-1"><input type="radio" name="att-${a.id}" value="yes" ${ans&&ans.attending?'checked':''}> Yes</label><label class="flex items-center gap-1"><input type="radio" name="att-${a.id}" value="no" ${ans&&!ans.attending?'checked':''}> No</label></div>
+    <div data-evbox class="${ans&&ans.attending?'':'hidden'}">${opts.length?`<div class="text-xs text-gray-600 mb-1">Which two events would ${esc(a.first_name)} like to compete in? (optional — the coaches make the final call)</div>
+      <div class="flex flex-wrap gap-2 mb-2">${sel(1,ans?.event_1)}${sel(2,ans?.event_2)}</div>`:'<p class="text-xs text-gray-500 mb-2">No events are posted for this division yet — the coaches will pick.</p>'}</div>
+    <input data-note class="border rounded p-1 text-sm w-full mb-2" placeholder="Anything the coaches should know? (optional)" value="${esc(ans?.note||'')}">
+    <button class="btn bg-blue-600 text-white text-sm" data-save>${ans?'Update answer':'Send to coaches'}</button> <span class="text-xs text-gray-500" data-msg></span>`}
+  </div>`;
+}
+document.addEventListener('change',e=>{ const box=e.target.closest('[data-ask]'); if(!box||e.target.type!=='radio') return; box.querySelector('[data-evbox]').classList.toggle('hidden',e.target.value!=='yes'); });
+document.addEventListener('click',async e=>{
+  const b=e.target.closest('[data-ask] [data-save]'); if(!b) return; const box=b.closest('[data-ask]'), aId=box.dataset.ask, m=cur();
+  const r=box.querySelector('input[type=radio]:checked'); const msg=box.querySelector('[data-msg]'); if(!r){ msg.textContent='Please answer yes or no.'; return; }
+  const yes=r.value==='yes', e1=(box.querySelector('[data-ev="1"]')||{}).value||null, e2=(box.querySelector('[data-ev="2"]')||{}).value||null;
+  b.disabled=true; msg.textContent='Sending…';
+  const {error}=await sb.rpc('answer_attendance',{p_meet:m.id,p_reg:aId,p_attending:yes,p_event1:yes?e1:null,p_event2:yes?e2:null,p_note:box.querySelector('[data-note]').value||null});
+  if(error){ msg.textContent=error.message.replace(/^.*?: /,''); b.disabled=false; return; }
+  await loadMeet();
+});
 
 async function toggle(ev){
   const cb=ev.target, aId=cb.dataset.a, eId=cb.dataset.e, m=cur();

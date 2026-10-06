@@ -1064,6 +1064,7 @@ $('parentForm').addEventListener('submit', async(e)=>{
     if(inHs==='yes' && hsAns==='yes') throw new Error('This athlete can\'t be registered: running for a high school track team and a VYC team in the same season is against California CIF rules (VYC rule IV.A.2).');
     const proofPath=skipProof?null:await uploadProof(file,'registrations');
     const row={
+      id: crypto.randomUUID(), // made here so the confirmation can link straight to this athlete's pay page
       season_year:CFG.SEASON_YEAR, sport:$('sport').value, gender:$('gender').value,
       first_name:$('firstName').value.trim(), last_name:$('lastName').value.trim(), dob,
       age_on_dec31:age, division, in_high_school: age>=13 ? inHs==='yes' : null, hs_track_this_season: age>=13 ? (inHs==='yes' && hsAns==='yes') : null,
@@ -1091,20 +1092,28 @@ $('parentForm').addEventListener('submit', async(e)=>{
     const {error}=await sb.from('registrations').insert(row);
     if(error) throw error;
     const who=`${row.first_name} ${row.last_name}`; familyDone.push(who);
+    const payLink=`pay.html?reg=${encodeURIComponent(row.id)}&email=${encodeURIComponent(row.email.toLowerCase())}`; familyPayLinks.push([who,payLink]);
+    const feeSet=await teamFeeSettings(teamCode);
     msg.innerHTML=`<div class="rounded-lg border-2 border-green-500 bg-green-50 p-3">
       <p class="font-semibold text-green-800">✓ ${esc(who)} is registered! Your team will review it shortly.</p>
+      ${feeSet?`<div class="mt-2 rounded-lg border border-blue-300 bg-blue-50 p-2"><p class="text-sm"><b>${esc(teamLabel(teamCode))} team fee: $${(+feeSet.fee_amount).toFixed(2).replace(/\.00$/,'')} per athlete</b>${feeSet.fee_note?` — ${esc(feeSet.fee_note)}`:''}${+feeSet.sibling_discount>0?` (sibling discount $${(+feeSet.sibling_discount).toFixed(0)} off each additional child)`:''}.</p>
+        <p class="text-sm mt-1">Pay by card${feeSet.plan_enabled?' (in full or on a payment plan)':''}${[feeSet.accept_zelle&&'Zelle',feeSet.accept_cashapp&&'Cash App',feeSet.accept_venmo&&'Venmo',feeSet.accept_other&&'check/cash'].filter(Boolean).length?', or by '+[feeSet.accept_zelle&&'Zelle',feeSet.accept_cashapp&&'Cash App',feeSet.accept_venmo&&'Venmo',feeSet.accept_other&&'check or cash'].filter(Boolean).join(', '):''}: <a class="underline font-semibold text-blue-700" href="${payLink}" target="_blank" rel="noopener">Pay ${esc(who)}'s fee →</a></p>
+        <p class="text-xs text-gray-600 mt-1">You can also pay later — the link opens in a new tab, and it's on your Parent Dashboard too.</p></div>`:''}
       ${familyDone.length>1?`<p class="text-xs text-gray-700 mt-1">Registered so far: ${familyDone.map(esc).join(', ')}</p>`:''}
       <p class="text-sm text-gray-700 mt-2">Have another child to register? We'll keep your family's information (address, phone, parents, emergency contact, insurance) so you only fill in the new athlete.</p>
       <div class="flex flex-wrap gap-2 mt-2"><button type="button" class="btn bg-blue-600 text-white" id="nextChild">+ Register another child</button><button type="button" class="btn bg-gray-200" id="familyDoneBtn">I'm done</button></div></div>`;
     msg.className='text-sm mt-2';
     if(wantsAcct) await ensureAccount($('email').value.trim(), p1, msg);
     $('nextChild').onclick=()=>startNextChild(e.target);
-    $('familyDoneBtn').onclick=()=>{ familyDone=[]; clearAthleteFields(e.target,true); msg.innerHTML='<p class="text-green-700 font-semibold">All set — thank you! You can close this page.</p>'; window.scrollTo(0,0); };
+    $('familyDoneBtn').onclick=()=>{ const links=familyPayLinks.slice(); familyDone=[]; familyPayLinks=[]; clearAthleteFields(e.target,true);
+      msg.innerHTML='<p class="text-green-700 font-semibold">All set — thank you! You can close this page.</p>'+(feeSet&&links.length?'<div class="text-sm mt-2"><b>Team fee links:</b> '+links.map(([w,l])=>`<a class="underline text-blue-700" href="${l}" target="_blank" rel="noopener">${esc(w)}</a>`).join(' · ')+'</div>':''); window.scrollTo(0,0); };
   }catch(err){ msg.textContent='Error: '+(err.message||err); msg.className='text-sm mt-2 text-red-600'; }
 });
 
 // ---- Several children: after one registration goes through, keep the family's info and clear only the athlete ----
-let familyDone=[];
+let familyDone=[], familyPayLinks=[];
+// The team's fee for this season (set by the team admin on the Payments tab); null when the team hasn't set one.
+async function teamFeeSettings(code){ try{ const {data}=await sb.from('team_payment_settings').select('*').eq('team_code',code).eq('season_year',CFG.SEASON_YEAR).maybeSingle(); return data&&+data.fee_amount>0?data:null; }catch(e){ return null; } }
 const FAMILY_FIELDS=['teamCode','sport','address','city','zip','phone','email','emergencyName','emergencyPhone','parent1Name','parent1Rel','parent2Name','parent2Rel','insuranceCarrier'];
 function clearAthleteFields(form, everything){
   const keep=everything?{}:Object.fromEntries(FAMILY_FIELDS.map(id=>[id,$(id).value])), keepLast=$('lastName').value;
