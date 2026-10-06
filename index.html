@@ -1092,26 +1092,42 @@ $('parentForm').addEventListener('submit', async(e)=>{
     const {error}=await sb.from('registrations').insert(row);
     if(error) throw error;
     const who=`${row.first_name} ${row.last_name}`; familyDone.push(who);
-    const payLink=`pay.html?reg=${encodeURIComponent(row.id)}&email=${encodeURIComponent(row.email.toLowerCase())}`; familyPayLinks.push([who,payLink]);
-    const feeSet=await teamFeeSettings(teamCode);
-    msg.innerHTML=`<div class="rounded-lg border-2 border-green-500 bg-green-50 p-3">
+    const payLink=`pay.html?reg=${encodeURIComponent(row.id)}&email=${encodeURIComponent(row.email.toLowerCase())}&new=1`;
+    // Remember the family's details so "Register another child" on the payment portal brings them back pre-filled.
+    try{ sessionStorage.setItem('vyc_family',JSON.stringify({fields:Object.fromEntries(FAMILY_FIELDS.map(id=>[id,$(id).value])),lastName:$('lastName').value,done:familyDone})); }catch(e){}
+    let secs=6, timer=null;
+    const paint=()=>{ msg.innerHTML=`<div class="rounded-lg border-2 border-green-500 bg-green-50 p-3">
       <p class="font-semibold text-green-800">✓ ${esc(who)} is registered! Your team will review it shortly.</p>
-      ${feeSet?`<div class="mt-2 rounded-lg border border-blue-300 bg-blue-50 p-2"><p class="text-sm"><b>${esc(teamLabel(teamCode))} team fee: $${(+feeSet.fee_amount).toFixed(2).replace(/\.00$/,'')} per athlete</b>${feeSet.fee_note?` — ${esc(feeSet.fee_note)}`:''}${+feeSet.sibling_discount>0?` (sibling discount $${(+feeSet.sibling_discount).toFixed(0)} off each additional child)`:''}.</p>
-        <p class="text-sm mt-1">Pay by card${feeSet.plan_enabled?' (in full or on a payment plan)':''}${[feeSet.accept_zelle&&'Zelle',feeSet.accept_cashapp&&'Cash App',feeSet.accept_venmo&&'Venmo',feeSet.accept_other&&'check/cash'].filter(Boolean).length?', or by '+[feeSet.accept_zelle&&'Zelle',feeSet.accept_cashapp&&'Cash App',feeSet.accept_venmo&&'Venmo',feeSet.accept_other&&'check or cash'].filter(Boolean).join(', '):''}: <a class="underline font-semibold text-blue-700" href="${payLink}" target="_blank" rel="noopener">Pay ${esc(who)}'s fee →</a></p>
-        <p class="text-xs text-gray-600 mt-1">You can also pay later — the link opens in a new tab, and it's on your Parent Dashboard too.</p></div>`:''}
       ${familyDone.length>1?`<p class="text-xs text-gray-700 mt-1">Registered so far: ${familyDone.map(esc).join(', ')}</p>`:''}
-      <p class="text-sm text-gray-700 mt-2">Have another child to register? We'll keep your family's information (address, phone, parents, emergency contact, insurance) so you only fill in the new athlete.</p>
-      <div class="flex flex-wrap gap-2 mt-2"><button type="button" class="btn bg-blue-600 text-white" id="nextChild">+ Register another child</button><button type="button" class="btn bg-gray-200" id="familyDoneBtn">I'm done</button></div></div>`;
-    msg.className='text-sm mt-2';
+      <p class="text-sm text-gray-900 mt-2"><b>Next: the payment portal.</b> You're being taken to ${esc(teamLabel(teamCode))}'s payment page for ${esc(row.first_name)} in <b id="payCountdown">${secs}</b> seconds. There you'll see the team fee and the ways you can pay — card, Zelle, Cash App, Venmo or check, whichever the team accepts.</p>
+      <div class="flex flex-wrap gap-2 mt-2"><a class="btn bg-blue-600 text-white" href="${payLink}" id="goPayNow">Go to the payment portal now →</a><button type="button" class="btn bg-gray-200" id="nextChild">Register another child first</button></div>
+      <p class="text-xs text-gray-600 mt-1">The payment page also has a "Register another child" button, and it keeps your family's details.</p></div>`; };
+    paint(); msg.className='text-sm mt-2';
     if(wantsAcct) await ensureAccount($('email').value.trim(), p1, msg);
-    $('nextChild').onclick=()=>startNextChild(e.target);
-    $('familyDoneBtn').onclick=()=>{ const links=familyPayLinks.slice(); familyDone=[]; familyPayLinks=[]; clearAthleteFields(e.target,true);
-      msg.innerHTML='<p class="text-green-700 font-semibold">All set — thank you! You can close this page.</p>'+(feeSet&&links.length?'<div class="text-sm mt-2"><b>Team fee links:</b> '+links.map(([w,l])=>`<a class="underline text-blue-700" href="${l}" target="_blank" rel="noopener">${esc(w)}</a>`).join(' · ')+'</div>':''); window.scrollTo(0,0); };
+    const go=()=>{ clearInterval(timer); location.href=payLink; };
+    timer=setInterval(()=>{ secs--; const c=$('payCountdown'); if(c) c.textContent=secs; if(secs<=0) go(); },1000);
+    $('goPayNow').onclick=e=>{ e.preventDefault(); go(); };
+    $('nextChild').onclick=()=>{ clearInterval(timer); startNextChild(e.target); };
   }catch(err){ msg.textContent='Error: '+(err.message||err); msg.className='text-sm mt-2 text-red-600'; }
 });
 
 // ---- Several children: after one registration goes through, keep the family's info and clear only the athlete ----
-let familyDone=[], familyPayLinks=[];
+let familyDone=[];
+// Back from the payment portal with "Register another child": restore the family's details, just fill in the new athlete.
+(function restoreFamily(){
+  if(new URLSearchParams(location.search).get('another')!=='1') return;
+  let saved=null; try{ saved=JSON.parse(sessionStorage.getItem('vyc_family')||'null'); }catch(e){}
+  if(!saved) return;
+  window.addEventListener('load',()=>{ setTimeout(()=>{
+    for(const [id,v] of Object.entries(saved.fields||{})){ const el=$(id); if(el&&v) el.value=v; }
+    if(saved.lastName) $('lastName').value=saved.lastName;
+    familyDone=saved.done||[];
+    try{ if($('teamCode').value){ $('teamCode').dispatchEvent(new Event('change')); } }catch(e){}
+    $('parentMsg').innerHTML=`<p class="text-sm text-gray-700">Welcome back — your family's details are filled in. Just add the next athlete.${familyDone.length?' Already registered: '+familyDone.map(esc).join(', '):''}</p>`;
+    const form=$('parentForm'), h=[...form.querySelectorAll('h2')].find(x=>/Athlete Information/.test(x.textContent));
+    (h||form).scrollIntoView({behavior:'smooth',block:'start'}); setTimeout(()=>$('firstName').focus(),400);
+  },300); });
+})();
 // The team's fee for this season (set by the team admin on the Payments tab); null when the team hasn't set one.
 async function teamFeeSettings(code){ try{ const {data}=await sb.from('team_payment_settings').select('*').eq('team_code',code).eq('season_year',CFG.SEASON_YEAR).maybeSingle(); return data&&+data.fee_amount>0?data:null; }catch(e){ return null; } }
 const FAMILY_FIELDS=['teamCode','sport','address','city','zip','phone','email','emergencyName','emergencyPhone','parent1Name','parent1Rel','parent2Name','parent2Rel','insuranceCarrier'];

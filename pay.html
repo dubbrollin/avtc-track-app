@@ -26,25 +26,28 @@
   <h1 class="text-2xl font-bold">Team fee</h1>
   <p class="text-gray-600 mb-4">Pay your team's fee for your athlete — by card, or another way your team accepts.</p>
   <div id="done" class="hidden rounded-lg border-2 border-green-500 bg-green-50 p-3 mb-3 text-sm"><b>Thank you!</b> Your card payment is being confirmed — this page updates on its own in a moment.</div>
+  <div id="arrived" class="hidden rounded-lg border-2 border-blue-400 bg-blue-50 p-3 mb-3 text-sm"><b>Registration received.</b> This is the payment portal for your athlete. Pick a way to pay below. Nothing is owed until your team posts its fee here.</div>
   <div id="ask" class="card hidden">
     <p class="text-sm mb-2">Enter the email address you used on the registration form so we can find your athlete.</p>
     <div class="flex gap-2"><input id="askEmail" type="email" class="border rounded p-2 flex-1" placeholder="you@example.com" autocomplete="email"><button class="btn bg-blue-600 text-white" id="askGo">Continue</button></div>
     <p id="askMsg" class="text-sm text-red-700 mt-2"></p>
   </div>
   <div id="fee" class="card hidden"></div>
-  <p class="text-xs text-gray-500">Registered more than one child? Each athlete has their own fee — open the link from each confirmation, or sign in to the <a class="underline" href="parent.html">Parent Dashboard</a> to see them all in one place.</p>
+  <div class="flex flex-wrap gap-2 mb-2"><a class="btn bg-blue-600 text-white" href="index.html?another=1">+ Register another child</a><a class="btn bg-gray-200" href="parent.html">Parent Dashboard</a></div>
+  <p class="text-xs text-gray-500">Each athlete has their own fee and pay page. "Register another child" keeps your family's details so you only fill in the new athlete. Sign in to the Parent Dashboard any time to see every athlete's balance in one place.</p>
 </div>
 <script>
 const $=id=>document.getElementById(id), CFG=window.APP_CONFIG;
 const sb=supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{auth:{lock:(n,t,fn)=>fn()}});
-const q=new URLSearchParams(location.search), reg=q.get('reg'), done=q.get('done')==='1';
+const q=new URLSearchParams(location.search), reg=q.get('reg'), done=q.get('done')==='1', arrived=q.get('new')==='1';
+if(arrived&&reg) $('arrived').classList.remove('hidden');
 let email=(q.get('email')||'').trim().toLowerCase();
 if(!reg){ $('ask').classList.remove('hidden'); $('ask').innerHTML='<p class="text-sm">This link is missing the athlete. Open the pay link from your registration confirmation, or sign in to the <a class="underline" href="parent.html">Parent Dashboard</a>.</p>'; }
 else if(!email){ $('ask').classList.remove('hidden'); $('askGo').onclick=()=>{ const e=$('askEmail').value.trim().toLowerCase(); if(!e){ $('askMsg').textContent='Enter your email.'; return; } email=e; $('ask').classList.add('hidden'); start(); }; }
 else start();
 async function start(){
   $('fee').classList.remove('hidden');
-  if(done){ $('done').classList.remove('hidden'); history.replaceState(null,'',location.pathname+'?reg='+encodeURIComponent(reg)+'&email='+encodeURIComponent(email)); }
+  if(done||arrived){ if(done) $('done').classList.remove('hidden'); history.replaceState(null,'',location.pathname+'?reg='+encodeURIComponent(reg)+'&email='+encodeURIComponent(email)); }
   await window.renderFeeCard($('fee'),{sb,regId:reg,email});
   if(done){ // Stripe's webhook records the payment a moment after the redirect — refresh a few times so the parent sees it land.
     let tries=0; const t=setInterval(async()=>{ tries++; await window.renderFeeCard($('fee'),{sb,regId:reg,email}); if(tries>=6||/Paid in full|Payment plan/.test($('fee').textContent)){ clearInterval(t); $('done').classList.add('hidden'); } },3000); }
