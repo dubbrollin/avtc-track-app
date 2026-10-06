@@ -11,7 +11,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="config.js"></script>
-<script src="shared.js"></script>
+<script src="shared.js"></script><script src="team-admin-panels.js"></script>
 <script src="events.js"></script>
 <script src="pdf.js"></script>
 <style>
@@ -53,6 +53,7 @@
     .dash-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:16px;align-items:start}
     .dash-col-right{position:sticky;top:12px}
   }
+.tatab{padding:.55rem 1rem;font-size:.9rem;cursor:pointer;background:#fff;border:0;font-weight:600}.tatab.active{background:var(--brand);color:#fff}
 </style>
 </head>
 <body class="text-gray-900"><header class="topnav"><div class="topnav-inner">
@@ -62,7 +63,6 @@
     <a href="index.html">Register</a>
     <a href="coach.html">Coach Dashboard</a>
     <a href="parent.html">Parent Dashboard</a>
-    <a href="meets-admin.html">Meet Admin</a>
     <a href="results.html">Results</a>
   </nav>
 </div></header>
@@ -110,6 +110,13 @@
 
       <!-- ROSTER & INTAKE (head coaches only, opened from the Roster button) -->
       <div id="rosterView" class="hidden"><div class="max-w-5xl mx-auto">
+          <div id="taTabs" class="flex flex-wrap rounded-lg overflow-hidden border text-sm mb-3 w-fit bg-white">
+            <button type="button" class="tatab" data-ta="roster">Roster &amp; intake</button>
+            <button type="button" class="tatab" data-ta="payments">Payments</button>
+            <button type="button" class="tatab" data-ta="signup">Parent meet sign-up</button>
+          </div>
+          <div id="taPayments" class="hidden"></div>
+          <div id="taSignup" class="hidden"></div>
           <div id="feeBanner"></div>
           <div class="card">
             <div class="col-head"><h2 class="flex-1">Roster <span id="count" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
@@ -189,10 +196,15 @@
             </div>
           </div>
 
-          <div class="card" id="uploadCard">
-            <div class="col-head"><h2>Upload meet results</h2></div>
-            <p class="text-xs text-gray-500 mb-2">Upload a meet's results (Hy-Tek Meet Manager export or your Team Manager .tcl file), or add one by hand — that happens on the Meet Admin page: find the meet in the list there and click "Results".</p>
-            <a href="meets-admin.html" class="btn bg-purple-600 text-white text-sm inline-block">Go to Meet Admin →</a>
+          <div class="card" id="teamAdminCard">
+            <div class="col-head"><h2>Team admin</h2></div>
+            <p class="text-xs text-gray-500 mb-2">Your team's roster and intake, your team's payment portal (fee, Stripe, Zelle…), and whether parents enter meet events themselves.</p>
+            <div class="flex flex-wrap gap-2">
+              <a href="coach.html?view=roster" class="btn bg-blue-600 text-white inline-block">Roster &amp; intake →</a>
+              <a href="coach.html?view=roster&tab=payments" class="btn bg-green-600 text-white inline-block">Payments →</a>
+              <a href="coach.html?view=roster&tab=signup" class="btn bg-gray-800 text-white inline-block">Parent meet sign-up →</a>
+            </div>
+            <p class="text-xs text-gray-500 mt-2">Uploading meet results and setting up meets happens on the <a class="underline" href="admin.html?tab=meetadmin">Meet Admin tab of the Admin page</a>.</p>
           </div>
           </div>
 
@@ -287,16 +299,34 @@ async function loadMe(){
   $('rosterNote').classList.toggle('hidden',fullAccess); $('certNote').classList.toggle('hidden',!fullAccess);
   $('coachesCard').style.display=fullAccess?'':'none';
   $('clearCard').style.display=fullAccess?'':'none';
-  $('uploadCard').style.display=fullAccess?'':'none'; // uploading results = team admins (and timers), not regular coaches
+  $('teamAdminCard').style.display=fullAccess?'':'none'; // team admins (and site admins) only
   // Roster lives on its own view (head coaches only) — the everyday dashboard is just Meet Register + Results.
   const vw=new URLSearchParams(location.search).get('view');
   const wantRoster = fullAccess && vw==='roster', wantReg = vw==='register';
   $('rosterView').classList.toggle('hidden',!wantRoster); $('registerView').classList.toggle('hidden',!wantReg);
   $('dashView').classList.toggle('hidden',wantRoster||wantReg);
   $('rosterBtn').classList.toggle('hidden',!fullAccess||wantRoster||wantReg); $('backBtn').classList.toggle('hidden',!(wantRoster||wantReg));
-  $('pageTitle').textContent = wantRoster ? 'Team admin: roster & intake' : wantReg ? 'Meet Registration' : 'Coach Dashboard';
+  $('pageTitle').textContent = wantRoster ? 'Team admin' : wantReg ? 'Meet Registration' : 'Coach Dashboard';
+  if(wantRoster) setupTeamAdminTabs();
   await load();
   if(wantReg) await loadMeetsForReg();
+}
+
+// ---- Team admin section: Roster & intake | Payments | Parent meet sign-up ----
+function setupTeamAdminTabs(){
+  const q=new URLSearchParams(location.search); const stripeTeam=q.get('stripe'); let tab=q.get('tab')||'roster'; if(stripeTeam) tab='payments';
+  if(q.has('tab')||stripeTeam) history.replaceState(null,'',location.pathname+'?view=roster');
+  const panels={roster:null,payments:$('taPayments'),signup:$('taSignup')};
+  const rosterBits=[...$('rosterView').firstElementChild.children].filter(x=>!['taTabs','taPayments','taSignup'].includes(x.id));
+  const teams=(window.VYC_TEAMS||[]).map(t=>({code:t.code,name:t.name,active:t.active!==false}));
+  const ctx=()=>({sb,team:myCoach.team_code,season:CFG.SEASON_YEAR,teams,canPickTeam:false});
+  let stripeReturn=!!stripeTeam;
+  const show=t=>{ document.querySelectorAll('.tatab').forEach(b=>b.classList.toggle('active',b.dataset.ta===t));
+    rosterBits.forEach(x=>x.classList.toggle('hidden',t!=='roster')); $('taPayments').classList.toggle('hidden',t!=='payments'); $('taSignup').classList.toggle('hidden',t!=='signup');
+    if(t==='payments'){ const c=ctx(); c.stripeReturn=stripeReturn; stripeReturn=false; window.mountTeamPayments($('taPayments'),c); }
+    if(t==='signup') window.mountParentSignup($('taSignup'),ctx()); };
+  document.querySelectorAll('.tatab').forEach(b=>b.onclick=()=>show(b.dataset.ta));
+  (async()=>{ try{ await window.leagueReady; teams.splice(0,teams.length,...(window.VYC_TEAMS||[]).map(t=>({code:t.code,name:t.name,active:t.active!==false}))); }catch(e){} show(tab); })();
 }
 
 // ---- data ----

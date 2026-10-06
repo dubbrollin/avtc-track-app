@@ -18,7 +18,7 @@ Conference fees (team → VYC, on the Fees & Fines tab) are unchanged. This is p
 | Parent pay page (linked from the registration confirmation; no login needed) | `pay.html`, `payments.js` |
 | Parent Dashboard: balance + pay buttons under each athlete | `parent.html` |
 | Registration confirmation: fee + "Pay now" link | `index.html` |
-| Admin page → **Payments** tab: Stripe setup, fee settings, ways to pay, confirm Zelle/check payments, record payments, adjust/waive, copy pay link | `admin.html` |
+| Coach Dashboard → **Team admin** → **Payments** (site admins also get it as a tab on the Admin page): Stripe setup, fee settings, ways to pay, confirm Zelle/check payments, record payments, adjust/waive, copy pay link | `team-admin-panels.js`, `coach.html`, `admin.html` |
 
 ## One-time setup (Riley)
 
@@ -83,7 +83,7 @@ Also run the parent meet sign-up change (team switch + "are you coming?" questio
 
 ## How a team switches it on
 
-1. Team admin signs in → Admin page → **Payments** tab.
+1. Team admin signs in → Coach Dashboard → **Team admin** card → **Payments**.
 2. **Set up Stripe for this team** → Stripe's form (bank account, responsible person, EIN or SSN) → Stripe sends them back to the Payments tab, which shows **Card payments ON ✓** when Stripe is satisfied. (If Stripe wants more, the tab says "Action needed" with a "Continue Stripe setup" button.)
 3. Enter the **fee per athlete**, optional sibling discount, what it covers, tick the ways to pay they accept (with the Zelle / Cash App / Venmo details), optionally the payment plan (deposit, number of monthly payments, first date) → **Save**.
 4. Press **Add the fee to athletes who don't have one** for anyone who registered before step 3. New registrations get the fee automatically.

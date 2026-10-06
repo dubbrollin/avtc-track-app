@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
         if (ins.error) throw ins.error;
         acctRow = ins.data;
       }
-      const back = `${APP_URL}/admin.html?stripe=${encodeURIComponent(team)}`;
+      const back = `${APP_URL}/coach.html?view=roster&tab=payments&stripe=${encodeURIComponent(team)}`;
       const link = await stripeV2("/v2/core/account_links", {
         account: acctRow!.stripe_account_id,
         use_case: { type: "account_onboarding", account_onboarding: { collection_options: { fields: "eventually_due" }, return_url: back, refresh_url: back + "&refresh=1" } },
