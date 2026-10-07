@@ -21,7 +21,6 @@
     <a href="home.html">Home</a>
     <a href="index.html">Register</a>
     <a href="coach.html">Coach Dashboard</a>
-    <a href="coach.html?view=roster">Team Admin</a>
     <a href="parent.html">Parent Dashboard</a>
     <a href="results.html">Results</a>
   </nav>
@@ -71,7 +70,7 @@ let sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: 
 let me=null, myRegs=[], meets=[], athletes=[], events=[], entries=[], attendance=[], teamSettings={};
 
 window.mountLoginWidget(sb, $('loginWidget'), {hint:"Sign in with the email you used to register your athlete."});
-$('logout').onclick=()=>sb.auth.signOut().then(()=>location.reload());
+$('logout').onclick=()=>{ if(window.clearRoleFlags) window.clearRoleFlags(); sb.auth.signOut().then(()=>location.reload()); };
 sb.auth.onAuthStateChange(async(_e,session)=>{
   if(!session||window.__authDone===session.user.id) return; window.__authDone=session.user.id; me=session.user.email;
   sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // rebuild client: the original can wedge after an OAuth redirect, hanging every later query forever

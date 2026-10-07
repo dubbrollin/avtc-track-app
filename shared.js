@@ -169,7 +169,17 @@ window.bgCheckLinkHtml = function(lead){
 // ---- Current season (from Site Admin > League Setup). Working meet lists show only this season's meets;
 // past seasons are locked history (results still show on the Results page). ----
 window.currentSeason = async function(){ try{ if(window.leagueReady) await window.leagueReady; }catch(e){} return (window.APP_CONFIG||{}).SEASON_YEAR; };
-// ---- "Site Admin" link in the top menu, only for signed-in site admins (flag is set by admin.html / coach.html) ----
+// ---- Role-based menu items, only for people who have that access (flags are set when they sign in on the Coach Dashboard
+//      or Site Admin page, and cleared when they sign out): "Team Admin" for team admins, "Timer" for timers, "Site Admin" for admins ----
 document.addEventListener('DOMContentLoaded',function(){ try{
-  if(localStorage.getItem('vyc_admin')==='1'){ const nav=document.querySelector('.topnav nav'); if(nav&&!nav.querySelector('a[href="admin.html"]')){ const a=document.createElement('a'); a.href='admin.html'; a.textContent='Site Admin'; nav.appendChild(a); } }
+  const nav=document.querySelector('.topnav nav'); if(!nav) return;
+  const flag=k=>localStorage.getItem(k)==='1';
+  const coachLink=nav.querySelector('a[href="coach.html"]');
+  const addAfter=(ref,href,text)=>{ if(nav.querySelector('a[href="'+href+'"]')) return; const a=document.createElement('a'); a.href=href; a.textContent=text; if(ref&&ref.nextSibling) nav.insertBefore(a,ref.nextSibling); else nav.appendChild(a); return a; };
+  let last=coachLink;
+  if(flag('vyc_team_admin')) last=addAfter(last,'coach.html?view=roster','Team Admin')||last;
+  if(flag('vyc_timer')) last=addAfter(last,'meets-admin.html','Timer')||last;
+  if(flag('vyc_admin')) addAfter(null,'admin.html','Site Admin');
 }catch(e){} });
+window.setRoleFlags=function(c){ try{ localStorage.setItem('vyc_admin',(c&&(c.is_admin||c.team_admin))?'1':'0'); localStorage.setItem('vyc_team_admin',(c&&(c.is_admin||c.team_admin))?'1':'0'); localStorage.setItem('vyc_timer',(c&&c.role_type==='timer')?'1':'0'); }catch(e){} };
+window.clearRoleFlags=function(){ try{ ['vyc_admin','vyc_team_admin','vyc_timer'].forEach(k=>localStorage.removeItem(k)); }catch(e){} };

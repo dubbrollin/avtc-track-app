@@ -44,7 +44,6 @@ table.t td{padding:5px 6px;border-top:1px solid #f3f4f6;vertical-align:middle}
 <a href="home.html">Home</a>
 <a href="index.html">Register</a>
 <a href="coach.html">Coach Dashboard</a>
-    <a href="coach.html?view=roster">Team Admin</a>
 <a href="parent.html">Parent Dashboard</a>
 <a href="results.html">Results</a>
 <a href="admin.html">Site Admin</a>
@@ -129,8 +128,8 @@ const {data}=await sb.from('coaches').select('*').eq('email',s.user.email).eq('a
 SEASON=+(await window.currentSeason());
 const pres=data&&data.president_conference&&data.president_season===SEASON?data.president_conference:null;
 const comm=!!(data&&data.commissioner_season===SEASON), treas=!!(data&&data.treasurer_season===SEASON);
-if(!data||!(data.is_admin||data.team_admin||pres||comm||treas)){ try{localStorage.setItem('vyc_admin','0')}catch(e){} $('deniedWho').textContent='Signed in as '+s.user.email+'. Ask a site admin or your team admin to give you access.'; $('denied').classList.remove('hide'); return; }
-try{localStorage.setItem('vyc_admin','1')}catch(e){}
+if(!data||!(data.is_admin||data.team_admin||pres||comm||treas)){ window.clearRoleFlags(); $('deniedWho').textContent='Signed in as '+s.user.email+'. Ask a site admin or your team admin to give you access.'; $('denied').classList.remove('hide'); return; }
+window.setRoleFlags(data);
 me=data; SITE=!!data.is_admin; MYTEAM=data.team_code; PRES=pres; COMM=comm; TREAS=treas; $('app').classList.remove('hide');
 await loadTeams();
 if(!SITE&&!data.team_admin){

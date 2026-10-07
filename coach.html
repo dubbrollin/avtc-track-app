@@ -62,7 +62,6 @@
     <a href="home.html">Home</a>
     <a href="index.html">Register</a>
     <a href="coach.html">Coach Dashboard</a>
-    <a href="coach.html?view=roster">Team Admin</a>
     <a href="parent.html">Parent Dashboard</a>
     <a href="results.html">Results</a>
   </nav>
@@ -237,8 +236,8 @@ function roleLabel(c){
 const WANT_TEAM_ADMIN=new URLSearchParams(location.search).get('view')==='roster';
 if(WANT_TEAM_ADMIN) document.title='Team Admin';
 window.mountLoginWidget(sb, $('loginWidget'), WANT_TEAM_ADMIN?{hint:'Team admins: sign in with the email you registered with. (You don\'t need to be a coach.)'}:{});
-$('logout').onclick=async()=>{await sb.auth.signOut(); location.reload();};
-document.querySelectorAll('.signout-btn').forEach(b=>b.onclick=async()=>{await sb.auth.signOut(); location.reload();});
+$('logout').onclick=async()=>{window.clearRoleFlags(); await sb.auth.signOut(); location.reload();};
+document.querySelectorAll('.signout-btn').forEach(b=>b.onclick=async()=>{window.clearRoleFlags(); await sb.auth.signOut(); location.reload();});
 sb.auth.onAuthStateChange(async(_e,session)=>{
   user=session?.user||null;
   if(!user) return;
@@ -281,12 +280,12 @@ async function loadMe(){
     return;
   }
   myCoach=data;
+  window.setRoleFlags(myCoach);
   if(myCoach.role_type==='timer' && !myCoach.is_admin && !myCoach.team_admin){ $('timerBox').style.display='block'; return; }
   // USATF coaches: verify against USATF's public lists if never checked, or last checked 30+ days ago.
   if(myCoach.usatf_certified && (!myCoach.usatf_registry_checked_at || Date.now()-new Date(myCoach.usatf_registry_checked_at)>30*864e5)){
     try{ const {data:v}=await sb.functions.invoke('usatf-verify',{body:{email:myCoach.email}}); if(v&&v.status){ myCoach.usatf_registry_status=v.status; myCoach.usatf_registry_checked_at=new Date().toISOString(); } }catch(e){}
   }
-  try{ localStorage.setItem('vyc_admin', (myCoach.is_admin||myCoach.team_admin)?'1':'0'); }catch(e){}
   fullAccess=isFullAccess(myCoach);
   $('notCoachBox').style.display='none'; $('coachApp').style.display='block';
   const team=window.VYC_TEAMS.find(t=>t.code===myCoach.team_code);
