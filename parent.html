@@ -50,7 +50,7 @@
     </div>
 
     <div class="card" id="registerCard">
-      <h2 class="font-bold mb-1">Meet sign-up</h2>
+      <h2 class="font-bold mb-1" id="signupTitle">Meet sign-up</h2>
       <p class="text-xs text-gray-500 mb-2" id="signupHint">Pick a meet, then check off which races your verified athlete(s) are running.</p>
       <div class="flex flex-wrap items-center gap-2 mb-2">
         <select id="meet" class="border rounded p-2 flex-1"></select>
@@ -130,7 +130,7 @@ async function loadMeets(){
   const {data:evc}=await sb.from('meet_events').select('meet_id'); const evCount={}; (evc||[]).forEach(x=>evCount[x.meet_id]=(evCount[x.meet_id]||0)+1);
   $('meet').innerHTML=meets.map(m=>`<option value="${m.id}">${m.name} — ${fmtDate(m.meet_date)}${evCount[m.id]?'':' (no events set up yet)'}</option>`).join('')||'<option value="">No meets posted yet</option>';
   const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
-  const pick=meets.find(m=>evCount[m.id]&&m.meet_date>=today)||meets.find(m=>evCount[m.id]&&isOpen(m))||meets.find(m=>evCount[m.id]); if(pick) $('meet').value=pick.id; // start on the current/next meet that has events
+  const pick=meets.find(m=>evCount[m.id]&&m.meet_date>=today)||meets.find(m=>m.meet_date>=today)||meets.find(m=>evCount[m.id]&&isOpen(m))||meets.find(m=>evCount[m.id])||meets[0]; if(pick) $('meet').value=pick.id; // start on the current/next meet
   $('meet').onchange=loadMeet; if(meets.length) await loadMeet(); else $('meetInfo').textContent='';
 }
 const cur=()=>meets.find(m=>m.id===$('meet').value);
@@ -138,7 +138,9 @@ function isOpen(m){ return m.status==='open' && new Date()<=new Date(m.entries_c
 
 async function loadMeet(){
   const m=cur(); if(!m) return;
-  $('meetInfo').textContent=`${m.location||''} · Entries ${isOpen(m)?'close':'closed'} ${new Date(m.entries_close).toLocaleString()}`;
+  const askMode=myRegs.some(r=>r.status!=='rejected'&&!parentEntryOn(r))&&!myRegs.some(r=>r.status!=='rejected'&&parentEntryOn(r));
+  if(askMode){ const dl=window.attendanceDeadline(m.meet_date); $('meetInfo').textContent=`${m.meet_date?fmtDate(m.meet_date):''}${m.location?' · '+m.location:''}${dl?' · Tell your team by '+window.fmtDeadline(dl):''}`; }
+  else $('meetInfo').textContent=`${m.location||''} · Entries ${isOpen(m)?'close':'closed'} ${new Date(m.entries_close).toLocaleString()}`;
   const [e,n,t]=await Promise.all([
     sb.from('meet_events').select('*').eq('meet_id',m.id),
     sb.from('entries').select('*').eq('meet_id',m.id),
@@ -154,8 +156,9 @@ const parentEntryOn=a=>{ const t=teamSettings[a.team_code]; return !t||t.parent_
 function render(){
   if(!athletes.length){ $('athletes').innerHTML=''; return; }
   const m=cur(), open=isOpen(m);
-  const anyAsk=athletes.some(a=>!parentEntryOn(a)), anyEnter=athletes.some(parentEntryOn);
-  $('signupHint').textContent=anyAsk&&!anyEnter?"Pick a meet and tell your coaches whether your athlete is coming — and, if you like, which two events they'd like to compete in. The coaches do the actual entering.":'Pick a meet, then check off which races your verified athlete(s) are running.';
+  const anyAsk=athletes.some(a=>!parentEntryOn(a)), anyEnter=athletes.some(parentEntryOn), askOnly=anyAsk&&!anyEnter;
+  $('signupTitle').textContent=askOnly?'Meet attendance':'Meet sign-up';
+  $('signupHint').textContent=askOnly?"Your team's coaches enter the athletes into events. Your part: tell them whether your athlete is coming to the meet below — and, if you like, which two events they'd like to compete in.":'Pick a meet, then check off which races your verified athlete(s) are running.';
   $('athletes').innerHTML=athletes.map(a=>{
     if(!parentEntryOn(a)) return renderAsk(a,m);
     const mine=entries.filter(x=>x.registration_id===a.id);
