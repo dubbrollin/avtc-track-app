@@ -112,6 +112,7 @@
       <div id="rosterView" class="hidden"><div class="max-w-5xl mx-auto">
           <div id="taTabs" class="flex flex-wrap rounded-lg overflow-hidden border text-sm mb-3 w-fit bg-white">
             <button type="button" class="tatab" data-ta="roster">Roster &amp; intake</button>
+            <button type="button" class="tatab" data-ta="coaches">Coaches <span id="taCoachBadge" class="hidden" style="background:#dc2626;color:#fff;border-radius:999px;padding:1px 7px;font-size:11px"></span></button>
             <button type="button" class="tatab" data-ta="payments">Payments</button>
             <button type="button" class="tatab" data-ta="signup">Parent meet sign-up</button>
           </div>
@@ -133,7 +134,8 @@
           </div>
           <div class="card" id="coachesCard">
             <div class="col-head"><h2 class="flex-1">Coaches on my team <span id="coachCount" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
-            <p class="text-xs text-gray-500 mb-2">Approve a new coach registration, make a coach a team admin, or review background-check status. Only team admins can do this.</p>
+            <p class="text-xs text-gray-500 mb-2">Every coach who signs up for your team lands here. <b>Approve</b> them so they can use the Coach Dashboard, make a coach a team admin, or check their background-check status. Only team admins (and site admins) can do this.</p>
+            <div id="coachPending"></div>
             <div id="coachList"></div>
           </div>
           <div class="card" id="clearCard">
@@ -201,9 +203,11 @@
             <p class="text-xs text-gray-500 mb-2">Your team's roster and intake, your team's payment portal (fee, Stripe, Zelle…), and whether parents enter meet events themselves.</p>
             <div class="flex flex-wrap gap-2">
               <a href="coach.html?view=roster" class="btn bg-blue-600 text-white inline-block">Roster &amp; intake →</a>
+              <a href="coach.html?view=roster&tab=coaches" class="btn bg-blue-600 text-white inline-block">Coaches →</a>
               <a href="coach.html?view=roster&tab=payments" class="btn bg-green-600 text-white inline-block">Payments →</a>
               <a href="coach.html?view=roster&tab=signup" class="btn bg-gray-800 text-white inline-block">Parent meet sign-up →</a>
             </div>
+            <div id="taCoachNotice"></div>
             <p class="text-xs text-gray-500 mt-2">Uploading meet results and setting up meets happens on the <a class="underline" href="admin.html?tab=meetadmin">Meet Admin tab of the Admin page</a>.</p>
           </div>
           </div>
@@ -299,7 +303,7 @@ async function loadMe(){
   $('exportCsv').style.display=fullAccess?'':'none';
   $('exportHytek').style.display=fullAccess?'':'none';
   $('rosterNote').classList.toggle('hidden',fullAccess); $('certNote').classList.toggle('hidden',!fullAccess);
-  $('coachesCard').style.display=fullAccess?'':'none';
+  $('coachesCard').style.display=fullAccess?'':'none'; if(!wantRosterView()) $('coachesCard').classList.add('hidden');
   $('clearCard').style.display=fullAccess?'':'none';
   $('teamAdminCard').style.display=fullAccess?'':'none'; // team admins (and site admins) only
   // Roster lives on its own view (head coaches only) — the everyday dashboard is just Meet Register + Results.
@@ -316,17 +320,17 @@ async function loadMe(){
   if(wantReg) await loadMeetsForReg();
 }
 
-// ---- Team admin section: Roster & intake | Payments | Parent meet sign-up ----
+const wantRosterView=()=>new URLSearchParams(location.search).get('view')==='roster';
+// ---- Team admin section: Roster & intake | Coaches | Payments | Parent meet sign-up ----
 function setupTeamAdminTabs(){
   const q=new URLSearchParams(location.search); const stripeTeam=q.get('stripe'); let tab=q.get('tab')||'roster'; if(stripeTeam) tab='payments';
   if(q.has('tab')||stripeTeam) history.replaceState(null,'',location.pathname+'?view=roster');
-  const panels={roster:null,payments:$('taPayments'),signup:$('taSignup')};
-  const rosterBits=[...$('rosterView').firstElementChild.children].filter(x=>!['taTabs','taPayments','taSignup'].includes(x.id));
+  const rosterBits=[...$('rosterView').firstElementChild.children].filter(x=>!['taTabs','taPayments','taSignup','coachesCard'].includes(x.id));
   const teams=(window.VYC_TEAMS||[]).map(t=>({code:t.code,name:t.name,active:t.active!==false}));
   const ctx=()=>({sb,team:myCoach.team_code,season:CFG.SEASON_YEAR,teams,canPickTeam:false});
   let stripeReturn=!!stripeTeam;
   const show=t=>{ document.querySelectorAll('.tatab').forEach(b=>b.classList.toggle('active',b.dataset.ta===t));
-    rosterBits.forEach(x=>x.classList.toggle('hidden',t!=='roster')); $('taPayments').classList.toggle('hidden',t!=='payments'); $('taSignup').classList.toggle('hidden',t!=='signup');
+    rosterBits.forEach(x=>x.classList.toggle('hidden',t!=='roster')); $('coachesCard').classList.toggle('hidden',t!=='coaches'); $('taPayments').classList.toggle('hidden',t!=='payments'); $('taSignup').classList.toggle('hidden',t!=='signup');
     if(t==='payments'){ const c=ctx(); c.stripeReturn=stripeReturn; stripeReturn=false; window.mountTeamPayments($('taPayments'),c); }
     if(t==='signup') window.mountParentSignup($('taSignup'),ctx()); };
   document.querySelectorAll('.tatab').forEach(b=>b.onclick=()=>show(b.dataset.ta));
@@ -529,6 +533,10 @@ function render(){
 }
 function renderCoaches(){
   $('coachCount').textContent=`(${coachRows.length})`;
+  const waiting=coachRows.filter(c=>!c.approved);
+  const badge=$('taCoachBadge'); if(badge){ badge.textContent=waiting.length; badge.classList.toggle('hidden',!waiting.length); }
+  if($('coachPending')) $('coachPending').innerHTML=waiting.length?`<div class="rounded-lg border border-amber-400 bg-amber-50 p-2 mb-2 text-sm"><b>${waiting.length} coach${waiting.length>1?'es are':' is'} waiting for your approval:</b> ${waiting.map(c=>esc(c.first_name||c.name||c.email)).join(', ')}. Approve them below so they can sign in to the Coach Dashboard.</div>`:'';
+  if($('taCoachNotice')) $('taCoachNotice').innerHTML=waiting.length?`<p class="text-sm mt-2 rounded-lg border border-amber-400 bg-amber-50 p-2"><b>${waiting.length} coach${waiting.length>1?'es':''} waiting for approval</b> — <a class="underline text-blue-700" href="coach.html?view=roster&tab=coaches">review now →</a></p>`:'';
   if(!coachRows.length){ $('coachList').innerHTML='<p class="text-sm text-gray-500">No coaches registered for this team yet.</p>'; return; }
   $('coachList').innerHTML=coachRows.map(c=>{
     const st=bgStatus(c);
