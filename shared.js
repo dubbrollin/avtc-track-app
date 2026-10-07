@@ -173,6 +173,9 @@ window.attendanceDeadline = function(meetDate){ if(!meetDate) return null; const
   let back=(dt.getDay()-4+7)%7; if(back===0) back=7; dt.setDate(dt.getDate()-back); return dt; };
 window.fmtDeadline = function(dt){ return dt?dt.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})+' at 8:00 PM':''; };
 window.LATE_ADD_RULE = 'If your team is not told by then and your athlete shows up on meet day, they are a late add and will run at the end of each heat.';
+// Which teams compete at a meet: meets.team_codes (empty = every team).
+window.meetHasTeam = function(m, code){ const L=(m&&m.team_codes)||[]; return !L.length || L.includes(code); };
+window.meetTeamsLabel = function(m){ const L=(m&&m.team_codes)||[]; if(!L.length) return 'All teams'; return L.map(c=>(window.VYC_TEAMS.find(t=>t.code===c)||{}).name||c).join(', '); };
 window.currentSeason = async function(){ try{ if(window.leagueReady) await window.leagueReady; }catch(e){} return (window.APP_CONFIG||{}).SEASON_YEAR; };
 // ---- Role-based menu items, only for people who have that access (flags are set when they sign in on the Coach Dashboard
 //      or Site Admin page, and cleared when they sign out): "Team Admin" for team admins, "Timer" for timers, "Site Admin" for admins ----

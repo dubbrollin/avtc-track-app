@@ -126,7 +126,8 @@ async function loadMyResults(){
 
 async function loadMeets(){
   const {data}=await sb.from('meets').select('*').eq('season_year',await window.currentSeason()).neq('status','archived').order('meet_date');
-  meets=data||[];
+  const myTeams=[...new Set(myRegs.filter(r=>r.status!=='rejected').map(r=>r.team_code))];
+  meets=(data||[]).filter(m=>myTeams.some(c=>window.meetHasTeam(m,c))); // only meets at least one of my athletes' teams is competing at
   const {data:evc}=await sb.from('meet_events').select('meet_id'); const evCount={}; (evc||[]).forEach(x=>evCount[x.meet_id]=(evCount[x.meet_id]||0)+1);
   $('meet').innerHTML=meets.map(m=>`<option value="${m.id}">${m.name} — ${fmtDate(m.meet_date)}${evCount[m.id]?'':' (no events set up yet)'}</option>`).join('')||'<option value="">No meets posted yet</option>';
   const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
@@ -146,7 +147,7 @@ async function loadMeet(){
     sb.from('entries').select('*').eq('meet_id',m.id),
     sb.from('meet_attendance').select('*').eq('meet_id',m.id)
   ]);
-  athletes=myRegs.filter(r=>r.status!=='rejected'&&(r.status==='verified'||!parentEntryOn(r)));
+  athletes=myRegs.filter(r=>r.status!=='rejected'&&(r.status==='verified'||!parentEntryOn(r))&&window.meetHasTeam(m,r.team_code)); // only athletes whose team is at this meet
   events=e.data||[]; entries=n.data||[]; attendance=t.data||[];
   $('none').classList.toggle('hidden',athletes.length>0);
   render();

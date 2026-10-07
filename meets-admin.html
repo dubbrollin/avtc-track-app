@@ -40,6 +40,9 @@
         <input id="mClose" type="datetime-local" class="border rounded p-2" title="Entries close">
         <input id="mLoc" class="border rounded p-2 col-span-2" placeholder="Location">
       </div>
+      <div class="mt-2"><div class="text-sm font-semibold">Teams competing</div>
+        <p class="text-xs text-gray-500 mb-1">Only these teams' coaches and parents will see this meet (and can enter athletes or answer "are you coming?"). Leave "All teams" ticked for a league-wide meet.</p>
+        <div id="mTeams" class="flex flex-wrap gap-x-4 gap-y-1 text-sm"></div></div>
       <p class="text-xs text-gray-500 mt-1">Second box = when entries close. The meet gets the full standard event list; untick any you don't want below after creating.</p>
       <button id="create" class="btn bg-blue-600 text-white mt-2">Create meet</button>
     </div>
@@ -63,10 +66,20 @@ sb.auth.onAuthStateChange(async(_e,s)=>{ if(!s||window.__authDone===s.user.id) r
   $('newMeetCard').classList.toggle('hidden',TIMER); $('timerNote').classList.toggle('hidden',!TIMER);
   $('app').classList.remove('hidden'); load(); });
 
+// Team picker (shared by the New meet form and each meet's "Teams competing" panel): an "All teams" box plus one box per active team.
+function teamPickerHtml(selected){ const sel=selected||[]; const all=!sel.length;
+  return `<label class="font-semibold"><input type="checkbox" data-team="__ALL" ${all?'checked':''}> All teams</label>`+
+    (window.VYC_TEAMS||[]).filter(t=>t.active!==false).map(t=>`<label><input type="checkbox" data-team="${t.code}" ${!all&&sel.includes(t.code)?'checked':''} ${all?'disabled':''}> ${t.name}</label>`).join(''); }
+function wireTeamPicker(box){ const all=box.querySelector('[data-team="__ALL"]');
+  all.onchange=()=>box.querySelectorAll('[data-team]:not([data-team="__ALL"])').forEach(cb=>{ cb.disabled=all.checked; if(all.checked) cb.checked=false; }); }
+function pickedTeams(box){ if(box.querySelector('[data-team="__ALL"]').checked) return null; const L=[...box.querySelectorAll('[data-team]:not([data-team="__ALL"])')].filter(cb=>cb.checked).map(cb=>cb.dataset.team); return L.length?L:null; }
+(async()=>{ try{ await window.leagueReady; }catch(e){} $('mTeams').innerHTML=teamPickerHtml([]); wireTeamPicker($('mTeams')); })();
+
 $('create').onclick=async()=>{
   const name=$('mName').value.trim(), date=$('mDate').value, close=$('mClose').value;
   if(!name||!date||!close) return alert('Name, date and entries-close are required.');
-  const {data:m,error}=await sb.from('meets').insert({name,meet_date:date,location:$('mLoc').value.trim(),entries_close:new Date(close).toISOString()}).select().single();
+  const team_codes=pickedTeams($('mTeams'));
+  const {data:m,error}=await sb.from('meets').insert({name,meet_date:date,location:$('mLoc').value.trim(),entries_close:new Date(close).toISOString(),team_codes}).select().single();
   if(error) return alert(error.message);
   const e2=await buildEvents(m.id);
   if(e2) return alert(e2.message);
@@ -127,7 +140,8 @@ async function load(){
     return; }
   $('meets').innerHTML=meets.map(m=>`<div class="bg-white rounded-xl shadow p-4 mb-3">
     <div class="flex flex-wrap items-center gap-2">
-      <div class="font-bold flex-1">${m.name} <span class="font-normal text-gray-500">${fmtDate(m.meet_date)} · ${m.status}</span></div>
+      <div class="font-bold flex-1">${m.name} <span class="font-normal text-gray-500">${fmtDate(m.meet_date)} · ${m.status}</span><div class="text-xs font-normal text-gray-600">Teams: ${window.meetTeamsLabel(m)}</div></div>
+      <button class="btn ${(m.team_codes||[]).length?'bg-amber-500 text-white':'bg-gray-200'} text-sm" data-act="teams" data-id="${m.id}">Teams competing${(m.team_codes||[]).length?' ('+m.team_codes.length+')':': all'}</button>
       <button class="btn bg-gray-200 text-sm" data-act="toggle" data-id="${m.id}">${m.status==='open'?'Close entries':'Reopen'}</button>
       <button class="btn bg-gray-200 text-sm" data-act="events" data-id="${m.id}">Events offered</button>
       <button class="btn bg-blue-600 text-white text-sm" data-act="import" data-id="${m.id}">Import events from Team Manager</button>
@@ -157,6 +171,11 @@ async function act(a,id){
     const a2=document.createElement('a'); a2.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));
     a2.download=`${m.name.replace(/[^\w]+/g,'_')}_ALL_TEAMS_entries_and_roster.txt`; a2.click(); return;
   }
+  if(a==='teams'){ const p=$('panel-'+id); if(p.querySelector('[data-team]')){ p.innerHTML=''; return; }
+    p.innerHTML=`<div class="rounded-lg border p-2"><div class="text-sm font-semibold mb-1">Which teams compete at ${m.name}?</div><p class="text-xs text-gray-500 mb-1">Only these teams' coaches and parents see this meet. Athletes from other teams can't be entered in it.</p><div class="flex flex-wrap gap-x-4 gap-y-1 text-sm" data-teams-box>${teamPickerHtml(m.team_codes||[])}</div><button class="btn bg-blue-600 text-white text-sm mt-2" data-save-teams>Save teams</button></div>`;
+    wireTeamPicker(p.querySelector('[data-teams-box]'));
+    p.querySelector('[data-save-teams]').onclick=async()=>{ const team_codes=pickedTeams(p.querySelector('[data-teams-box]')); const {error}=await sb.from('meets').update({team_codes}).eq('id',id); if(error) return alert(error.message); load(); };
+    return; }
   if(a==='toggle'){ await sb.from('meets').update({status:m.status==='open'?'closed':'open'}).eq('id',id); return load(); }
   if(a==='champ'){ await sb.from('meets').update({is_championship:!m.is_championship}).eq('id',id); return load(); }
   if(a==='invit'){ await sb.from('meets').update({is_invitational:!m.is_invitational}).eq('id',id); return load(); }
