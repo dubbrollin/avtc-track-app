@@ -1091,27 +1091,25 @@ $('parentForm').addEventListener('submit', async(e)=>{
     const {error}=await sb.from('registrations').insert(row);
     if(error) throw error;
     const who=`${row.first_name} ${row.last_name}`; familyDone.push(who);
-    const payLink=`pay.html?reg=${encodeURIComponent(row.id)}&email=${encodeURIComponent(row.email.toLowerCase())}&new=1`;
-    // Remember the family's details so "Register another child" on the payment portal brings them back pre-filled.
-    try{ sessionStorage.setItem('vyc_family',JSON.stringify({fields:Object.fromEntries(FAMILY_FIELDS.map(id=>[id,$(id).value])),lastName:$('lastName').value,done:familyDone})); }catch(e){}
-    let secs=6, timer=null;
-    const paint=()=>{ msg.innerHTML=`<div class="rounded-lg border-2 border-green-500 bg-green-50 p-3">
+    familyRegIds.push(row.id);
+    const payLink=`pay.html?regs=${encodeURIComponent(familyRegIds.join(','))}&email=${encodeURIComponent(row.email.toLowerCase())}&new=1`;
+    // Remember the family's details (and who's registered so far) so "Register another child" from the payment portal comes back pre-filled.
+    try{ sessionStorage.setItem('vyc_family',JSON.stringify({fields:Object.fromEntries(FAMILY_FIELDS.map(id=>[id,$(id).value])),lastName:$('lastName').value,done:familyDone,regs:familyRegIds})); }catch(e){}
+    msg.innerHTML=`<div class="rounded-lg border-2 border-green-500 bg-green-50 p-3">
       <p class="font-semibold text-green-800">✓ ${esc(who)} is registered! Your team will review it shortly.</p>
       ${familyDone.length>1?`<p class="text-xs text-gray-700 mt-1">Registered so far: ${familyDone.map(esc).join(', ')}</p>`:''}
-      <p class="text-sm text-gray-900 mt-2"><b>Next: the payment portal.</b> You're being taken to ${esc(teamLabel(teamCode))}'s payment page for ${esc(row.first_name)} in <b id="payCountdown">${secs}</b> seconds. There you'll see the team fee and the ways you can pay — card, Zelle, Cash App, Venmo or check, whichever the team accepts.</p>
-      <div class="flex flex-wrap gap-2 mt-2"><a class="btn bg-blue-600 text-white" href="${payLink}" id="goPayNow">Go to the payment portal now →</a><button type="button" class="btn bg-gray-200" id="nextChild">Register another child first</button></div>
-      <p class="text-xs text-gray-600 mt-1">The payment page also has a "Register another child" button, and it keeps your family's details.</p></div>`; };
-    paint(); msg.className='text-sm mt-2';
+      <p class="text-base font-semibold text-gray-900 mt-3">Do you have another child to register?</p>
+      <p class="text-xs text-gray-600">We'll keep your family's details (address, phones, parents, emergency contact, insurance) so you only fill in the next athlete.</p>
+      <div class="flex flex-wrap gap-2 mt-2"><button type="button" class="btn bg-blue-600 text-white" id="nextChild">Yes — register another child</button><a class="btn bg-green-600 text-white" href="${payLink}" id="goPayNow">No — take me to the payment portal →</a></div>
+      <p class="text-xs text-gray-600 mt-2">The payment portal shows ${esc(teamLabel(teamCode))}'s fee for ${familyDone.length>1?'each child':esc(row.first_name)} and the ways you can pay — card, Zelle, Cash App, Venmo or check, whichever the team accepts.</p></div>`;
+    msg.className='text-sm mt-2';
     if(wantsAcct) await ensureAccount($('email').value.trim(), p1, msg);
-    const go=()=>{ clearInterval(timer); location.href=payLink; };
-    timer=setInterval(()=>{ secs--; const c=$('payCountdown'); if(c) c.textContent=secs; if(secs<=0) go(); },1000);
-    $('goPayNow').onclick=e=>{ e.preventDefault(); go(); };
-    $('nextChild').onclick=()=>{ clearInterval(timer); startNextChild(e.target); };
+    $('nextChild').onclick=()=>startNextChild(e.target);
   }catch(err){ msg.textContent='Error: '+(err.message||err); msg.className='text-sm mt-2 text-red-600'; }
 });
 
 // ---- Several children: after one registration goes through, keep the family's info and clear only the athlete ----
-let familyDone=[];
+let familyDone=[], familyRegIds=[];
 // Back from the payment portal with "Register another child": restore the family's details, just fill in the new athlete.
 (function restoreFamily(){
   if(new URLSearchParams(location.search).get('another')!=='1') return;
@@ -1120,7 +1118,7 @@ let familyDone=[];
   window.addEventListener('load',()=>{ setTimeout(()=>{
     for(const [id,v] of Object.entries(saved.fields||{})){ const el=$(id); if(el&&v) el.value=v; }
     if(saved.lastName) $('lastName').value=saved.lastName;
-    familyDone=saved.done||[];
+    familyDone=saved.done||[]; familyRegIds=saved.regs||[];
     try{ if($('teamCode').value){ $('teamCode').dispatchEvent(new Event('change')); } }catch(e){}
     $('parentMsg').innerHTML=`<p class="text-sm text-gray-700">Welcome back — your family's details are filled in. Just add the next athlete.${familyDone.length?' Already registered: '+familyDone.map(esc).join(', '):''}</p>`;
     const form=$('parentForm'), h=[...form.querySelectorAll('h2')].find(x=>/Athlete Information/.test(x.textContent));

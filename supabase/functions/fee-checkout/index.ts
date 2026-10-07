@@ -47,7 +47,8 @@ Deno.serve(async (req) => {
     const athlete = `${reg.first_name} ${reg.last_name}`;
     const stripe = stripeClient();
     const opts = { stripeAccount: acct.stripe_account_id };
-    const payUrl = `${APP_URL}/pay.html?reg=${encodeURIComponent(reg.id)}&email=${encodeURIComponent(regEmail)}`;
+    const siblings = String(body.regs || "").split(",").map((x: string) => x.trim()).filter((x: string) => /^[0-9a-f-]{36}$/i.test(x));
+    const payUrl = `${APP_URL}/pay.html?regs=${encodeURIComponent([reg.id, ...siblings.filter((x: string) => x !== reg.id)].join(","))}&email=${encodeURIComponent(regEmail)}`;
     const common = {
       customer_email: regEmail,
       success_url: payUrl + "&done=1",
@@ -73,6 +74,8 @@ Deno.serve(async (req) => {
       if (fee.stripe_subscription_id) return json({ error: "A payment plan is already running for this athlete." }, 400);
       if (Number(paidTotal || 0) > 0) return json({ error: "A payment plan is only available before any payment has been made. Use 'Pay the balance' instead." }, 400);
       const n = Math.max(1, Number(settings.plan_installments || 1));
+      const every = String(settings.plan_interval || "month");
+      const everyWord = every === "week" ? "weekly" : every === "2weeks" ? "every-two-weeks" : "monthly";
       const depositSet = Number(settings.plan_deposit || 0);
       if (depositSet >= balance) return json({ error: "The deposit covers the whole fee — just pay in full." }, 400);
       // Monthly installment = equal share (whole cents); any leftover cents ride on the deposit, which is charged first.
@@ -85,11 +88,11 @@ Deno.serve(async (req) => {
         customer_creation: "always",
         line_items: [{ quantity: 1, price_data: { currency: "usd", unit_amount: depositC,
           product_data: { name: `${teamName} ${reg.season_year} team fee — deposit for ${athlete}`,
-            description: `Then ${n} monthly payment${n > 1 ? "s" : ""} of $${dollars(instC).toFixed(2)} starting ${settings.plan_first_date}` } } }],
+            description: `Then ${n} ${everyWord} payment${n > 1 ? "s" : ""} of $${dollars(instC).toFixed(2)} starting ${settings.plan_first_date}` } } }],
         payment_intent_data: { setup_future_usage: "off_session", description: `${teamName} ${reg.season_year} team fee — deposit for ${athlete}`,
           metadata: { fee_id: fee.id, registration_id: reg.id, kind: "deposit" } },
         metadata: { fee_id: fee.id, registration_id: reg.id, kind: "deposit", team_code: reg.team_code,
-          plan_installments: String(n), plan_amount_cents: String(instC), plan_first_date: String(settings.plan_first_date), athlete, team_name: teamName, season: String(reg.season_year) },
+          plan_installments: String(n), plan_amount_cents: String(instC), plan_first_date: String(settings.plan_first_date), plan_interval: every, athlete, team_name: teamName, season: String(reg.season_year) },
       }, opts);
       return json({ url: session.url, deposit: dollars(depositC), installment: dollars(instC), installments: n });
     }

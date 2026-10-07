@@ -77,6 +77,12 @@ Also run the parent meet sign-up change (team switch + "are you coming?" questio
 & "C:\Users\avtra\Cowork Projects\outputs\App Building\track app\avtc-track-app\supabase\run-sql.ps1" -File "C:\Users\avtra\Cowork Projects\outputs\App Building\track app\avtc-track-app\supabase\2026-10-06-parent-meet-attendance.sql"
 ```
 
+And the payment-plan frequency change (weekly / every two weeks / monthly):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "C:\Users\avtra\Cowork Projects\outputs\App Building\track app\avtc-track-app\supabase\run-sql.ps1" -File "C:\Users\avtra\Cowork Projects\outputs\App Building\track app\avtc-track-app\supabase\2026-10-06-plan-interval.sql"
+```
+
 ### 5. Publish the pages
 
 `git push origin main` from the app folder (test push — same as every other update).

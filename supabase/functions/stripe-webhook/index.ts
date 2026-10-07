@@ -139,22 +139,28 @@ Deno.serve(async (req) => {
     if (!pm) throw new Error("No saved card on the deposit payment");
     await stripe.customers.update(customer, { invoice_settings: { default_payment_method: pm } }, opts);
 
-    // First installment on the team's chosen date (noon Pacific), then monthly; the subscription cancels itself 3 days after the last one.
+    // First installment on the team's chosen date (noon Pacific), then weekly / every two weeks / monthly as the team chose;
+    // the subscription cancels itself 3 days after the last one.
+    const every = String(m.plan_interval || "month");
+    const recurring = every === "week" ? { interval: "week" as const, interval_count: 1 } : every === "2weeks" ? { interval: "week" as const, interval_count: 2 } : { interval: "month" as const, interval_count: 1 };
+    const everyWord = every === "week" ? "weekly" : every === "2weeks" ? "every-two-weeks" : "monthly";
     const [y, mo, d] = String(m.plan_first_date || today()).split("-").map(Number);
     const first = Math.floor(Date.UTC(y, mo - 1, d, 19) / 1000);
     const now = Math.floor(Date.now() / 1000);
     const startsLater = first > now + 300;
     const anchor = startsLater ? first : now;
-    const lastDate = new Date(anchor * 1000); lastDate.setUTCMonth(lastDate.getUTCMonth() + (n - 1));
+    const lastDate = new Date(anchor * 1000);
+    if (recurring.interval === "week") lastDate.setUTCDate(lastDate.getUTCDate() + 7 * recurring.interval_count * (n - 1));
+    else lastDate.setUTCMonth(lastDate.getUTCMonth() + (n - 1));
     const cancelAt = Math.floor(lastDate.getTime() / 1000) + 3 * 86400;
-    const product = await stripe.products.create({ name: `${m.team_name || fee.team_code} ${m.season || fee.season_year} team fee — monthly payment for ${m.athlete || "athlete"}` }, opts);
+    const product = await stripe.products.create({ name: `${m.team_name || fee.team_code} ${m.season || fee.season_year} team fee — ${everyWord} payment for ${m.athlete || "athlete"}` }, opts);
     const sub = await stripe.subscriptions.create({
       customer, default_payment_method: pm, off_session: true, proration_behavior: "none",
-      items: [{ quantity: 1, price_data: { currency: "usd", product: product.id, unit_amount: instC, recurring: { interval: "month" } } }],
+      items: [{ quantity: 1, price_data: { currency: "usd", product: product.id, unit_amount: instC, recurring } }],
       ...(startsLater ? { trial_end: first } : {}),
       cancel_at: cancelAt,
-      description: `${m.team_name || fee.team_code} ${m.season || fee.season_year} team fee — ${n} monthly payment${n > 1 ? "s" : ""} for ${m.athlete || "athlete"}`,
-      metadata: { fee_id: fee.id, registration_id: fee.registration_id, team_code: fee.team_code, installments: String(n), app: "vyc-track" },
+      description: `${m.team_name || fee.team_code} ${m.season || fee.season_year} team fee — ${n} ${everyWord} payment${n > 1 ? "s" : ""} for ${m.athlete || "athlete"}`,
+      metadata: { fee_id: fee.id, registration_id: fee.registration_id, team_code: fee.team_code, installments: String(n), every, app: "vyc-track" },
       payment_settings: { save_default_payment_method: "on_subscription" },
     }, opts);
     await db.from("athlete_fees").update({ stripe_customer_id: customer, stripe_subscription_id: sub.id, plan_installments: n, plan_amount: dollars(instC), plan_paid: 0,

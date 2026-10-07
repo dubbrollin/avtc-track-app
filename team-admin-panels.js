@@ -35,7 +35,7 @@ window.mountTeamPayments=async function(el, ctx){
       sb.from('fee_payments').select('*').eq('team_code',team).eq('status','reported').order('reported_at')]);
     st=a; set=s; rows=r; pending=pend||[];
   }catch(e){ el.innerHTML=STYLE+'<p class="text-red-700 text-sm">'+esc(e.message)+'</p>'; return; }
-  const s=set||{fee_amount:0,sibling_discount:0,plan_enabled:false,plan_deposit:0,plan_installments:2,accept_card:true};
+  const s=set||{fee_amount:0,sibling_discount:0,plan_enabled:false,plan_deposit:0,plan_installments:2,plan_interval:'month',accept_card:true};
   const chk=(id,v,label)=>`<label class="flex items-center gap-2 text-sm"><input type="checkbox" data-id="${id}" ${v?'checked':''}> ${label}</label>`;
   const q=id=>el.querySelector(`[data-id="${id}"]`);
   const tn=teamName(ctx,team);
@@ -62,9 +62,10 @@ ${st?`<p class="text-xs text-gray-400 mt-1">Account ${esc(st.stripe_account_id)}
 <div class="ml-6 mt-1">${chk('psPlan',s.plan_enabled,'<b>Offer a payment plan</b> — deposit now, then equal monthly card payments charged automatically')}
  <div data-id="psPlanBox" class="flex flex-wrap gap-2 items-end mt-1 ${s.plan_enabled?'':'hide'}">
   <label class="text-sm">Deposit today $<br><input data-id="psDep" type="number" min="0" step="0.01" value="${+s.plan_deposit||''}" style="width:7rem"></label>
-  <label class="text-sm">Monthly payments<br><select data-id="psN">${opts([1,2,3,4,5,6,7,8,9,10,11,12].map(n=>[n,n]),s.plan_installments||2)}</select></label>
+  <label class="text-sm">Number of payments<br><select data-id="psN">${opts([1,2,3,4,5,6,7,8,9,10,11,12].map(n=>[n,n]),s.plan_installments||2)}</select></label>
+  <label class="text-sm">How often<br><select data-id="psEvery">${opts([['week','Weekly'],['2weeks','Every two weeks'],['month','Monthly']],s.plan_interval||'month')}</select></label>
   <label class="text-sm">First one on<br><input data-id="psFirst" type="date" value="${esc(s.plan_first_date||'')}"></label>
-  <span class="text-xs text-gray-500">Example: $250 fee, $100 deposit, 3 payments → $100 today then $50 a month. A missed payment is flagged here and the parent is asked for a new card.</span></div></div></div>
+  <span class="text-xs text-gray-500">Example: $250 fee, $100 deposit, 3 payments monthly → $100 today then $50 a month. Pick weekly or every two weeks to collect faster. A missed payment is flagged here and the parent is asked for a new card.</span></div></div></div>
 <div class="mt-2 grid gap-2" style="grid-template-columns:repeat(auto-fit,minmax(18rem,1fr))">
  <div>${chk('psZelle',s.accept_zelle,'<b>Zelle</b>')}<input data-id="psZelleInfo" value="${esc(s.zelle_info||'')}" class="w-full mt-1" placeholder="Zelle to: email or phone, and the name that shows"></div>
  <div>${chk('psCashapp',s.accept_cashapp,'<b>Cash App</b>')}<input data-id="psCashappInfo" value="${esc(s.cashapp_info||'')}" class="w-full mt-1" placeholder="$Cashtag"></div>
@@ -96,7 +97,7 @@ ${pending.length?`<div class="tapcard" style="border:1px solid #f59e0b;backgroun
   if(q('teamSel')) q('teamSel').onchange=()=>{ ctx.team=q('teamSel').value; if(ctx.onTeamChange) ctx.onTeamChange(ctx.team); refresh(); };
   q('psPlan').onchange=()=>q('psPlanBox').classList.toggle('hide',!q('psPlan').checked);
   q('psSave').onclick=async()=>{ const p={team_code:team,season_year:SEASON,fee_amount:+q('psFee').value||0,sibling_discount:+q('psSib').value||0,fee_note:q('psNote').value,
-    accept_card:q('psCard').checked,plan_enabled:q('psPlan').checked,plan_deposit:+q('psDep').value||0,plan_installments:+q('psN').value||1,plan_first_date:q('psFirst').value||null,
+    accept_card:q('psCard').checked,plan_enabled:q('psPlan').checked,plan_deposit:+q('psDep').value||0,plan_installments:+q('psN').value||1,plan_interval:q('psEvery').value||'month',plan_first_date:q('psFirst').value||null,
     accept_zelle:q('psZelle').checked,zelle_info:q('psZelleInfo').value,accept_cashapp:q('psCashapp').checked,cashapp_info:q('psCashappInfo').value,accept_venmo:q('psVenmo').checked,venmo_info:q('psVenmoInfo').value,accept_other:q('psOther').checked,other_info:q('psOtherInfo').value};
     for(const [on,info,label] of [['accept_zelle','zelle_info','Zelle'],['accept_cashapp','cashapp_info','Cash App'],['accept_venmo','venmo_info','Venmo']]){ if(p[on]&&!p[info].trim()){ toast(`Add the ${label} details parents should send to.`,true); return; } }
     const {error}=await sb.rpc('save_team_payment_settings',{p}); if(error){ toast(error.message,true); return; } toast('Saved'); refresh(); };
