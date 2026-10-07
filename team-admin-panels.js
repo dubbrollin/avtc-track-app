@@ -137,17 +137,21 @@ ${pending.length?`<div class="tapcard" style="border:1px solid #f59e0b;backgroun
   };
 };
 
-/* ============================ PARENT MEET SIGN-UP SWITCH ============================ */
+/* ============================ PARENT MEET SIGN-UP: can parents pick events? ============================ */
 window.mountParentSignup=async function(el, ctx){
   const sb=ctx.sb; el.classList.add('tap');
   const {data:tsRows}=await sb.from('team_settings').select('*'); const ts={}; (tsRows||[]).forEach(t=>ts[t.team_code]=t);
   const list=ctx.canPickTeam?(ctx.teams||[]).filter(t=>t.active!==false):(ctx.teams||[]).filter(t=>t.code===ctx.team);
   el.innerHTML=STYLE+`<div class="tapcard"><h3 class="font-bold mb-1">Parent meet sign-up</h3>
-<p class="text-xs text-gray-500 mb-2"><b>ON</b> = parents enter their athletes into meet events themselves on the Parent Dashboard. <b>OFF</b> = parents only answer "Is your athlete coming?" (yes/no, plus up to two events they'd like) and the coaches of that division enter the athletes on Meet Registration. ${ctx.canPickTeam?'Each team chooses for itself.':'Your choice applies to '+esc(teamName(ctx,ctx.team))+' only.'}</p>
-<table class="tapt"><thead><tr><th>Team</th><th>Parents enter events</th><th></th></tr></thead><tbody>${list.map(t=>{ const on=!ts[t.code]||ts[t.code].parent_entry_enabled!==false;
-  return `<tr data-team="${esc(t.code)}"><td>${esc(t.name)}</td><td><span class="tappill ${on?'ok':'warn'}">${on?'ON — parents enter':'OFF — parents say yes/no, coaches enter'}</span>${ts[t.code]?`<div class="text-xs text-gray-400">${esc(ts[t.code].updated_by||'')} ${esc(String(ts[t.code].updated_at||'').slice(0,10))}</div>`:''}</td><td><button ${btn('lite',`data-pe="${on?'off':'on'}"`)}>${on?'Turn OFF':'Turn ON'}</button></td></tr>`; }).join('')||'<tr><td colspan="3" class="text-gray-500">No team.</td></tr>'}</tbody></table></div>`;
+<p class="text-xs text-gray-500 mb-2">Before every meet, parents are asked on their dashboard: <b>"Is your athlete coming?"</b> (yes / no, by the Thursday before at 8 PM). The coaches do all the entering. Your choice here: <b>can parents also pick the events</b> they'd like their athlete in? If yes, say how many they may choose — up to three. ${ctx.canPickTeam?'Each team chooses for itself.':'Your choice applies to '+esc(teamName(ctx,ctx.team))+' only.'}</p>
+<table class="tapt"><thead><tr><th>Team</th><th>Can parents pick events?</th><th>How many events may they choose?</th><th></th></tr></thead><tbody>${list.map(t=>{ const row=ts[t.code]||{}, on=!!row.parent_entry_enabled&&row.team_code, n=Math.min(3,Math.max(1,+row.parent_event_picks||2));
+  return `<tr data-team="${esc(t.code)}"><td>${esc(t.name)}</td><td><span class="tappill ${on?'ok':'warn'}">${on?'YES — they say if coming + pick events':'NO — they only say if coming'}</span>${row.team_code?`<div class="text-xs text-gray-400">${esc(row.updated_by||'')} ${esc(String(row.updated_at||'').slice(0,10))}</div>`:''}</td>
+  <td>${on?`<select data-picks>${[1,2,3].map(k=>`<option value="${k}" ${k===n?'selected':''}>${k} event${k>1?'s':''}</option>`).join('')}</select>`:'<span class="text-xs text-gray-400">—</span>'}</td>
+  <td><button ${btn('lite',`data-pe="${on?'off':'on'}"`)}>${on?'Switch to: only ask if coming':'Switch to: let parents pick events'}</button></td></tr>`; }).join('')||'<tr><td colspan="4" class="text-gray-500">No team.</td></tr>'}</tbody></table></div>`;
   el.onclick=async e=>{ const pe=e.target.closest('button[data-pe]'); if(!pe) return; const team=pe.closest('tr').dataset.team, on=pe.dataset.pe==='on', tn=teamName(ctx,team);
-    if(!confirm(on?`Turn parent meet entries ON for ${tn}? Parents will enter their athletes into events themselves.`:`Turn parent meet entries OFF for ${tn}? Parents will only say whether their athlete is coming (and which two events they'd like); the coaches enter the athletes.`)) return;
-    const {error}=await sb.rpc('set_parent_entry',{p_team:team,p_on:on}); if(error){ toast(error.message,true); return; } toast('Saved'); window.mountParentSignup(el,ctx); };
+    if(!confirm(on?`${tn}: parents will say whether their athlete is coming AND pick the events they'd like (you choose how many). The coaches still do the entering.`:`${tn}: parents will ONLY say whether their athlete is coming. The coaches choose the events.`)) return;
+    const {error}=await sb.rpc('set_parent_entry',{p_team:team,p_on:on,p_picks:on?2:null}); if(error){ toast(error.message,true); return; } toast('Saved'); window.mountParentSignup(el,ctx); };
+  el.onchange=async e=>{ const sel=e.target.closest('select[data-picks]'); if(!sel) return; const team=sel.closest('tr').dataset.team;
+    const {error}=await sb.rpc('set_parent_entry',{p_team:team,p_on:true,p_picks:+sel.value}); if(error){ toast(error.message,true); return; } toast(`Parents may pick up to ${sel.value} event${+sel.value>1?'s':''}`); window.mountParentSignup(el,ctx); };
 };
 })();

@@ -15,13 +15,15 @@
     <a href="home.html">Home</a>
     <a href="index.html">Register</a>
     <a href="coach.html">Coach Dashboard</a>
+    <a href="meets-admin.html?view=timer">Timer</a>
     <a href="parent.html">Parent Dashboard</a>
     <a href="meets-admin.html">Meet Admin</a>
     <a href="results.html">Results</a>
   </nav>
 </div></header>
 <div class="max-w-3xl mx-auto p-4">
-  <h1 class="text-2xl font-bold">Meets — Admin</h1>
+  <h1 class="text-2xl font-bold" id="pageH1">Meets — Admin</h1>
+  <p id="timerIntro" class="hidden text-sm text-gray-600 mt-1">For timers: sign in, pick the meet, <b>download the entries</b> for Meet Manager, and <b>upload the results</b> when the meet is done.</p>
   <div id="login" class="bg-white rounded-xl shadow p-4 mt-3">
     <div id="loginWidget"></div>
   </div>
@@ -58,10 +60,13 @@ let meets=[];
 // Who's here: site/team admins get everything; an approved timer can ONLY upload results to existing meets
 // (the database enforces the same rules). Everyone else is turned away.
 let TIMER=false;
-window.mountLoginWidget(sb, $('loginWidget'), {hint:"Admin or timer sign-in."});
+const TIMER_VIEW=new URLSearchParams(location.search).get('view')==='timer'; // the "Timer" menu item: the timer's dashboard (admins can use it too)
+if(TIMER_VIEW){ document.title='Timer Dashboard'; $('pageH1').textContent='Timer Dashboard'; $('timerIntro').classList.remove('hidden'); }
+window.mountLoginWidget(sb, $('loginWidget'), {hint:TIMER_VIEW?"Timers: sign in with the email you registered with.":"Admin or timer sign-in."});
 sb.auth.onAuthStateChange(async(_e,s)=>{ if(!s||window.__authDone===s.user.id) return; window.__authDone=s.user.id; sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } } /* rebuild: original client can wedge after an OAuth redirect */); $('login').classList.add('hidden');
   const {data:me}=await sb.from('coaches').select('is_admin,team_admin,role_type').eq('email',s.user.email).eq('approved',true).maybeSingle();
   const isAdmin=!!(me&&(me.is_admin||me.team_admin)); TIMER=!!(me&&!isAdmin&&me.role_type==='timer');
+  if(TIMER_VIEW&&(isAdmin||TIMER)) TIMER=true; // on the Timer Dashboard everyone gets the timer's view: download entries + upload results
   if(!isAdmin&&!TIMER){ $('noAccessWho').textContent=`Signed in as ${s.user.email}. Results are uploaded by team admins and approved timers — register as a timer on the Register page, or ask your team admin.`; $('noAccess').classList.remove('hidden'); return; }
   $('newMeetCard').classList.toggle('hidden',TIMER); $('timerNote').classList.toggle('hidden',!TIMER);
   $('app').classList.remove('hidden'); load(); });

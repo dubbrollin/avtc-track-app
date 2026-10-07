@@ -21,6 +21,7 @@
     <a href="home.html">Home</a>
     <a href="index.html">Register</a>
     <a href="coach.html">Coach Dashboard</a>
+    <a href="meets-admin.html?view=timer">Timer</a>
     <a href="parent.html">Parent Dashboard</a>
     <a href="results.html">Results</a>
   </nav>
@@ -50,14 +51,14 @@
     </div>
 
     <div class="card" id="registerCard">
-      <h2 class="font-bold mb-1" id="signupTitle">Meet sign-up</h2>
-      <p class="text-xs text-gray-500 mb-2" id="signupHint">Pick a meet, then check off which races your verified athlete(s) are running.</p>
+      <h2 class="font-bold mb-1" id="signupTitle">Meet attendance</h2>
+      <p class="text-xs text-gray-500 mb-2" id="signupHint">Your team's coaches enter the athletes into events. Your part: tell them whether your athlete is coming to the meet below.</p>
       <div class="flex flex-wrap items-center gap-2 mb-2">
         <select id="meet" class="border rounded p-2 flex-1"></select>
       </div>
       <p id="meetInfo" class="text-sm text-gray-600 mb-3"></p>
       <div id="athletes"></div>
-      <p id="none" class="hidden text-gray-600 text-sm">No athletes found for this email yet. Once your athlete is registered (and, for entering races yourself, certified), they will show up here.</p>
+      <p id="none" class="hidden text-gray-600 text-sm">No athletes found for this email yet. Once your athlete is registered, they will show up here.</p>
     </div>
   </div>
 </div>
@@ -139,62 +140,44 @@ function isOpen(m){ return m.status==='open' && new Date()<=new Date(m.entries_c
 
 async function loadMeet(){
   const m=cur(); if(!m) return;
-  const askMode=myRegs.some(r=>r.status!=='rejected'&&!parentEntryOn(r))&&!myRegs.some(r=>r.status!=='rejected'&&parentEntryOn(r));
-  if(askMode){ const dl=window.attendanceDeadline(m.meet_date); $('meetInfo').textContent=`${m.meet_date?fmtDate(m.meet_date):''}${m.location?' · '+m.location:''}${dl?' · Tell your team by '+window.fmtDeadline(dl):''}`; }
-  else $('meetInfo').textContent=`${m.location||''} · Entries ${isOpen(m)?'close':'closed'} ${new Date(m.entries_close).toLocaleString()}`;
+  const dl=window.attendanceDeadline(m.meet_date); $('meetInfo').textContent=`${m.meet_date?fmtDate(m.meet_date):''}${m.location?' · '+m.location:''}${dl?' · Tell your team by '+window.fmtDeadline(dl):''}`;
   const [e,n,t]=await Promise.all([
     sb.from('meet_events').select('*').eq('meet_id',m.id),
     sb.from('entries').select('*').eq('meet_id',m.id),
     sb.from('meet_attendance').select('*').eq('meet_id',m.id)
   ]);
-  athletes=myRegs.filter(r=>r.status!=='rejected'&&(r.status==='verified'||!parentEntryOn(r))&&window.meetHasTeam(m,r.team_code)); // only athletes whose team is at this meet
+  athletes=myRegs.filter(r=>r.status!=='rejected'&&window.meetHasTeam(m,r.team_code)); // only athletes whose team is at this meet
   events=e.data||[]; entries=n.data||[]; attendance=t.data||[];
   $('none').classList.toggle('hidden',athletes.length>0);
   render();
 }
 
-const parentEntryOn=a=>{ const t=teamSettings[a.team_code]; return !t||t.parent_entry_enabled!==false; };
+// How many events may the parent pick for this athlete? 0 = the team only asks "are you coming?"
+const picksFor=a=>{ const t=teamSettings[a.team_code]; return (t&&t.parent_entry_enabled)?Math.min(3,Math.max(1,+t.parent_event_picks||2)):0; };
 function render(){
   if(!athletes.length){ $('athletes').innerHTML=''; return; }
-  const m=cur(), open=isOpen(m);
-  const anyAsk=athletes.some(a=>!parentEntryOn(a)), anyEnter=athletes.some(parentEntryOn), askOnly=anyAsk&&!anyEnter;
-  $('signupTitle').textContent=askOnly?'Meet attendance':'Meet sign-up';
-  $('signupHint').textContent=askOnly?"Your team's coaches enter the athletes into events. Your part: tell them whether your athlete is coming to the meet below — and, if you like, which two events they'd like to compete in.":'Pick a meet, then check off which races your verified athlete(s) are running.';
-  $('athletes').innerHTML=athletes.map(a=>{
-    if(!parentEntryOn(a)) return renderAsk(a,m);
-    const mine=entries.filter(x=>x.registration_id===a.id);
-    const myEvs=mine.map(x=>events.find(v=>v.id===x.meet_event_id)).filter(Boolean).map(v=>({relay:v.is_relay}));
-    const opts=events.filter(v=>(v.division===a.division||v.division==='ALL')&&(v.gender===a.gender||v.gender==='Mixed')).sort((x,y)=>((x.event_number??9999)-(y.event_number??9999))||x.name.localeCompare(y.name));
-    const rule=ENTRY_RULES[a.division];
-    return `<div class="bg-white rounded-xl border p-3 mb-3">
-      <div class="font-bold">${esc(a.first_name)} ${esc(a.last_name)} <span class="text-sm font-normal text-gray-500">${esc(a.division)} · ${esc(a.gender)}</span></div>
-      <div class="text-xs text-gray-500 mb-2">${mine.length}/${rule.max} events${rule.relayRequiredFor4th?' (4th must be a relay)':''}</div>
-      ${opts.length?opts.map(v=>{
-        const en=mine.find(x=>x.meet_event_id===v.id);
-        const err=en?null:checkLimits(a.division,myEvs,{relay:v.is_relay});
-        const seed=!en||v.is_relay?'':en.seed_source==='result'?`<span class="text-xs text-green-700 ml-auto">seed ${esc(en.seed_mark)} <span class="text-gray-400">(from results)</span></span>`:en.seed_mark?`<span class="text-xs text-gray-600 ml-auto">seed ${esc(en.seed_mark)}</span>`:'';
-        return `<label class="flex items-center gap-2 py-1 ${err&&!en?'opacity-40':''}">
-          <input type="checkbox" data-a="${a.id}" data-e="${v.id}" ${en?'checked':''} ${(!open)||(err&&!en)?'disabled':''}>
-          <span>${v.event_number?`<b>#${v.event_number}</b> `:''}${esc(v.name)}${v.note?` <span class="text-xs text-gray-500">${esc(v.note)}</span>`:''}${(v.division==='ALL'||v.gender==='Mixed')?' <span class="text-xs text-gray-500">(mixed/all ages)</span>':''}${v.is_relay?' <span class="text-xs bg-yellow-100 px-1 rounded">relay</span>':''}</span>${seed}</label>`;
-      }).join(''):'<p class="text-sm text-gray-500">No events offered for this division at this meet.</p>'}
-    </div>`;
-  }).join('');
-  document.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.onchange=toggle);
+  const m=cur();
+  const anyPicks=athletes.some(a=>picksFor(a)>0);
+  $('signupHint').textContent=anyPicks?"Your team's coaches enter the athletes into events. Your part: tell them whether your athlete is coming to the meet below, and which events they'd like to compete in.":"Your team's coaches enter the athletes into events. Your part: tell them whether your athlete is coming to the meet below.";
+  $('athletes').innerHTML=athletes.map(a=>renderAsk(a,m)).join('');
 }
 
-// "Are you coming?" — shown instead of the event checkboxes when the team has switched parent entries off.
+// "Is your athlete coming?" — plus up to N event picks when the team allows it.
 function renderAsk(a,m){
-  const ans=attendance.find(x=>x.registration_id===a.id)||null;
+  const ans=attendance.find(x=>x.registration_id===a.id)||null, n=picksFor(a);
   const mine=entries.filter(x=>x.registration_id===a.id).map(x=>events.find(v=>v.id===x.meet_event_id)).filter(Boolean);
   const opts=events.filter(v=>(v.division===a.division||v.division==='ALL')&&(v.gender===a.gender||v.gender==='Mixed')).sort((x,y)=>((x.event_number??9999)-(y.event_number??9999))||x.name.localeCompare(y.name));
   const evName=id=>{ const v=events.find(x=>x.id===id); return v?v.name:''; };
-  const sel=(n,val)=>`<select data-ev="${n}" class="border rounded p-1 text-sm"><option value="">— pick an event —</option>${opts.map(v=>`<option value="${v.id}" ${v.id===val?'selected':''}>${v.event_number?'#'+v.event_number+' ':''}${esc(v.name)}${v.is_relay?' (relay)':''}</option>`).join('')}</select>`;
+  const picked=[ans?.event_1,ans?.event_2,ans?.event_3].map(evName).filter(Boolean);
+  const sel=(i,val)=>`<select data-ev="${i}" class="border rounded p-1 text-sm"><option value="">— pick an event —</option>${opts.map(v=>`<option value="${v.id}" ${v.id===val?'selected':''}>${v.event_number?'#'+v.event_number+' ':''}${esc(v.name)}${v.is_relay?' (relay)':''}</option>`).join('')}</select>`;
   const todayStr=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
   const past=m.status==='archived'||(m.meet_date&&m.meet_date<todayStr&&m.status!=='open');
   const when=`${m.meet_date?fmtDate(m.meet_date):''}${m.location?' · '+esc(m.location):''}`;
   const dl=window.attendanceDeadline(m.meet_date), dlPast=dl&&Date.now()>dl.getTime();
-  const saved=ans?`<div class="text-sm rounded-lg p-2 mb-2 ${ans.attending?'bg-green-50 border border-green-300':'bg-gray-100 border'}">${ans.late?'<span class="text-xs font-bold text-red-700 bg-red-100 px-1 rounded mr-1">LATE ADD</span>':''}${ans.attending?`<b class="text-green-800">✓ You said ${esc(a.first_name)} is coming.</b>${ans.event_1||ans.event_2?` Requested: ${[ans.event_1,ans.event_2].map(evName).filter(Boolean).map(esc).join(' and ')}.`:''}`:`<b>You said ${esc(a.first_name)} is not coming.</b>`}${ans.note?` <span class="text-gray-600">Note: ${esc(ans.note)}</span>`:''}
+  const saved=ans?`<div class="text-sm rounded-lg p-2 mb-2 ${ans.attending?'bg-green-50 border border-green-300':'bg-gray-100 border'}">${ans.late?'<span class="text-xs font-bold text-red-700 bg-red-100 px-1 rounded mr-1">LATE ADD</span>':''}${ans.attending?`<b class="text-green-800">✓ You said ${esc(a.first_name)} is coming.</b>${picked.length?` Requested: ${picked.map(esc).join(', ')}.`:''}`:`<b>You said ${esc(a.first_name)} is not coming.</b>`}${ans.note?` <span class="text-gray-600">Note: ${esc(ans.note)}</span>`:''}
     <div class="text-xs text-gray-500 mt-1">${mine.length?`Entered by the coaches so far: ${mine.map(v=>esc(v.name)).join(', ')}.`:ans.attending?'Your coaches will enter the events — check back here to see them.':''} Answered ${new Date(ans.updated_at||ans.answered_at).toLocaleDateString()}${ans.late?' — after the deadline, so '+esc(a.first_name)+' is a late add and runs at the end of each heat':''}.</div></div>`:'';
+  const pickBox=n>0?`<div data-evbox class="${ans&&ans.attending?'':'hidden'}">${opts.length?`<div class="text-xs text-gray-600 mb-1">Which ${n===1?'event':'events'} would ${esc(a.first_name)} like to compete in? (pick up to ${n} — the coaches make the final call)</div>
+      <div class="flex flex-wrap gap-2 mb-2">${[1,2,3].slice(0,n).map(i=>sel(i,ans?.['event_'+i])).join('')}</div>`:'<p class="text-xs text-gray-500 mb-2">No events are posted for this division yet — the coaches will pick.</p>'}</div>`:'';
   return `<div class="bg-white rounded-xl border p-3 mb-3" data-ask="${a.id}">
     <div class="font-bold">${esc(a.first_name)} ${esc(a.last_name)} <span class="text-sm font-normal text-gray-500">${esc(a.division)} · ${esc(a.gender)}</span></div>
     ${saved}
@@ -203,19 +186,18 @@ function renderAsk(a,m){
     ${dl?(dlPast?`<div class="text-xs rounded-lg border border-red-400 bg-red-50 p-2 mb-2"><b class="text-red-800">The deadline was ${esc(window.fmtDeadline(dl))}.</b> You can still answer, but ${esc(a.first_name)} is now a <b>late add</b> and will run at the end of each heat.</div>`
       :`<div class="text-xs rounded-lg border border-amber-300 bg-amber-50 p-2 mb-2"><b>Please answer by ${esc(window.fmtDeadline(dl))}</b> (the Thursday before the meet). ${esc(window.LATE_ADD_RULE)}</div>`):''}
     <div class="flex gap-3 mb-2 text-sm"><label class="flex items-center gap-1"><input type="radio" name="att-${a.id}" value="yes" ${ans&&ans.attending?'checked':''}> Yes</label><label class="flex items-center gap-1"><input type="radio" name="att-${a.id}" value="no" ${ans&&!ans.attending?'checked':''}> No</label></div>
-    <div data-evbox class="${ans&&ans.attending?'':'hidden'}">${opts.length?`<div class="text-xs text-gray-600 mb-1">Which two events would ${esc(a.first_name)} like to compete in? (optional — the coaches make the final call)</div>
-      <div class="flex flex-wrap gap-2 mb-2">${sel(1,ans?.event_1)}${sel(2,ans?.event_2)}</div>`:'<p class="text-xs text-gray-500 mb-2">No events are posted for this division yet — the coaches will pick.</p>'}</div>
+    ${pickBox}
     <input data-note class="border rounded p-1 text-sm w-full mb-2" placeholder="Anything the coaches should know? (optional)" value="${esc(ans?.note||'')}">
     <button class="btn bg-blue-600 text-white text-sm" data-save>${ans?'Update answer':'Send to coaches'}</button> <span class="text-xs text-gray-500" data-msg></span>`}
   </div>`;
 }
-document.addEventListener('change',e=>{ const box=e.target.closest('[data-ask]'); if(!box||e.target.type!=='radio') return; box.querySelector('[data-evbox]').classList.toggle('hidden',e.target.value!=='yes'); });
+document.addEventListener('change',e=>{ const box=e.target.closest('[data-ask]'); if(!box||e.target.type!=='radio') return; const ev=box.querySelector('[data-evbox]'); if(ev) ev.classList.toggle('hidden',e.target.value!=='yes'); });
 document.addEventListener('click',async e=>{
   const b=e.target.closest('[data-ask] [data-save]'); if(!b) return; const box=b.closest('[data-ask]'), aId=box.dataset.ask, m=cur();
   const r=box.querySelector('input[type=radio]:checked'); const msg=box.querySelector('[data-msg]'); if(!r){ msg.textContent='Please answer yes or no.'; return; }
-  const yes=r.value==='yes', e1=(box.querySelector('[data-ev="1"]')||{}).value||null, e2=(box.querySelector('[data-ev="2"]')||{}).value||null;
+  const yes=r.value==='yes', ev=i=>yes?((box.querySelector(`[data-ev="${i}"]`)||{}).value||null):null;
   b.disabled=true; msg.textContent='Sending…';
-  const {error}=await sb.rpc('answer_attendance',{p_meet:m.id,p_reg:aId,p_attending:yes,p_event1:yes?e1:null,p_event2:yes?e2:null,p_note:box.querySelector('[data-note]').value||null});
+  const {error}=await sb.rpc('answer_attendance',{p_meet:m.id,p_reg:aId,p_attending:yes,p_event1:ev(1),p_event2:ev(2),p_event3:ev(3),p_note:box.querySelector('[data-note]').value||null});
   if(error){ msg.textContent=error.message.replace(/^.*?: /,''); b.disabled=false; return; }
   await loadMeet();
 });

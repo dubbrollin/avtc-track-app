@@ -185,8 +185,7 @@ document.addEventListener('DOMContentLoaded',function(){ try{
   const coachLink=nav.querySelector('a[href="coach.html"]');
   const addAfter=(ref,href,text)=>{ if(nav.querySelector('a[href="'+href+'"]')) return; const a=document.createElement('a'); a.href=href; a.textContent=text; if(ref&&ref.nextSibling) nav.insertBefore(a,ref.nextSibling); else nav.appendChild(a); return a; };
   let last=coachLink;
-  if(flag('vyc_team_admin')) last=addAfter(last,'coach.html?view=roster','Team Admin')||last;
-  if(flag('vyc_timer')) last=addAfter(last,'meets-admin.html','Timer')||last;
+  if(flag('vyc_team_admin')) last=addAfter(last,'coach.html?view=roster','Team Admin')||last; // "Timer" is a fixed menu item: meets-admin.html?view=timer
   if(flag('vyc_admin')) addAfter(null,'admin.html','Site Admin');
 }catch(e){} });
 window.setRoleFlags=function(c){ try{ localStorage.setItem('vyc_admin',(c&&(c.is_admin||c.team_admin))?'1':'0'); localStorage.setItem('vyc_team_admin',(c&&(c.is_admin||c.team_admin))?'1':'0'); localStorage.setItem('vyc_timer',(c&&c.role_type==='timer')?'1':'0'); }catch(e){} };
