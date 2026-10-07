@@ -57,7 +57,7 @@
       </div>
       <p id="meetInfo" class="text-sm text-gray-600 mb-3"></p>
       <div id="athletes"></div>
-      <p id="none" class="hidden text-gray-600 text-sm">No verified athletes found for this email yet. Once a coach verifies your athlete, races will show up here.</p>
+      <p id="none" class="hidden text-gray-600 text-sm">No athletes found for this email yet. Once your athlete is registered (and, for entering races yourself, certified), they will show up here.</p>
     </div>
   </div>
 </div>
@@ -144,7 +144,7 @@ async function loadMeet(){
     sb.from('entries').select('*').eq('meet_id',m.id),
     sb.from('meet_attendance').select('*').eq('meet_id',m.id)
   ]);
-  athletes=myRegs.filter(r=>r.status==='verified');
+  athletes=myRegs.filter(r=>r.status!=='rejected'&&(r.status==='verified'||!parentEntryOn(r)));
   events=e.data||[]; entries=n.data||[]; attendance=t.data||[];
   $('none').classList.toggle('hidden',athletes.length>0);
   render();
@@ -185,13 +185,16 @@ function renderAsk(a,m){
   const opts=events.filter(v=>(v.division===a.division||v.division==='ALL')&&(v.gender===a.gender||v.gender==='Mixed')).sort((x,y)=>((x.event_number??9999)-(y.event_number??9999))||x.name.localeCompare(y.name));
   const evName=id=>{ const v=events.find(x=>x.id===id); return v?v.name:''; };
   const sel=(n,val)=>`<select data-ev="${n}" class="border rounded p-1 text-sm"><option value="">— pick an event —</option>${opts.map(v=>`<option value="${v.id}" ${v.id===val?'selected':''}>${v.event_number?'#'+v.event_number+' ':''}${esc(v.name)}${v.is_relay?' (relay)':''}</option>`).join('')}</select>`;
-  const past=m.status==='archived'||(m.meet_date&&m.meet_date<new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'}));
+  const todayStr=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
+  const past=m.status==='archived'||(m.meet_date&&m.meet_date<todayStr&&m.status!=='open');
+  const when=`${m.meet_date?fmtDate(m.meet_date):''}${m.location?' · '+esc(m.location):''}`;
   const saved=ans?`<div class="text-sm rounded-lg p-2 mb-2 ${ans.attending?'bg-green-50 border border-green-300':'bg-gray-100 border'}">${ans.attending?`<b class="text-green-800">✓ You said ${esc(a.first_name)} is coming.</b>${ans.event_1||ans.event_2?` Requested: ${[ans.event_1,ans.event_2].map(evName).filter(Boolean).map(esc).join(' and ')}.`:''}`:`<b>You said ${esc(a.first_name)} is not coming.</b>`}${ans.note?` <span class="text-gray-600">Note: ${esc(ans.note)}</span>`:''}
     <div class="text-xs text-gray-500 mt-1">${mine.length?`Entered by the coaches so far: ${mine.map(v=>esc(v.name)).join(', ')}.`:ans.attending?'Your coaches will enter the events — check back here to see them.':''} Answered ${new Date(ans.updated_at||ans.answered_at).toLocaleDateString()}.</div></div>`:'';
   return `<div class="bg-white rounded-xl border p-3 mb-3" data-ask="${a.id}">
     <div class="font-bold">${esc(a.first_name)} ${esc(a.last_name)} <span class="text-sm font-normal text-gray-500">${esc(a.division)} · ${esc(a.gender)}</span></div>
     ${saved}
-    ${past?'<p class="text-sm text-gray-500">This meet has passed.</p>':`<div class="text-sm font-semibold mb-1">Is ${esc(a.first_name)} coming to ${esc(m.name)}?</div>
+    ${a.status!=='verified'?`<p class="text-xs text-gray-500 mb-1">${esc(a.first_name)}'s registration is still being reviewed — you can answer now and the coaches will enter them once certified.</p>`:''}
+    ${past?'<p class="text-sm text-gray-500">This meet has passed.</p>':`<div class="text-sm font-semibold mb-1">Is ${esc(a.first_name)} coming to <span class="text-blue-800">${esc(m.name)}</span>${when?` <span class="font-normal text-gray-600">— ${when}</span>`:''}?</div>
     <div class="flex gap-3 mb-2 text-sm"><label class="flex items-center gap-1"><input type="radio" name="att-${a.id}" value="yes" ${ans&&ans.attending?'checked':''}> Yes</label><label class="flex items-center gap-1"><input type="radio" name="att-${a.id}" value="no" ${ans&&!ans.attending?'checked':''}> No</label></div>
     <div data-evbox class="${ans&&ans.attending?'':'hidden'}">${opts.length?`<div class="text-xs text-gray-600 mb-1">Which two events would ${esc(a.first_name)} like to compete in? (optional — the coaches make the final call)</div>
       <div class="flex flex-wrap gap-2 mb-2">${sel(1,ans?.event_1)}${sel(2,ans?.event_2)}</div>`:'<p class="text-xs text-gray-500 mb-2">No events are posted for this division yet — the coaches will pick.</p>'}</div>
