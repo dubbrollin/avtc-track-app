@@ -62,6 +62,7 @@
     <a href="home.html">Home</a>
     <a href="index.html">Register</a>
     <a href="coach.html">Coach Dashboard</a>
+    <a href="coach.html?view=roster">Team Admin</a>
     <a href="parent.html">Parent Dashboard</a>
     <a href="results.html">Results</a>
   </nav>
@@ -233,7 +234,9 @@ function roleLabel(c){
 }
 
 // ---- auth ----
-window.mountLoginWidget(sb, $('loginWidget'));
+const WANT_TEAM_ADMIN=new URLSearchParams(location.search).get('view')==='roster';
+if(WANT_TEAM_ADMIN) document.title='Team Admin';
+window.mountLoginWidget(sb, $('loginWidget'), WANT_TEAM_ADMIN?{hint:'Team admins: sign in with the email you registered with. (You don\'t need to be a coach.)'}:{});
 $('logout').onclick=async()=>{await sb.auth.signOut(); location.reload();};
 document.querySelectorAll('.signout-btn').forEach(b=>b.onclick=async()=>{await sb.auth.signOut(); location.reload();});
 sb.auth.onAuthStateChange(async(_e,session)=>{
@@ -306,8 +309,10 @@ async function loadMe(){
   $('rosterView').classList.toggle('hidden',!wantRoster); $('registerView').classList.toggle('hidden',!wantReg);
   $('dashView').classList.toggle('hidden',wantRoster||wantReg);
   $('rosterBtn').classList.toggle('hidden',!fullAccess||wantRoster||wantReg); $('backBtn').classList.toggle('hidden',!(wantRoster||wantReg));
-  $('pageTitle').textContent = wantRoster ? 'Team admin' : wantReg ? 'Meet Registration' : 'Coach Dashboard';
+  $('pageTitle').textContent = wantRoster ? 'Team Admin' : wantReg ? 'Meet Registration' : 'Coach Dashboard';
+  $('backBtn').textContent = wantRoster ? 'Coach Dashboard →' : '← Back to dashboard';
   if(wantRoster) setupTeamAdminTabs();
+  if(WANT_TEAM_ADMIN && !fullAccess){ $('xferBanner').innerHTML='<div class="card" style="border:1px solid #f59e0b;background:#fffbeb"><b>Team Admin is for team admins.</b> Your account ('+esc(user.email)+') is approved as a coach but isn\'t a team admin yet — your team admin or a site admin can make you one on the Team Admin page (Roster &amp; intake → Coaches on my team). Here is your Coach Dashboard instead.</div>'; }
   await load();
   if(wantReg) await loadMeetsForReg();
 }
