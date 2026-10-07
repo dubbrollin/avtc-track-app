@@ -168,6 +168,11 @@ window.bgCheckLinkHtml = function(lead){
 };
 // ---- Current season (from Site Admin > League Setup). Working meet lists show only this season's meets;
 // past seasons are locked history (results still show on the Results page). ----
+// "Is your athlete coming?" deadline: the Thursday before the meet at 8:00 PM. Late after that = late add, runs at the end of each heat.
+window.attendanceDeadline = function(meetDate){ if(!meetDate) return null; const [y,m,d]=String(meetDate).slice(0,10).split('-').map(Number); const dt=new Date(y,m-1,d,20,0,0);
+  let back=(dt.getDay()-4+7)%7; if(back===0) back=7; dt.setDate(dt.getDate()-back); return dt; };
+window.fmtDeadline = function(dt){ return dt?dt.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})+' at 8:00 PM':''; };
+window.LATE_ADD_RULE = 'If your team is not told by then and your athlete shows up on meet day, they are a late add and will run at the end of each heat.';
 window.currentSeason = async function(){ try{ if(window.leagueReady) await window.leagueReady; }catch(e){} return (window.APP_CONFIG||{}).SEASON_YEAR; };
 // ---- Role-based menu items, only for people who have that access (flags are set when they sign in on the Coach Dashboard
 //      or Site Admin page, and cleared when they sign out): "Team Admin" for team admins, "Timer" for timers, "Site Admin" for admins ----
