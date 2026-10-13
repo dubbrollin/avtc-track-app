@@ -159,7 +159,7 @@ window.mountMessenger=async function(root, opts){
     report();
   }
   function report(){ const other=chans.reduce((a,c)=>a+(cur===c.id?0:(c.unread||0)),0); $('backBtn').innerHTML='← All chats'+(other?` <span class="tm-unread" style="margin-left:4px">${other}</span>`:'');
-    if(opts.onUnread) try{ opts.onUnread(chans.reduce((a,c)=>a+(cur===c.id?0:(c.unread||0)),0)); }catch(e){} }
+    if(opts.onUnread) try{ opts.onUnread(chans.reduce((a,c)=>a+(c.unread||0),0)); }catch(e){} }
   function who(c){ const g=c.genders&&c.genders.length===1?(c.genders[0]==='Boy'?' · boys':' · girls'):'';
     return c.audience==='direct'?'Direct message':c.audience==='coaches'?'Coaches only':c.audience==='team'?'Whole team'+g:(c.divisions||[]).join(', ')+g; }
 
@@ -213,8 +213,15 @@ window.mountMessenger=async function(root, opts){
         ${m.deleted_at?'<div class="b">Message removed</div>':(m.body?`<div class="b">${linkify(m.body)}</div>`:'')+(att.length?`<div class="tm-atts">${att.map(attHtml).join('')}</div>`:'')}</div>`; }).join('')
       || `<p class="text-sm text-gray-500">No messages yet.${c.can_post?' Say hello 👋':''}</p>`;
     if(jump||nearEnd){ box.scrollTop=box.scrollHeight; box.querySelectorAll('img').forEach(i=>i.addEventListener('load',()=>{ box.scrollTop=box.scrollHeight; },{once:true})); }
-    sb.rpc('msg_mark_read',{p_channel:id}).then(()=>{ const x=chans.find(y=>y.id===id); if(x) x.unread=0; report(); });
+    markSeen();
   }
+  // A chat only counts as READ once its messages are actually on the person's screen — opening the dashboard with the
+  // chat scrolled out of view (or the tab in the background) must not clear the "new messages" notice.
+  let onScreen=false; const seen=new Set();
+  function markSeen(){ const id=cur; if(!id||id===ALL||!onScreen||document.hidden) return; const x=chans.find(y=>y.id===id); if(x&&!x.unread&&seen.has(id)) return; seen.add(id);
+    sb.rpc('msg_mark_read',{p_channel:id}).then(()=>{ const y=chans.find(z=>z.id===id); if(y) y.unread=0; report(); }); }
+  try{ new IntersectionObserver(es=>{ onScreen=es.some(e=>e.isIntersecting&&e.intersectionRatio>=.4); if(onScreen) markSeen(); },{threshold:[0,.4,1]}).observe($('msgs')); }catch(e){ onScreen=true; }
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden) markSeen(); });
   $('msgs').onclick=async e=>{
     if(e.target.closest('[data-older]')){ if(cur===ALL){ histLim+=100; return drawHistory(); } const box=$('msgs'), h=box.scrollHeight; lim+=200; await loadMessages(true); box.scrollTop=box.scrollHeight-h; return; }
     const go=!e.target.closest('a')&&e.target.closest('[data-go]'); if(go) return openChannel(go.dataset.go);

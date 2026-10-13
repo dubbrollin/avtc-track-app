@@ -178,11 +178,9 @@
 
       <!-- DASHBOARD -->
       <div id="dashView">
+        <!-- New-message notice: stays at the top until the messages (at the bottom of the dashboard) have been read -->
+        <div class="max-w-6xl mx-auto"><button type="button" id="msgAlert" class="hidden w-full text-left rounded-lg mb-3 font-semibold" style="background:#D2451E;color:#fff;padding:.7rem 1rem;border:0;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.18)"></button></div>
         <div id="xferBanner" class="max-w-6xl mx-auto"></div>
-        <div class="max-w-6xl mx-auto"><div class="card hidden" id="msgCard">
-          <div class="col-head"><h2 class="flex-1">Messages <span id="msgBadge" style="display:none;background:#D2451E;color:#fff;border-radius:999px;padding:1px 8px;font-size:12px;font-weight:700;letter-spacing:0;vertical-align:middle"></span> <span class="text-gray-500 font-normal text-xs normal-case tracking-normal">with your team's parents and coaches</span></h2></div>
-          <div id="msgMount"></div>
-        </div></div>
         <div class="max-w-6xl mx-auto dash2">
           <div class="card" id="rosterSection">
             <div class="col-head"><h2 class="flex-1">My roster <span id="dashCount" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
@@ -222,7 +220,13 @@
           </div>
           </div>
 
-      </div></div>
+      </div>
+        <!-- Messages sit at the bottom of the dashboard, under everything else -->
+        <div class="max-w-6xl mx-auto"><div class="card hidden" id="msgCard">
+          <div class="col-head"><h2 class="flex-1">Messages <span id="msgBadge" style="display:none;background:#D2451E;color:#fff;border-radius:999px;padding:1px 8px;font-size:12px;font-weight:700;letter-spacing:0;vertical-align:middle"></span> <span class="text-gray-500 font-normal text-xs normal-case tracking-normal">with your team's parents and coaches</span></h2></div>
+          <div id="msgMount"></div>
+        </div></div>
+      </div>
     </div>
   </div>
 </div>
@@ -301,8 +305,9 @@ async function loadMe(){
     try{ const {data:v}=await sb.functions.invoke('usatf-verify',{body:{email:myCoach.email}}); if(v&&v.status){ myCoach.usatf_registry_status=v.status; myCoach.usatf_registry_checked_at=new Date().toISOString(); } }catch(e){}
   }
   fullAccess=isFullAccess(myCoach);
+  document.getElementById('msgAlert').onclick=()=>document.getElementById('msgCard').scrollIntoView({behavior:'smooth',block:'start'}); // the notice stays until the messages have been read
   // Team Messenger (a paid team extra) lives right on the dashboard. Hidden when the team doesn't have it (team admins see how to get it).
-  window.mountMessenger($('msgMount'),{sb,team:myCoach.team_code, onUnread:n=>{ const b=document.getElementById('msgBadge'); if(b){ b.textContent=n||''; b.style.display=n?'':'none'; } }}).then(st=>{ if(st==='none') return; $('msgCard').classList.remove('hidden'); if(location.hash==='#messages') $('msgCard').scrollIntoView({block:'start'}); }).catch(()=>{});
+  window.mountMessenger($('msgMount'),{sb,team:myCoach.team_code, onUnread:n=>{ const b=document.getElementById('msgBadge'); if(b){ b.textContent=n||''; b.style.display=n?'':'none'; } const a=document.getElementById('msgAlert'); if(a){ a.classList.toggle('hidden',!n); a.textContent=n?`🔔 You have ${n} new message${n>1?'s':''} — tap here to read ${n>1?'them':'it'} ↓`:''; } }}).then(st=>{ if(st==='none') return; $('msgCard').classList.remove('hidden'); if(location.hash==='#messages') $('msgCard').scrollIntoView({block:'start'}); }).catch(()=>{});
   $('notCoachBox').style.display='none'; $('coachApp').style.display='block';
   const team=window.VYC_TEAMS.find(t=>t.code===myCoach.team_code);
   $('teamLabel').textContent = (team ? `— ${team.name}${team.conference?' ('+team.conference+')':''} · ${roleLabel(myCoach)}${myCoach.is_admin?' · Site admin':myCoach.team_admin?' · Team admin':''}` : `— ${roleLabel(myCoach)}`);

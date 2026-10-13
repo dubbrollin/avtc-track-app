@@ -16,6 +16,12 @@
 .pill{font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px}
 .raceBtn{padding:.5rem .9rem;border-radius:.5rem;border:1px solid #d1d5db;font-size:.875rem;cursor:pointer;background:#fff}
 .raceBtn.active{background:var(--brand);color:#fff;border-color:var(--brand)}
+@media (min-width:1000px){
+  #wrap.wide{max-width:76rem}
+  #wrap.wide #cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);grid-template-rows:auto auto 1fr;column-gap:14px;align-items:start}
+  #wrap.wide #athCard{grid-column:1;grid-row:1} #wrap.wide #resCard{grid-column:1;grid-row:2} #wrap.wide #registerCard{grid-column:1;grid-row:3}
+  #wrap.wide #msgCard{grid-column:2;grid-row:1 / span 3;position:sticky;top:72px}
+}
 </style>
 </head><body class="text-gray-900"><header class="topnav"><div class="topnav-inner">
   <a class="brand" href="home.html">VYC <b>Track &amp; Field</b></a>
@@ -28,7 +34,7 @@
     <a href="results.html">Results</a>
   </nav>
 </div></header>
-<div class="max-w-2xl mx-auto p-4">
+<div class="max-w-2xl mx-auto p-4" id="wrap">
   <h1 class="text-2xl font-bold" id="club"></h1>
   <p class="text-gray-600 mb-4">Parent Dashboard — your athletes and meet sign-ups</p>
 
@@ -41,7 +47,11 @@
       <button id="logout" class="btn bg-gray-200 text-sm">Sign out</button>
     </div>
 
-    <div class="card">
+    <!-- With Team Messenger on, wide screens show the messages to the RIGHT of the athletes so a parent with several kids doesn't scroll for them. -->
+    <!-- New-message notice: stays at the top until the messages have been read -->
+    <button type="button" id="msgAlert" class="hidden w-full text-left rounded-lg mb-3 font-semibold" style="background:#D2451E;color:#fff;padding:.7rem 1rem;border:0;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.18)"></button>
+    <div id="cols">
+    <div class="card" id="athCard">
       <h2 class="font-bold mb-2">My athletes</h2>
       <div id="myAthletes"></div>
       <p class="text-xs text-gray-500 mt-2">Registered a new athlete? <a class="text-blue-600 underline" href="index.html">Add one here</a>. Not verified yet? A coach on their team needs to review it first.</p>
@@ -52,7 +62,7 @@
       <div id="msgMount"></div>
     </div>
 
-    <div class="card">
+    <div class="card" id="resCard">
       <h2 class="font-bold mb-2">Meet results</h2>
       <div id="myResults"><p class="text-sm text-gray-500">Loading…</p></div>
     </div>
@@ -66,6 +76,7 @@
       <p id="meetInfo" class="text-sm text-gray-600 mb-3"></p>
       <div id="athletes"></div>
       <p id="none" class="hidden text-gray-600 text-sm">No athletes found for this email yet. Once your athlete is registered, they will show up here.</p>
+    </div>
     </div>
   </div>
 </div>
@@ -83,8 +94,9 @@ sb.auth.onAuthStateChange(async(_e,session)=>{
   if(!session||window.__authDone===session.user.id) return; window.__authDone=session.user.id; me=session.user.email;
   sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // rebuild client: the original can wedge after an OAuth redirect, hanging every later query forever
   $('login').classList.add('hidden'); $('app').classList.remove('hidden');
+  document.getElementById('msgAlert').onclick=()=>document.getElementById('msgCard').scrollIntoView({behavior:'smooth',block:'start'}); // the notice stays until the messages have been read
   // Team Messenger (a paid team extra): messages from the coaches show here, and the parent can reply. Hidden when the team doesn't have it.
-  window.mountMessenger($('msgMount'),{sb, onUnread:n=>{ const b=document.getElementById('msgBadge'); if(b){ b.textContent=n||''; b.style.display=n?'':'none'; } }}).then(st=>{ if(st==='none') return; $('msgCard').classList.remove('hidden'); if(location.hash==='#messages') $('msgCard').scrollIntoView({block:'start'}); }).catch(()=>{});
+  window.mountMessenger($('msgMount'),{sb, onUnread:n=>{ const b=document.getElementById('msgBadge'); if(b){ b.textContent=n||''; b.style.display=n?'':'none'; } const a=document.getElementById('msgAlert'); if(a){ a.classList.toggle('hidden',!n); a.textContent=n?`🔔 You have ${n} new message${n>1?'s':''} — tap here to read ${n>1?'them':'it'} ↓`:''; } }}).then(st=>{ if(st==='none') return; $('msgCard').classList.remove('hidden'); $('wrap').classList.add('wide'); if(location.hash==='#messages') $('msgCard').scrollIntoView({block:'start'}); }).catch(()=>{});
   await loadMyAthletes();
   await loadMyResults();
   await loadMeets();
