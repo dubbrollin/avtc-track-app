@@ -24,6 +24,8 @@ Deno.serve(async (req) => {
     if (!allowed) return json({ error: "Only this team's team admin (or a site admin) can set up payments." }, 403);
 
     const db = adminDb();
+    const { data: extras } = await db.rpc("team_has_extras", { t: team });   // taking payments online is a paid team extra
+    if (!extras) return json({ error: "Card payments are part of the paid team extras, which aren't switched on for this team yet. Contact the league site admin." }, 403);
     const { data: teamRow } = await db.from("league_teams").select("code,name").eq("code", team).maybeSingle();
     const teamName = teamRow?.name || team;
     let { data: acctRow } = await db.from("team_stripe_accounts").select("*").eq("team_code", team).maybeSingle();

@@ -8,7 +8,7 @@
 //     team      start on this team (otherwise the first of my teams that has it switched on)
 //     lockTeam  show only that team (the Site Admin view)
 //     onUnread  called with my unread count whenever it changes (for a badge on the dashboard card)
-//   state: 'on' (chats are showing) · 'off' (my team hasn't got it — a notice shows for team admins) · 'none' (nothing to show)
+//   state: 'on' (chats are showing) · 'none' (nothing to show — e.g. the team hasn't added the paid extras)
 (function(){
 const CSS=`<style id="tmStyle">
 .tm{font-size:.95rem}.tm .tm-hide{display:none!important}
@@ -132,10 +132,7 @@ window.mountMessenger=async function(root, opts){
     const [{data:sw},{data:m}]=await Promise.all([sb.from('team_messaging').select('enabled').eq('team_code',team).maybeSingle(), sb.rpc('msg_can_manage',{t:team})]);
     const on=!!(sw&&sw.enabled); mgr=!!m;
     hide('main',true); $('notice').innerHTML=''; report();
-    if(!on){
-      if(!mgr) return 'none';   // parents and regular coaches see nothing until their team has it
-      $('notice').innerHTML=note(`<span class="tm-pill warn">Paid team extra</span> <b>Team Messenger is not switched on for ${tn}.</b><br>Message your parents right here on the dashboard — the whole team, one division (age group), boys or girls only, a coaches-only group, or one parent directly — with photos and files, and each parent sees it on their own dashboard. It is part of the paid team extras; the league site admin switches it on (Site Admin → Messages).`,'border-color:#f59e0b;background:#fffbeb');
-      return 'off'; }
+    if(!on) return 'none';   // a team that hasn't added the paid extras shows nothing on the dashboards (the notice is on the Team Admin page only)
     if(r&&!r.is_coach&&r.waiting&&!mgr){ $('notice').innerHTML=note(`You'll see ${tn}'s team messages here as soon as the team has reviewed your athlete's registration.`); return 'on'; }
     if(r&&r.is_coach&&!r.can_post&&!mgr) $('notice').innerHTML=note(`You can read your division's chats and use <b>Coaches only</b>. To message parents, ask your team admin to give you permission.`,'border-color:#f59e0b;background:#fffbeb');
     hide('main',false);

@@ -37,7 +37,8 @@ Deno.serve(async (req) => {
       db.from("league_teams").select("name").eq("code", reg.team_code).maybeSingle(),
     ]);
     if (!fee) return json({ error: "No fee is set up for this athlete yet. Ask your team." }, 400);
-    if (!settings?.accept_card) return json({ error: "This team isn't taking card payments." }, 400);
+    const { data: extras } = await db.rpc("team_has_extras", { t: reg.team_code });   // card payments + payment plans are a paid team extra
+    if (!extras || !settings?.accept_card) return json({ error: "This team isn't taking card payments." }, 400);
     if (!acct || acct.status !== "active") return json({ error: "This team's card payments aren't switched on yet. Choose another way to pay, or check back soon." }, 400);
     if (["paid", "waived", "void"].includes(fee.status)) return json({ error: "Nothing is owed for this athlete." }, 400);
 
