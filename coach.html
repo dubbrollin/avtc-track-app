@@ -7,7 +7,9 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="theme.css">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css?v=b1">
+<script src="theme.js?v=b1"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="config.js"></script>
@@ -207,6 +209,7 @@
               <a href="coach.html?view=roster&tab=coaches" class="btn bg-blue-600 text-white inline-block">Coaches →</a>
               <a href="coach.html?view=roster&tab=payments" class="btn bg-green-600 text-white inline-block">Payments →</a>
               <a href="coach.html?view=roster&tab=signup" class="btn bg-gray-800 text-white inline-block">Parent meet sign-up →</a>
+              <a href="messages.html" class="btn bg-blue-600 text-white inline-block">Team Messenger →</a>
             </div>
             <div id="taCoachNotice"></div>
             <p class="text-xs text-gray-500 mt-2">Uploading meet results and setting up meets happens on the <a class="underline" href="admin.html?tab=meetadmin">Meet Admin tab of the Admin page</a>.</p>
@@ -286,6 +289,7 @@ async function loadMe(){
   }
   myCoach=data;
   window.setRoleFlags(myCoach);
+  if(window.msgNavBadge) window.msgNavBadge(sb);
   if(myCoach.role_type==='timer' && !myCoach.is_admin && !myCoach.team_admin){ $('timerBox').style.display='block'; return; }
   // USATF coaches: verify against USATF's public lists if never checked, or last checked 30+ days ago.
   if(myCoach.usatf_certified && (!myCoach.usatf_registry_checked_at || Date.now()-new Date(myCoach.usatf_registry_checked_at)>30*864e5)){

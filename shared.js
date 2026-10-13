@@ -123,19 +123,31 @@ window.mountLoginWidget = function(sb, container, opts){
     if (!email || !password) return setMsg('Enter your email and password.');
     setMsg('Signing in…');
     const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error && /not confirmed/i.test(error.message)) return needConfirm(email);
     if (error) setMsg(/Invalid login credentials/i.test(error.message)
       ? "Wrong email/password, or you haven't set a password yet — try \"First time? Create password.\""
       : error.message);
+  };
+  // New logins must prove the email is theirs: we email a link, and the login only works after they open it.
+  const needConfirm = (email) => {
+    msgEl.className = 'text-sm mt-2 text-green-700';
+    msgEl.innerHTML = 'Almost done — we emailed a link to <b></b>. Open that email and tap the link to confirm it is you — you will come right back here signed in. (Check spam too.) <button type="button" class="underline text-blue-700">Send it again</button>';
+    msgEl.querySelector('b').textContent = email;
+    msgEl.querySelector('button').onclick = async () => {
+      const { error } = await sb.auth.resend({ type: 'signup', email, options: { emailRedirectTo: location.href.split('#')[0] } });
+      setMsg(error ? error.message : 'Sent again to ' + email + ' — it can take a minute to arrive.', !error);
+    };
   };
   g('#authSignUp').onclick = async () => {
     const email = emailEl.value.trim(), password = passEl.value;
     if (!email || !password) return setMsg('Enter your email and choose a password.');
     if (password.length < 6) return setMsg('Password must be at least 6 characters.');
     setMsg('Creating your login…');
-    const { error } = await sb.auth.signUp({ email, password });
+    const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.href.split('#')[0] } });
     if (error) setMsg(/already registered|already exists/i.test(error.message)
       ? 'That email already has a password set — use Sign in instead.'
       : error.message);
+    else if (data && !data.session) needConfirm(email);   // email confirmation is on: no session until they open the link
     else setMsg('Account created — signing you in…', true);
   };
   g('#authGoogle').onclick = async () => {
@@ -186,7 +198,12 @@ document.addEventListener('DOMContentLoaded',function(){ try{
   const addAfter=(ref,href,text)=>{ if(nav.querySelector('a[href="'+href+'"]')) return; const a=document.createElement('a'); a.href=href; a.textContent=text; if(ref&&ref.nextSibling) nav.insertBefore(a,ref.nextSibling); else nav.appendChild(a); return a; };
   let last=coachLink;
   if(flag('vyc_team_admin')) last=addAfter(last,'coach.html?view=roster','Team Admin')||last; // "Timer" is a fixed menu item: meets-admin.html?view=timer
+  // "Messages" (Team Messenger, a paid team extra) sits just before Results on every page.
+  if(!nav.querySelector('a[href="messages.html"]')){ const m=document.createElement('a'); m.href='messages.html'; m.textContent='Messages'; nav.insertBefore(m,nav.querySelector('a[href="results.html"]')); }
   if(flag('vyc_admin')) addAfter(null,'admin.html','Site Admin');
 }catch(e){} });
 window.setRoleFlags=function(c){ try{ localStorage.setItem('vyc_admin',(c&&(c.is_admin||c.team_admin))?'1':'0'); localStorage.setItem('vyc_team_admin',(c&&(c.is_admin||c.team_admin))?'1':'0'); localStorage.setItem('vyc_timer',(c&&c.role_type==='timer')?'1':'0'); }catch(e){} };
 window.clearRoleFlags=function(){ try{ ['vyc_admin','vyc_team_admin','vyc_timer'].forEach(k=>localStorage.removeItem(k)); }catch(e){} };
+// Unread Team Messenger count on the "Messages" menu item — called by the dashboards once someone is signed in.
+window.msgNavBadge=async function(sb){ try{ const {data,error}=await sb.rpc('msg_my_channels'); if(error) return; const n=(data||[]).reduce((a,c)=>a+(c.unread||0),0);
+  const a=document.querySelector('.topnav nav a[href="messages.html"]'); if(a) a.innerHTML='Messages'+(n?' <span style="background:#D2451E;color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;font-weight:700">'+n+'</span>':''); }catch(e){} };
