@@ -18,9 +18,9 @@
 .raceBtn.active{background:var(--brand);color:#fff;border-color:var(--brand)}
 @media (min-width:1000px){
   #wrap.wide{max-width:76rem}
-  #wrap.wide #cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);grid-template-rows:auto auto 1fr;column-gap:14px;align-items:start}
-  #wrap.wide #athCard{grid-column:1;grid-row:1} #wrap.wide #resCard{grid-column:1;grid-row:2} #wrap.wide #registerCard{grid-column:1;grid-row:3}
-  #wrap.wide #msgCard{grid-column:2;grid-row:1 / span 3;position:sticky;top:72px}
+  #wrap.wide #cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);grid-template-rows:auto auto auto 1fr;column-gap:14px;align-items:start}
+  #wrap.wide #athCard{grid-column:1;grid-row:1} #wrap.wide #schedCard{grid-column:1;grid-row:2} #wrap.wide #resCard{grid-column:1;grid-row:3} #wrap.wide #registerCard{grid-column:1;grid-row:4}
+  #wrap.wide #msgCard{grid-column:2;grid-row:1 / span 4;position:sticky;top:72px}
 }
 </style>
 </head><body class="text-gray-900"><header class="topnav"><div class="topnav-inner">
@@ -60,6 +60,11 @@
     <div class="card hidden" id="msgCard">
       <h2 class="font-bold mb-2">Team messages <span id="msgBadge" style="display:none;background:#D2451E;color:#fff;border-radius:999px;padding:1px 8px;font-size:12px;font-weight:700;letter-spacing:0;vertical-align:middle"></span></h2>
       <div id="msgMount"></div>
+    </div>
+
+    <div class="card" id="schedCard">
+      <h2 class="font-bold mb-2">Schedule</h2>
+      <div id="schedule"><p class="text-sm text-gray-500">Loading…</p></div>
     </div>
 
     <div class="card" id="resCard">
@@ -150,11 +155,32 @@ async function loadMeets(){
   const {data}=await sb.from('meets').select('*').eq('season_year',await window.currentSeason()).neq('status','archived').order('meet_date');
   const myTeams=[...new Set(myRegs.filter(r=>r.status!=='rejected').map(r=>r.team_code))];
   meets=(data||[]).filter(m=>myTeams.some(c=>window.meetHasTeam(m,c))); // only meets at least one of my athletes' teams is competing at
+  renderSchedule(myTeams);
   const {data:evc}=await sb.from('meet_events').select('meet_id'); const evCount={}; (evc||[]).forEach(x=>evCount[x.meet_id]=(evCount[x.meet_id]||0)+1);
   $('meet').innerHTML=meets.map(m=>`<option value="${m.id}">${m.name} — ${fmtDate(m.meet_date)}${evCount[m.id]?'':' (no events set up yet)'}</option>`).join('')||'<option value="">No meets posted yet</option>';
   const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
   const pick=meets.find(m=>evCount[m.id]&&m.meet_date>=today)||meets.find(m=>m.meet_date>=today)||meets.find(m=>evCount[m.id]&&isOpen(m))||meets.find(m=>evCount[m.id])||meets[0]; if(pick) $('meet').value=pick.id; // start on the current/next meet
   $('meet').onchange=loadMeet; if(meets.length) await loadMeet(); else $('meetInfo').textContent='';
+}
+// ---- Schedule: this season's meets for my athletes' team(s) — when, who they're up against, and where (opens Google Maps) ----
+function renderSchedule(myTeams){
+  const el=$('schedule');
+  if(!myTeams.length){ el.innerHTML='<p class="text-sm text-gray-500">Your team\'s meets will show here once your athlete is registered.</p>'; return; }
+  if(!meets.length){ el.innerHTML='<p class="text-sm text-gray-500">No meets are posted for this season yet. Check back soon.</p>'; return; }
+  const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
+  const tName=c=>(window.VYC_TEAMS.find(t=>t.code===c)||{}).name||c;
+  const when=d=>d?new Date(String(d).slice(0,10)+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}):'Date to be announced';
+  const vs=m=>{ const L=(m.team_codes||[]); if(!L.length) return 'All VYC teams'; const o=L.filter(c=>!myTeams.includes(c)); return o.length?o.map(tName).join(', '):'Your team only'; };
+  const row=(m,past)=>{ const mine=myTeams.filter(c=>window.meetHasTeam(m,c));
+    return `<div class="py-2 border-t first:border-t-0 ${past?'opacity-60':''}">
+      <div class="flex flex-wrap items-baseline gap-x-2"><b class="text-sm" style="color:var(--act,#1764c8)">${esc(when(m.meet_date))}</b><span class="font-bold">${esc(m.name)}</span>
+        ${m.is_championship?'<span class="pill" style="background:#fef3c7;color:#92400e">Championship</span>':''}${m.is_invitational?'<span class="pill" style="background:#e5e7eb">Invitational</span>':''}${past?'<span class="pill" style="background:#e5e7eb">Done</span>':''}</div>
+      ${myTeams.length>1?`<div class="text-xs text-gray-500">${mine.map(tName).map(esc).join(', ')}</div>`:''}
+      <div class="text-sm mt-0.5"><span class="text-gray-500">Against:</span> ${esc(vs(m))}</div>
+      <div class="text-sm">${m.location?`<span class="text-gray-500">Where:</span> <a class="text-blue-700 underline" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.location)}">${esc(m.location)} — open in Google Maps ↗</a>`:'<span class="text-gray-500">Where: to be announced</span>'}</div></div>`; };
+  const up=meets.filter(m=>!m.meet_date||m.meet_date>=today), past=meets.filter(m=>m.meet_date&&m.meet_date<today).reverse();
+  el.innerHTML=(up.length?up.map(m=>row(m,false)).join(''):'<p class="text-sm text-gray-500">No more meets coming up this season.</p>')
+    +(past.length?`<details class="mt-2"><summary class="cursor-pointer text-sm text-gray-600">Earlier this season (${past.length})</summary>${past.map(m=>row(m,true)).join('')}</details>`:'');
 }
 const cur=()=>meets.find(m=>m.id===$('meet').value);
 function isOpen(m){ return m.status==='open' && new Date()<=new Date(m.entries_close); }
