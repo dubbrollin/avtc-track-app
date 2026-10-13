@@ -1,6 +1,7 @@
 // Team-admin panels shared by the Coach Dashboard's "Team admin" section and the Site Admin page:
 //   window.mountTeamPayments(el, ctx)   — the team's payment portal (Stripe setup, fee, ways to pay, athletes' balances)
 //   window.mountParentSignup(el, ctx)   — the "parents enter meet events themselves: ON / OFF" switch
+//   window.mountTeamMessaging(el, ctx)  — Team Messenger (paid team extra): on/off per team (site admins switch it)
 // ctx = { sb, team, season, teams:[{code,name,active}], canPickTeam:bool, onTeamChange(code) }
 (function(){
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -153,5 +154,28 @@ window.mountParentSignup=async function(el, ctx){
     const {error}=await sb.rpc('set_parent_entry',{p_team:team,p_on:on,p_picks:on?2:null}); if(error){ toast(error.message,true); return; } toast('Saved'); window.mountParentSignup(el,ctx); };
   el.onchange=async e=>{ const sel=e.target.closest('select[data-picks]'); if(!sel) return; const team=sel.closest('tr').dataset.team;
     const {error}=await sb.rpc('set_parent_entry',{p_team:team,p_on:true,p_picks:+sel.value}); if(error){ toast(error.message,true); return; } toast(`Parents may pick up to ${sel.value} event${+sel.value>1?'s':''}`); window.mountParentSignup(el,ctx); };
+};
+/* ============================ TEAM MESSENGER: the paid on/off switch per team ============================ */
+window.mountTeamMessaging=async function(el, ctx){
+  const sb=ctx.sb; el.classList.add('tap'); el.innerHTML=STYLE+'<p class="text-sm text-gray-500">Loading…</p>';
+  const [{data:sw,error},{data:ch}]=await Promise.all([sb.from('team_messaging').select('*'), sb.from('msg_channels').select('team_code,audience,archived').eq('season_year',ctx.season)]);
+  if(error){ el.innerHTML=STYLE+'<div class="tapcard"><b>Team Messenger isn\'t set up yet.</b><p class="text-xs text-gray-500 mt-1">'+esc(error.message)+'</p></div>'; return; }
+  const on={}; (sw||[]).forEach(r=>on[r.team_code]=r);
+  const cnt={}; (ch||[]).filter(c=>!c.archived).forEach(c=>{ const k=cnt[c.team_code]??={g:0,d:0}; c.audience==='direct'?k.d++:k.g++; });
+  const list=ctx.canPickTeam?(ctx.teams||[]).filter(t=>t.active!==false):(ctx.teams||[]).filter(t=>t.code===ctx.team);
+  const nOn=list.filter(t=>on[t.code]&&on[t.code].enabled).length;
+  el.innerHTML=STYLE+`<div class="tapcard"><div class="flex flex-wrap items-center gap-2 mb-1"><h3 class="font-bold flex-1">Team Messenger <span class="tappill warn">Paid team extra</span>${ctx.canPickTeam?` <span class="text-sm font-normal text-gray-500">on for ${nOn} of ${list.length} teams</span>`:''}</h3></div>
+<p class="text-xs text-gray-500 mb-2">Coaches and parents message each other right on their dashboards (Coach Dashboard and Parent Dashboard): whole-team, division and coaches-only groups, one-to-one direct messages, photos and files. A team admin is in every chat, and coaches post only with their team admin's permission. It is part of the paid team extras ($99 per team per season). ${ctx.canPickTeam?'Switch it on for a team once they\'ve paid; switching it off hides their chats but keeps every message.':'Only the league site admin can switch it on or off.'}</p>
+<table class="tapt"><thead><tr><th>Team</th><th>Team Messenger</th><th>In use</th>${ctx.canPickTeam?'<th></th>':''}</tr></thead><tbody>${list.map(t=>{ const r=on[t.code], y=!!(r&&r.enabled), k=cnt[t.code];
+  return `<tr data-team="${esc(t.code)}"><td>${esc(t.name)}</td><td><span class="tappill ${y?'ok':''}">${y?'ON':'Off'}</span>${r?`<div class="text-xs text-gray-400">${esc(r.updated_by||'')} ${esc(String(r.updated_at||'').slice(0,10))}</div>`:''}</td>
+  <td class="text-xs text-gray-600">${k?`${k.g} group${k.g===1?'':'s'}${k.d?` · ${k.d} direct message${k.d===1?'':'s'}`:''}`:'—'}</td>
+  ${ctx.canPickTeam?`<td class="whitespace-nowrap"><button ${btn(y?'lite':'grn',`data-msg="${y?'off':'on'}"`)}>${y?'Switch off':'Switch on'}</button>${y?` <button ${btn('lite','data-open')}>See chats</button>`:''}</td>`:''}</tr>`; }).join('')||'<tr><td colspan="4" class="text-gray-500">No team.</td></tr>'}</tbody></table></div>
+<div data-id="msgViewCard" class="tapcard hide"><h3 class="font-bold mb-2" data-id="msgViewTitle"></h3><div data-id="msgView"></div></div>`;
+  el.onclick=async e=>{ const o=e.target.closest('button[data-open]');
+    if(o){ const team=o.closest('tr').dataset.team, card=el.querySelector('[data-id="msgViewCard"]'); card.classList.remove('hide'); el.querySelector('[data-id="msgViewTitle"]').textContent=teamName(ctx,team)+' — chats';
+      await window.mountMessenger(el.querySelector('[data-id="msgView"]'),{sb,team,lockTeam:true}); card.scrollIntoView({behavior:'smooth',block:'start'}); return; }
+    const b=e.target.closest('button[data-msg]'); if(!b) return; const team=b.closest('tr').dataset.team, go=b.dataset.msg==='on', tn=teamName(ctx,team);
+    if(!confirm(go?`Switch Team Messenger ON for ${tn}? Their coaches and parents can start messaging right away.`:`Switch Team Messenger OFF for ${tn}? Their chats are hidden (every message is kept).`)) return;
+    const {error}=await sb.rpc('msg_set_enabled',{p_team:team,p_on:go}); if(error){ toast(error.message,true); return; } toast(go?'Switched on':'Switched off'); window.mountTeamMessaging(el,ctx); };
 };
 })();

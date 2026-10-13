@@ -13,7 +13,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="config.js"></script>
-<script src="shared.js"></script><script src="team-admin-panels.js"></script>
+<script src="shared.js"></script><script src="messenger.js"></script><script src="team-admin-panels.js"></script>
 <script src="events.js"></script>
 <script src="pdf.js"></script>
 <style>
@@ -177,6 +177,10 @@
       <!-- DASHBOARD -->
       <div id="dashView">
         <div id="xferBanner" class="max-w-6xl mx-auto"></div>
+        <div class="max-w-6xl mx-auto"><div class="card hidden" id="msgCard">
+          <div class="col-head"><h2 class="flex-1">Messages <span id="msgBadge" style="display:none;background:#D2451E;color:#fff;border-radius:999px;padding:1px 8px;font-size:12px;font-weight:700;letter-spacing:0;vertical-align:middle"></span> <span class="text-gray-500 font-normal text-xs normal-case tracking-normal">with your team's parents and coaches</span></h2></div>
+          <div id="msgMount"></div>
+        </div></div>
         <div class="max-w-6xl mx-auto dash2">
           <div class="card" id="rosterSection">
             <div class="col-head"><h2 class="flex-1">My roster <span id="dashCount" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
@@ -209,7 +213,6 @@
               <a href="coach.html?view=roster&tab=coaches" class="btn bg-blue-600 text-white inline-block">Coaches →</a>
               <a href="coach.html?view=roster&tab=payments" class="btn bg-green-600 text-white inline-block">Payments →</a>
               <a href="coach.html?view=roster&tab=signup" class="btn bg-gray-800 text-white inline-block">Parent meet sign-up →</a>
-              <a href="messages.html" class="btn bg-blue-600 text-white inline-block">Team Messenger →</a>
             </div>
             <div id="taCoachNotice"></div>
             <p class="text-xs text-gray-500 mt-2">Uploading meet results and setting up meets happens on the <a class="underline" href="admin.html?tab=meetadmin">Meet Admin tab of the Admin page</a>.</p>
@@ -289,13 +292,14 @@ async function loadMe(){
   }
   myCoach=data;
   window.setRoleFlags(myCoach);
-  if(window.msgNavBadge) window.msgNavBadge(sb);
   if(myCoach.role_type==='timer' && !myCoach.is_admin && !myCoach.team_admin){ $('timerBox').style.display='block'; return; }
   // USATF coaches: verify against USATF's public lists if never checked, or last checked 30+ days ago.
   if(myCoach.usatf_certified && (!myCoach.usatf_registry_checked_at || Date.now()-new Date(myCoach.usatf_registry_checked_at)>30*864e5)){
     try{ const {data:v}=await sb.functions.invoke('usatf-verify',{body:{email:myCoach.email}}); if(v&&v.status){ myCoach.usatf_registry_status=v.status; myCoach.usatf_registry_checked_at=new Date().toISOString(); } }catch(e){}
   }
   fullAccess=isFullAccess(myCoach);
+  // Team Messenger (a paid team extra) lives right on the dashboard. Hidden when the team doesn't have it (team admins see how to get it).
+  window.mountMessenger($('msgMount'),{sb,team:myCoach.team_code, onUnread:n=>{ const b=document.getElementById('msgBadge'); if(b){ b.textContent=n||''; b.style.display=n?'':'none'; } }}).then(st=>{ if(st==='none') return; $('msgCard').classList.remove('hidden'); if(location.hash==='#messages') $('msgCard').scrollIntoView({block:'start'}); }).catch(()=>{});
   $('notCoachBox').style.display='none'; $('coachApp').style.display='block';
   const team=window.VYC_TEAMS.find(t=>t.code===myCoach.team_code);
   $('teamLabel').textContent = (team ? `— ${team.name}${team.conference?' ('+team.conference+')':''} · ${roleLabel(myCoach)}${myCoach.is_admin?' · Site admin':myCoach.team_admin?' · Team admin':''}` : `— ${roleLabel(myCoach)}`);

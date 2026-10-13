@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="theme.css?v=b1">
 <script src="theme.js?v=b1"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="config.js"></script><script src="shared.js"></script><script src="events.js"></script><script src="payments.js"></script>
+<script src="config.js"></script><script src="shared.js"></script><script src="events.js"></script><script src="payments.js"></script><script src="messenger.js"></script>
 <style>
 .btn{padding:.6rem 1rem;border-radius:.5rem;font-weight:600}
 .card{background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
@@ -47,6 +47,11 @@
       <p class="text-xs text-gray-500 mt-2">Registered a new athlete? <a class="text-blue-600 underline" href="index.html">Add one here</a>. Not verified yet? A coach on their team needs to review it first.</p>
     </div>
 
+    <div class="card hidden" id="msgCard">
+      <h2 class="font-bold mb-2">Team messages <span id="msgBadge" style="display:none;background:#D2451E;color:#fff;border-radius:999px;padding:1px 8px;font-size:12px;font-weight:700;letter-spacing:0;vertical-align:middle"></span></h2>
+      <div id="msgMount"></div>
+    </div>
+
     <div class="card">
       <h2 class="font-bold mb-2">Meet results</h2>
       <div id="myResults"><p class="text-sm text-gray-500">Loading…</p></div>
@@ -78,7 +83,8 @@ sb.auth.onAuthStateChange(async(_e,session)=>{
   if(!session||window.__authDone===session.user.id) return; window.__authDone=session.user.id; me=session.user.email;
   sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // rebuild client: the original can wedge after an OAuth redirect, hanging every later query forever
   $('login').classList.add('hidden'); $('app').classList.remove('hidden');
-  if(window.msgNavBadge) window.msgNavBadge(sb);
+  // Team Messenger (a paid team extra): messages from the coaches show here, and the parent can reply. Hidden when the team doesn't have it.
+  window.mountMessenger($('msgMount'),{sb, onUnread:n=>{ const b=document.getElementById('msgBadge'); if(b){ b.textContent=n||''; b.style.display=n?'':'none'; } }}).then(st=>{ if(st==='none') return; $('msgCard').classList.remove('hidden'); if(location.hash==='#messages') $('msgCard').scrollIntoView({block:'start'}); }).catch(()=>{});
   await loadMyAthletes();
   await loadMyResults();
   await loadMeets();

@@ -198,12 +198,7 @@ document.addEventListener('DOMContentLoaded',function(){ try{
   const addAfter=(ref,href,text)=>{ if(nav.querySelector('a[href="'+href+'"]')) return; const a=document.createElement('a'); a.href=href; a.textContent=text; if(ref&&ref.nextSibling) nav.insertBefore(a,ref.nextSibling); else nav.appendChild(a); return a; };
   let last=coachLink;
   if(flag('vyc_team_admin')) last=addAfter(last,'coach.html?view=roster','Team Admin')||last; // "Timer" is a fixed menu item: meets-admin.html?view=timer
-  // "Messages" (Team Messenger, a paid team extra) sits just before Results on every page.
-  if(!nav.querySelector('a[href="messages.html"]')){ const m=document.createElement('a'); m.href='messages.html'; m.textContent='Messages'; nav.insertBefore(m,nav.querySelector('a[href="results.html"]')); }
   if(flag('vyc_admin')) addAfter(null,'admin.html','Site Admin');
 }catch(e){} });
-window.setRoleFlags=function(c){ try{ localStorage.setItem('vyc_admin',(c&&(c.is_admin||c.team_admin))?'1':'0'); localStorage.setItem('vyc_team_admin',(c&&(c.is_admin||c.team_admin))?'1':'0'); localStorage.setItem('vyc_timer',(c&&c.role_type==='timer')?'1':'0'); }catch(e){} };
-window.clearRoleFlags=function(){ try{ ['vyc_admin','vyc_team_admin','vyc_timer'].forEach(k=>localStorage.removeItem(k)); }catch(e){} };
-// Unread Team Messenger count on the "Messages" menu item — called by the dashboards once someone is signed in.
-window.msgNavBadge=async function(sb){ try{ const {data,error}=await sb.rpc('msg_my_channels'); if(error) return; const n=(data||[]).reduce((a,c)=>a+(c.unread||0),0);
-  const a=document.querySelector('.topnav nav a[href="messages.html"]'); if(a) a.innerHTML='Messages'+(n?' <span style="background:#D2451E;color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;font-weight:700">'+n+'</span>':''); }catch(e){} };
+window.setRoleFlags=function(c){ try{ localStorage.setItem('vyc_admin',(c&&(c.is_admin||c.team_admin))?'1':'0'); localStorage.setItem('vyc_team_admin',(c&&(c.is_admin||c.team_admin))?'1':'0'); localStorage.setItem('vyc_timer',(c&&c.role_type==='timer')?'1':'0'); localStorage.setItem('vyc_coach',(c&&c.role_type!=='timer')?'1':'0'); }catch(e){} };
+window.clearRoleFlags=function(){ try{ ['vyc_admin','vyc_team_admin','vyc_timer','vyc_coach'].forEach(k=>localStorage.removeItem(k)); }catch(e){} };

@@ -12,7 +12,7 @@
 <script src="theme.js?v=b1"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
-<script src="shared.js"></script><script src="team-admin-panels.js"></script>
+<script src="shared.js"></script><script src="team-admin-panels.js"></script><script src="messenger.js"></script>
 <script src="events.js"></script>
 <style>
 body{background:#f3f4f6}
@@ -67,6 +67,7 @@ table.t td{padding:5px 6px;border-top:1px solid #f3f4f6;vertical-align:middle}
 <button class="tab" data-tab="clearances">Transfer Requests <span id="clrBadge" class="pill warn hide"></span></button>
 <button class="tab" data-tab="fees">Fees &amp; Fines <span id="feeBadge" class="pill bad hide"></span></button>
 <button class="tab" data-tab="payments">Payments</button>
+<button class="tab" data-tab="messages">Messages</button>
 <button class="tab" data-tab="meets">Meets &amp; Results</button>
 <button class="tab" data-tab="meetadmin">Meet Admin</button>
 <button class="tab" data-tab="records">Records &amp; Standards</button>
@@ -158,7 +159,7 @@ refreshClrBadge(); refreshCertBadge(); showFeeNotice();
 });
 async function loadTeams(){ const {data}=await sb.from('league_teams').select('*').order('sort_order').order('name'); teams=data||[]; }
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>show(b.dataset.tab));
-function show(t){ tab=t; document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===t)); ({people:paintPeople,athletes:paintAthletes,cert:paintCert,clearances:paintClearances,fees:paintFees,payments:paintPayments,meets:paintMeets,meetadmin:paintMeetAdmin,records:paintRecords,league:paintLeague})[t](); }
+function show(t){ tab=t; document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===t)); ({people:paintPeople,athletes:paintAthletes,cert:paintCert,clearances:paintClearances,fees:paintFees,payments:paintPayments,messages:paintMessages,meets:paintMeets,meetadmin:paintMeetAdmin,records:paintRecords,league:paintLeague})[t](); }
 
 /* ============================ PEOPLE & ACCESS ============================ */
 // NOTE: the `coaches` table has no `id` column — its primary key is `email`.
@@ -670,6 +671,8 @@ const {error}=await sb.rpc('settle_charge',{p_id:id,p_status:act,p_note:note}); 
 
 /* ============================ PAYMENTS (team fee portal) ============================ */
 // The panel itself lives in team-admin-panels.js (shared with the Coach Dashboard's Team admin section).
+// Team Messenger (paid team extra): the on/off switch per team. The panel lives in team-admin-panels.js.
+async function paintMessages(){ $('pane').innerHTML=''; await window.mountTeamMessaging($('pane'),{sb,team:MYTEAM,season:SEASON,teams,canPickTeam:SITE}); }
 let payTeam=null, stripeReturnPending=false;
 async function paintPayments(){
 if(!payTeam) payTeam=MYTEAM||(teams.find(t=>t.active!==false)||{}).code;
