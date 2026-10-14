@@ -3,13 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#001C3B"><link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="VYC Track"><meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>Valley Youth Conference</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="theme.css?v=b1">
-<script src="theme.js?v=b1"></script>
+<script src="theme.js?v=b2"></script>
 <script src="config.js"></script><script src="shared.js"></script>
 <style>
   body{background:#f3f4f6}
@@ -38,6 +39,14 @@
     <h1 class="text-2xl font-bold">Valley Youth Conference</h1>
     <p class="text-gray-600 mt-1">Youth track &amp; field for the Antelope Valley and San Fernando Valley — regular season and the Valley United Striders postseason team.</p>
     <p class="text-sm mt-2"><a class="text-blue-600 underline" href="https://valleyconference.org/" target="_blank">Conference rules, policies &amp; more at valleyconference.org →</a></p>
+  </div>
+
+  <style>#getApp:not([hidden]){display:flex;gap:12px;align-items:center;flex-wrap:wrap}</style>
+  <div id="getApp" class="card mt-3" hidden>
+    <img src="icons/icon-192.png" alt="" width="52" height="52" style="border-radius:12px">
+    <div style="flex:1;min-width:200px"><div class="font-bold">Get the VYC Track app</div>
+      <p class="text-sm text-gray-600" data-how></p></div>
+    <button type="button" class="btn bg-blue-600 text-white px-4 py-2" data-install hidden>Install app</button>
   </div>
 
   <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">

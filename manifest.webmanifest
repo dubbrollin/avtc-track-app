@@ -1,0 +1,23 @@
+{
+  "id": "./home.html",
+  "name": "VYC Track & Field",
+  "short_name": "VYC Track",
+  "description": "Valley Youth Conference track & field — registration, coach and parent dashboards, meet entries, team messages and results.",
+  "start_url": "./home.html?source=app",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F4F6F9",
+  "theme_color": "#001C3B",
+  "categories": ["sports", "education"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Parent Dashboard", "url": "./parent.html", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Coach Dashboard", "url": "./coach.html", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Results", "url": "./results.html", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
