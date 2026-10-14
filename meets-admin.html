@@ -11,7 +11,22 @@
 <script src="theme.js?v=b2"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script><script src="shared.js"></script><script src="events.js"></script><script src="results.js"></script><script src="live-connect.js"></script>
-<style>.btn{padding:.5rem .9rem;border-radius:.5rem;font-weight:600}</style>
+<style>.btn{padding:.5rem .9rem;border-radius:.5rem;font-weight:600}
+  /* Timer Dashboard: the how-to guide sits on the right on a laptop, and folds up above the meets on a phone */
+  #wrap.withGuide{max-width:72rem}
+  #cols.guide{display:grid;gap:1.25rem;grid-template-columns:minmax(0,1fr) 340px;align-items:start}
+  #cols.guide #timerGuide{position:sticky;top:84px;max-height:calc(100vh - 100px);overflow-y:auto}
+  @media (max-width:1023px){ #cols.guide{grid-template-columns:minmax(0,1fr)} #cols.guide #timerGuide{position:static;max-height:none;order:-1} }
+  .tg{background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);font-size:13px;line-height:1.45}
+  .tg>summary{cursor:pointer;padding:12px 14px;font-weight:800;font-size:15px;list-style:revert}
+  .tg .body{padding:0 14px 14px}
+  .tg h3{font-weight:800;font-size:13px;margin:14px 0 4px;color:#111827}
+  .tg h3 .n{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--brand,#1d4ed8);color:#fff;font-size:11px;margin-right:6px}
+  .tg ol{list-style:decimal;padding-left:20px;margin:2px 0} .tg ul{list-style:disc;padding-left:20px;margin:2px 0} .tg li{margin:3px 0}
+  .tg .opt{border-radius:8px;padding:8px 10px;margin:6px 0}
+  .tg kbd{font-family:ui-monospace,monospace;font-size:11px;background:#f3f4f6;border:1px solid #d1d5db;border-bottom-width:2px;border-radius:4px;padding:0 4px}
+  .tg code{font-family:ui-monospace,monospace;font-size:12px;background:#f3f4f6;border-radius:4px;padding:0 3px}
+</style>
 </head><body class="bg-gray-50 text-gray-900"><header class="topnav"><div class="topnav-inner">
   <a class="brand" href="home.html">VYC <b>Track &amp; Field</b></a>
   <nav>
@@ -23,7 +38,8 @@
     <a href="results.html">Results</a>
   </nav>
 </div></header>
-<div class="max-w-3xl mx-auto p-4">
+<div id="wrap" class="max-w-3xl mx-auto p-4">
+<div id="cols"><div id="mainCol" class="min-w-0">
   <h1 class="text-2xl font-bold" id="pageH1">Meets — Admin</h1>
   <p id="timerIntro" class="hidden text-sm text-gray-600 mt-1">For timers: sign in, pick the meet, <b>download the entries</b> for Meet Manager, and <b>upload the results</b> when the meet is done.</p>
   <div id="login" class="bg-white rounded-xl shadow p-4 mt-3">
@@ -53,6 +69,77 @@
 
     <div id="meets" class="mt-4"></div>
   </div>
+</div><!-- /mainCol -->
+
+<!-- Timer Dashboard only: step-by-step guide for uploading results and connecting Meet Manager for live results -->
+<aside id="timerGuide" class="hidden">
+  <details class="tg" id="tgBox" open>
+    <summary>📋 How to upload results &amp; go live</summary>
+    <div class="body">
+      <p class="text-gray-600">Parents follow each meet on its own results page. While the meet is running, that page updates itself every 30 seconds, so anything you send shows up there within about half a minute.</p>
+
+      <h3><span class="n">1</span>Before meet day</h3>
+      <ol>
+        <li>Use the <b>timing laptop</b> (the one with Meet Manager) and open this page in <b>Google Chrome</b> or <b>Microsoft Edge</b>.</li>
+        <li>Sign in with the email you registered with as a timer.</li>
+        <li>On the meet below, click <b>Download entries (Hy-Tek)</b>. In Meet Manager use <b>File › Import › Semi-Colon Delimited Entries</b> and pick that file.</li>
+        <li>Practice once: click <b>Upload results</b>, tick <b>Test only</b>, and connect (step 2). It shows what it reads without posting anything.</li>
+      </ol>
+
+      <h3><span class="n">2</span>Connect for live results</h3>
+      <p>On meet day, click <b>Upload results</b> on today's meet, then pick <b>one</b> of these:</p>
+      <div class="opt bg-red-50 border border-red-200">
+        <p class="font-bold text-red-800">A. Fully automatic (recommended)</p>
+        <ol>
+          <li>Click the red button <b>Fully automatic: connect to the Meet Manager database</b>.</li>
+          <li>Pick this meet's <b>.mdb</b> file — usually in <code>C:\Hy-Sport\TFMM</code> (Meet Manager's <b>File › Open</b> shows where it is).</li>
+          <li>The first time, open <b>Which event is which</b> and pick an event for any <span class="bg-orange-100 px-1 rounded">orange</span> row. You only do this once per meet.</li>
+          <li>That's it. Every result you accept in Meet Manager goes live by itself; the page checks every 30 seconds.</li>
+        </ol>
+      </div>
+      <div class="opt bg-gray-50 border border-gray-200">
+        <p class="font-bold">B. One key per event <span class="font-normal text-gray-500">(needs Meet Manager's Pro option)</span></p>
+        <ol>
+          <li>In Meet Manager: <b>Run › Web › Log-in</b>, tick <b>Do not upload</b>, and make sure <kbd>F11</kbd>/<kbd>F12</kbd> are turned on.</li>
+          <li>Here, click the white button <b>One key per event</b> and pick the <code>C:\Realtime</code> folder.</li>
+          <li>When an event is finished, open it in <b>Run</b> and press <kbd>F12</kbd>. It goes live within seconds.</li>
+        </ol>
+      </div>
+      <p class="mt-1">You'll see <span class="text-green-800 font-semibold">● Connected</span> (or <span class="text-green-800 font-semibold">● Watching</span>) and a list of each event as it's posted. Make sure <b>Test only</b> is <b>not</b> ticked on meet day.</p>
+
+      <h3><span class="n">3</span>During the meet</h3>
+      <ul>
+        <li><b>Leave this page open</b> the whole meet. You can use Meet Manager in front of it, but don't close the tab.</li>
+        <li>Keep the laptop <b>plugged in</b> and online. If the internet drops, it keeps retrying and catches up when it's back.</li>
+        <li>Fixed a mark in Meet Manager? Just send that event again (or wait for the automatic check). The new results <b>replace</b> the old ones; nothing is ever doubled.</li>
+        <li>Click <b>View</b> on the meet to see exactly what parents see.</li>
+      </ul>
+
+      <h3><span class="n">4</span>No live connection? Upload a file</h3>
+      <ol>
+        <li>In Meet Manager, export the results as a <b>semicolon-delimited</b> file (<b>File › Export</b>).</li>
+        <li>Here, click <b>Upload results</b>, choose the file under <b>Upload the results file</b>, then <b>Save these results</b>.</li>
+        <li>Do this every few events, as often as you like. Each upload replaces those events.</li>
+      </ol>
+
+      <h3><span class="n">5</span>When the meet is over</h3>
+      <ul>
+        <li>Send the final results one more time (or upload the final file), then click <b>Stop</b>.</li>
+        <li>Check the meet's results page with <b>View</b>.</li>
+      </ul>
+
+      <h3>Something not right?</h3>
+      <ul>
+        <li><b>"This browser can't watch files"</b> → open this page in Chrome or Edge on the Windows timing laptop.</li>
+        <li><b>"Doesn't look like a Meet Manager database"</b> → you picked the wrong file; pick the meet's <b>.mdb</b>.</li>
+        <li><b>Field marks look wrong</b> → in <b>Which event is which</b>, change the unit (meters / inches / centimeters).</li>
+        <li><b>Still stuck</b> → click <b>Download a database report</b> (no athlete names in it) and send it to your site admin.</li>
+        <li><b>Posted something by mistake?</b> Ask a team admin to remove it.</li>
+      </ul>
+    </div>
+  </details>
+</aside>
+</div><!-- /cols -->
 </div>
 <script>
 const $=id=>document.getElementById(id);
@@ -63,7 +150,9 @@ let meets=[];
 // (the database enforces the same rules). Everyone else is turned away.
 let TIMER=false;
 const TIMER_VIEW=new URLSearchParams(location.search).get('view')==='timer'; // the "Timer" menu item: the timer's dashboard (admins can use it too)
-if(TIMER_VIEW){ document.title='Timer Dashboard'; $('pageH1').textContent='Timer Dashboard'; $('timerIntro').classList.remove('hidden'); }
+if(TIMER_VIEW){ document.title='Timer Dashboard'; $('pageH1').textContent='Timer Dashboard'; $('timerIntro').classList.remove('hidden');
+  $('wrap').classList.add('withGuide'); $('cols').classList.add('guide'); $('timerGuide').classList.remove('hidden');
+  if(window.innerWidth<1024) $('tgBox').open=false; } // on a phone the guide starts folded up above the meets
 window.mountLoginWidget(sb, $('loginWidget'), {hint:TIMER_VIEW?"Timers: sign in with the email you registered with.":"Admin or timer sign-in."});
 sb.auth.onAuthStateChange(async(_e,s)=>{ if(!s||window.__authDone===s.user.id) return; window.__authDone=s.user.id; sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } } /* rebuild: original client can wedge after an OAuth redirect */); $('login').classList.add('hidden');
   const {data:me}=await sb.from('coaches').select('is_admin,team_admin,role_type').eq('email',s.user.email).eq('approved',true).maybeSingle();
@@ -270,7 +359,7 @@ async function resultsPanel(m){
   p.innerHTML=`<div id="live-${m.id}"></div><div class="border rounded p-3 bg-purple-50">
     <p class="text-sm mb-2"><b>${count||0}</b> results stored for this meet. <a class="underline" href="results.html?meet=${m.id}" target="_blank">View</a></p>
     <p class="text-sm font-semibold">Upload the results file</p>
-    <p class="text-xs text-green-800 bg-green-50 border border-green-200 rounded p-2 mb-1"><b>No live connection?</b> You can also export the results from Meet Manager and upload the file here after every few events — as often as you like. Each upload replaces the events in the file (nothing gets doubled), and parents see them on the Results page's <a class="underline" href="results.html?live=${m.id}" target="_blank">Live tab</a> within 30 seconds. Upload the final file once more at the end of the meet.</p>
+    <p class="text-xs text-green-800 bg-green-50 border border-green-200 rounded p-2 mb-1"><b>No live connection?</b> You can also export the results from Meet Manager and upload the file here after every few events — as often as you like. Each upload replaces the events in the file (nothing gets doubled), and parents see them on <a class="underline" href="results.html?meet=${m.id}" target="_blank">this meet's results page</a> within 30 seconds. Upload the final file once more at the end of the meet.</p>
     <p class="text-xs text-gray-600 mb-1">Either the semicolon-delimited Meet Manager export, or your Team Manager's own "TCL01-01.tcl" results file (auto-detected). The semicolon-delimited file keeps every team in the meet, so the results page can show the whole conference. (The .tcl format only ever contains your own team.)</p>
     <input type="file" id="rf-${m.id}" accept=".txt,.csv,.sd3,.tcl,text/plain" class="text-sm">
     <label class="text-xs ml-2"><input type="checkbox" id="rall-${m.id}" checked> keep all teams (semicolon format)</label>

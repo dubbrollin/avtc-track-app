@@ -237,7 +237,7 @@ window.mountLiveConnect=function(host, ctx){
   const can=!!(window.showDirectoryPicker&&window.showOpenFilePicker);
   el.innerHTML=`<div class="border-2 border-red-200 rounded p-3 bg-white mb-3">
     <p class="font-bold text-red-700">🔴 Live connection to Meet Manager</p>
-    <p class="text-xs text-gray-600 mb-2">Run this on the timing laptop (the one with Meet Manager), in Chrome or Edge, and leave this page open during the meet. Results go to the Results page's Live tab as they come in — parents see them within 30 seconds.</p>
+    <p class="text-xs text-gray-600 mb-2">Run this on the timing laptop (the one with Meet Manager), in Chrome or Edge, and leave this page open during the meet. Results go to this meet's results page as they come in — parents see them within 30 seconds.</p>
     ${can?'':'<p class="text-sm text-red-700 font-semibold mb-2">This browser can\'t watch files on the computer. Open this page in Google Chrome or Microsoft Edge on the timing laptop (Windows).</p>'}
     <div class="flex flex-wrap gap-2 mb-2">
       <button type="button" data-k="db" class="btn bg-red-600 text-white text-sm" ${can?'':'disabled'}>Fully automatic: connect to the Meet Manager database</button>
