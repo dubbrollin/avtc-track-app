@@ -7,8 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="theme.css?v=b1">
-<script src="theme.js?v=b2"></script>
+<link rel="stylesheet" href="theme.css?v=b3">
+<script src="theme.js?v=b3"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script><script src="shared.js"></script><script src="payments.js"></script>
 <style>
@@ -17,13 +17,15 @@
 .pill{font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px}
 </style>
 </head><body class="text-gray-900"><header class="topnav"><div class="topnav-inner">
-  <a class="brand" href="home.html">VYC <b>Track &amp; Field</b></a>
+  <a class="brand" href="home.html"><span class="brand-name">Valley Youth Conference</span><span class="brand-sub">Track &amp; Field</span></a>
   <nav>
     <a href="home.html">Home</a>
     <a href="index.html">Register</a>
-    <a href="meets-admin.html?view=timer">Timer</a>
-    <a href="parent.html">Parent Dashboard</a>
+    <a href="parent.html">My Athletes</a>
     <a href="results.html">Results</a>
+    <a href="coach.html">Coach Dashboard</a>
+    <a href="entries.html">Meet Entries</a>
+    <a href="meets-admin.html?view=timer">Timer</a>
   </nav>
 </div></header>
 <div class="max-w-2xl mx-auto p-4">
@@ -37,8 +39,8 @@
     <p id="askMsg" class="text-sm text-red-700 mt-2"></p>
   </div>
   <div id="fees"></div>
-  <div class="flex flex-wrap gap-2 mb-2"><a class="btn bg-blue-600 text-white" href="index.html?another=1">+ Register another child</a><a class="btn bg-gray-200" href="parent.html">Parent Dashboard</a></div>
-  <p class="text-xs text-gray-500">Each athlete has their own fee and pay page. "Register another child" keeps your family's details so you only fill in the new athlete. Sign in to the Parent Dashboard any time to see every athlete's balance in one place.</p>
+  <div id="moreBox"><div class="flex flex-wrap gap-2 mb-2"><a class="btn bg-blue-600 text-white" href="index.html?another=1">+ Register another child</a><a class="btn bg-gray-200" href="parent.html">My Athletes</a></div>
+  <p class="text-xs text-gray-500">Each athlete has their own fee and pay page. "Register another child" keeps your family's details so you only fill in the new athlete. Sign in to My Athletes any time to see every athlete's balance in one place.</p></div>
 </div>
 <script>
 const $=id=>document.getElementById(id), CFG=window.APP_CONFIG;
@@ -49,7 +51,7 @@ if(arrived&&reg) $('arrived').classList.remove('hidden');
 let email=(q.get('email')||'').trim().toLowerCase();
 $('fees').innerHTML=regs.map(id=>`<div class="card" data-reg="${id}"></div>`).join('');
 const renderAll=()=>Promise.all(regs.map(id=>window.renderFeeCard(document.querySelector(`[data-reg="${id}"]`),{sb,regId:id,email,siblings:regs})));
-if(!reg){ $('ask').classList.remove('hidden'); $('ask').innerHTML='<p class="text-sm">This link is missing the athlete. Open the pay link from your registration confirmation, or sign in to the <a class="underline" href="parent.html">Parent Dashboard</a>.</p>'; }
+if(!reg){ $('ask').classList.remove('hidden'); $('ask').innerHTML='<p class="font-semibold text-lg" style="color:var(--navy)">See what you owe</p><p class="text-sm text-gray-600 mt-1 mb-3">Sign in to see every athlete\'s fee and pay it in one place.</p><a class="btn bg-blue-600 text-white inline-block px-5 py-2" href="parent.html">Sign in to My Athletes</a><p class="text-xs text-gray-500 mt-3">Haven\'t registered yet? <a class="underline" href="index.html">Register your athlete</a>.</p>'; $('moreBox').classList.add('hidden'); }
 else if(!email){ $('ask').classList.remove('hidden'); $('askGo').onclick=()=>{ const e=$('askEmail').value.trim().toLowerCase(); if(!e){ $('askMsg').textContent='Enter your email.'; return; } email=e; $('ask').classList.add('hidden'); start(); }; }
 else start();
 async function start(){

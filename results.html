@@ -7,8 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="theme.css?v=b1">
-<script src="theme.js?v=b2"></script>
+<link rel="stylesheet" href="theme.css?v=b3">
+<script src="theme.js?v=b3"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="config.js"></script><script src="shared.js"></script><script src="events.js"></script><script src="results.js"></script><script src="league-records.js"></script>
@@ -29,23 +29,21 @@
   .stdline td{font-size:11px;color:#166534;background:#f0fdf4;padding:2px 6px;border-top:2px dashed #86efac;font-weight:600}
 </style>
 </head><body class="bg-gray-50 text-gray-900"><header class="topnav"><div class="topnav-inner">
-  <a class="brand" href="home.html">VYC <b>Track &amp; Field</b></a>
+  <a class="brand" href="home.html"><span class="brand-name">Valley Youth Conference</span><span class="brand-sub">Track &amp; Field</span></a>
   <nav>
     <a href="home.html">Home</a>
     <a href="index.html">Register</a>
-    <a href="coach.html">Coach Dashboard</a>
-    <a href="meets-admin.html?view=timer">Timer</a>
-    <a href="parent.html">Parent Dashboard</a>
+    <a href="parent.html">My Athletes</a>
     <a href="results.html">Results</a>
+    <a href="coach.html">Coach Dashboard</a>
+    <a href="entries.html">Meet Entries</a>
+    <a href="meets-admin.html?view=timer">Timer</a>
   </nav>
 </div></header>
 <div class="max-w-3xl mx-auto p-4">
   <h1 class="text-2xl font-bold" id="club"></h1>
   <p class="text-gray-600 mb-3">Results &amp; Records</p>
-  <div id="login" class="bg-white rounded-xl shadow p-4">
-    <div id="loginWidget"></div>
-  </div>
-  <div id="app" class="hidden">
+  <div id="app">
     <div class="flex rounded-lg overflow-hidden border text-sm mb-3 w-fit">
       <button id="modeSeason" class="seg">Season Rankings</button>
       <button id="modeMeet" class="seg">Meet Results</button>
@@ -75,13 +73,12 @@
 <script>
 const $=id=>document.getElementById(id);
 const CFG=window.APP_CONFIG;
-$('club').textContent=CFG.CLUB_NAME;
+$('club').textContent=CFG.LEAGUE_NAME;
 let sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // avoid cross-tab navigator.locks deadlock when multiple app pages are open at once
 let allResults=[], seasonBest=[], meets=[], mode='season';
 let lastGroups=[];
 DIVISIONS.forEach(d=>$('div').add(new Option(d.name,d.name)));
 
-window.mountLoginWidget(sb, $('loginWidget'), {hint:"Sign in with the email you registered with."});
 
 $('modeSeason').onclick=()=>setMode('season');
 $('modeMeet').onclick=()=>setMode('meet');
@@ -96,7 +93,8 @@ function setMode(m){
   render();
 }
 
-sb.auth.onAuthStateChange(async(_e,s)=>{ if(!s||window.__authDone===s.user.id) return; window.__authDone=s.user.id; sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } } /* rebuild: original client can wedge after an OAuth redirect */); $('login').classList.add('hidden'); $('app').classList.remove('hidden');
+// Results are public: load straight away, no sign-in needed.
+(async()=>{ const {data:{session}}=await sb.auth.getSession(); window.__signedIn=!!session;
   const {data:m}=await sb.from('meets').select('id,name,meet_date,is_championship,season_year').order('meet_date',{ascending:false});
   meets=m||[];
   await loadAll();
@@ -104,7 +102,7 @@ sb.auth.onAuthStateChange(async(_e,s)=>{ if(!s||window.__authDone===s.user.id) r
   const want=new URLSearchParams(location.search).get('meet'); if(want){ const wm=meets.find(x=>x.id===want); if(wm&&wm.season_year){ const cb=document.querySelector(`#yearPick input[value="${wm.season_year}"]`); if(cb) cb.checked=true; } fillMeetSelect(); $('meet').value=want; mode='meet'; }
   setMode(mode);
   ['meet','meetRecord','evt','div','gen','conf','qOnly'].forEach(i=>$(i).onchange=render); $('q').oninput=render;
-});
+})();
 
 // ---- Season (year) checkboxes: one per season that has results; the latest is checked to start ----
 const meetYear=id=>{ const m=meets.find(x=>x.id===id); return m?m.season_year:null; };
@@ -127,7 +125,7 @@ async function loadAll(){
   if(window.leagueReady) await window.leagueReady;
   // The server returns at most 1,000 rows per request and a league season has thousands of results, so page through everything.
   const [rr,sb2,ss,rc]=await Promise.all([
-    pageAll(()=>sb.from('results').select('*, meets(name,meet_date)').order('id')),
+    pageAll(()=>sb.from('results').select('id,meet_id,registration_id,athlete_name,gender,division,event_code,event_name,is_relay,relay_runners,round,mark,mark_value,is_time,place,wind,team_code,heat,overall_place, meets(name,meet_date)').order('id')),
     pageAll(()=>sb.from('season_best').select('*').order('id')),
     pageAll(()=>sb.from('qualifying_standards').select('*').order('id')),
     pageAll(()=>sb.from('conference_records').select('*').order('id'))
@@ -135,7 +133,7 @@ async function loadAll(){
   stds=ss; recs=rc.filter(r=>!r.scope||r.scope==='conference');
   const lgE=rc.filter(r=>r.scope==='east'), lgW=rc.filter(r=>r.scope==='west');
   if(lgE.length||lgW.length) window.LEAGUE_RECORDS={East:lgE,West:lgW}; // edited on the Site Admin page; falls back to league-records.js if none saved
-  const missing=[...new Set([...rr,...sb2].filter(r=>!r.team_code && r.registration_id).map(r=>r.registration_id))];
+  const missing=!window.__signedIn?[]:[...new Set([...rr,...sb2].filter(r=>!r.team_code && r.registration_id).map(r=>r.registration_id))];
   let regsById={};
   const chunks=[]; for(let i=0;i<missing.length;i+=150) chunks.push(missing.slice(i,i+150));
   (await Promise.all(chunks.map(c=>sb.from('registrations').select('id,team_code').in('id',c)))).forEach(({data:regs})=>(regs||[]).forEach(r=>regsById[r.id]=r)); // in parallel — sequential lookups made the page take ~20 seconds

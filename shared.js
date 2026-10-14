@@ -101,14 +101,19 @@ window.hytekRoster = function(rows, cfg){
 window.mountLoginWidget = function(sb, container, opts){
   opts = opts || {};
   const hint = opts.hint || "Sign in with your email and password.";
+  const benefit = opts.benefit || "";
   container.innerHTML = `
-    <p class="text-sm text-gray-600 mb-2">${hint}</p>
-    <input type="email" id="authEmail" class="w-full border rounded p-2 mb-2" placeholder="you@example.com" autocomplete="email">
-    <input type="password" id="authPass" class="w-full border rounded p-2 mb-2" placeholder="Password" autocomplete="current-password">
-    <div class="flex gap-2 mb-2">
-      <button type="button" id="authSignIn" class="btn bg-blue-600 text-white flex-1">Sign in</button>
-      <button type="button" id="authSignUp" class="btn bg-gray-200 flex-1">First time? Create password</button>
+    <div class="signin-head">
+      <img src="logo.png" alt="" width="56" height="56" onerror="this.remove()">
+      <div><div class="signin-title">Sign in</div>${benefit ? `<p class="signin-benefit">${benefit}</p>` : ""}</div>
     </div>
+    <p class="text-sm text-gray-600 mb-2">${hint}</p>
+    <label class="sr-only" for="authEmail">Email</label>
+    <input type="email" id="authEmail" class="w-full border rounded p-2 mb-2" placeholder="you@example.com" autocomplete="email">
+    <label class="sr-only" for="authPass">Password</label>
+    <input type="password" id="authPass" class="w-full border rounded p-2 mb-2" placeholder="Password" autocomplete="current-password">
+    <button type="button" id="authSignIn" class="btn bg-blue-600 text-white w-full py-2">Sign in</button>
+    <p class="text-sm text-center mt-3 mb-1 text-gray-600">First time here? <button type="button" id="authSignUp" class="signin-link">Create your password</button></p>
     <div class="flex items-center gap-2 my-2 text-xs text-gray-400"><div class="flex-1 border-t"></div>or<div class="flex-1 border-t"></div></div>
     <button type="button" id="authGoogle" class="btn bg-white border w-full flex items-center justify-center gap-2">
       <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.6l6.7-6.7C35.9 2.5 30.4 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.8 6.1C12.2 13.1 17.6 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.6c-.5 3-2.2 5.5-4.7 7.2l7.3 5.7C43.8 37.9 46.5 31.8 46.5 24.5z"/><path fill="#FBBC05" d="M10.4 19.3C9.8 21 9.5 22.9 9.5 24.9s.3 3.9.9 5.6l-7.8 6.1C1 32.9 0 29 0 24.9s1-8 2.6-11.7l7.8 6.1z"/><path fill="#34A853" d="M24 49c6.4 0 11.8-2.1 15.7-5.7l-7.3-5.7c-2 1.4-4.6 2.2-8.4 2.2-6.4 0-11.8-3.6-13.7-8.8l-7.8 6.1C6.5 43.6 14.6 49 24 49z"/></svg>
@@ -193,14 +198,6 @@ window.meetTeamsLabel = function(m){ const L=(m&&m.team_codes)||[]; if(!L.length
 window.currentSeason = async function(){ try{ if(window.leagueReady) await window.leagueReady; }catch(e){} return (window.APP_CONFIG||{}).SEASON_YEAR; };
 // ---- Role-based menu items, only for people who have that access (flags are set when they sign in on the Coach Dashboard
 //      or Site Admin page, and cleared when they sign out): "Team Admin" for team admins, "Timer" for timers, "Site Admin" for admins ----
-document.addEventListener('DOMContentLoaded',function(){ try{
-  const nav=document.querySelector('.topnav nav'); if(!nav) return;
-  const flag=k=>localStorage.getItem(k)==='1';
-  const coachLink=nav.querySelector('a[href="coach.html"]');
-  const addAfter=(ref,href,text)=>{ if(nav.querySelector('a[href="'+href+'"]')) return; const a=document.createElement('a'); a.href=href; a.textContent=text; if(ref&&ref.nextSibling) nav.insertBefore(a,ref.nextSibling); else nav.appendChild(a); return a; };
-  let last=coachLink;
-  if(flag('vyc_team_admin')) last=addAfter(last,'coach.html?view=roster','Team Admin')||last; // "Timer" is a fixed menu item: meets-admin.html?view=timer
-  if(flag('vyc_admin')) addAfter(null,'admin.html','Site Admin');
-}catch(e){} });
+// (The menu itself, including these role links, is built in theme.js.)
 window.setRoleFlags=function(c){ try{ localStorage.setItem('vyc_admin',(c&&(c.is_admin||c.team_admin))?'1':'0'); localStorage.setItem('vyc_team_admin',(c&&(c.is_admin||c.team_admin))?'1':'0'); localStorage.setItem('vyc_timer',(c&&c.role_type==='timer')?'1':'0'); localStorage.setItem('vyc_coach',(c&&c.role_type!=='timer')?'1':'0'); }catch(e){} };
 window.clearRoleFlags=function(){ try{ ['vyc_admin','vyc_team_admin','vyc_timer','vyc_coach'].forEach(k=>localStorage.removeItem(k)); }catch(e){} };

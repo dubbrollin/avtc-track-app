@@ -9,8 +9,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="theme.css?v=b1">
-<script src="theme.js?v=b2"></script>
+<link rel="stylesheet" href="theme.css?v=b3">
+<script src="theme.js?v=b3"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
 <script src="shared.js"></script><script src="team-admin-panels.js"></script><script src="messenger.js"></script>
@@ -42,16 +42,16 @@ table.t td{padding:5px 6px;border-top:1px solid #f3f4f6;vertical-align:middle}
 </style>
 </head>
 <body class="text-gray-900"><header class="topnav"><div class="topnav-inner">
-<a class="brand" href="home.html">VYC <b>Track &amp; Field</b></a>
+<a class="brand" href="home.html"><span class="brand-name">Valley Youth Conference</span><span class="brand-sub">Track &amp; Field</span></a>
 <nav>
-<a href="home.html">Home</a>
-<a href="index.html">Register</a>
-<a href="coach.html">Coach Dashboard</a>
+    <a href="home.html">Home</a>
+    <a href="index.html">Register</a>
+    <a href="parent.html">My Athletes</a>
+    <a href="results.html">Results</a>
+    <a href="coach.html">Coach Dashboard</a>
+    <a href="entries.html">Meet Entries</a>
     <a href="meets-admin.html?view=timer">Timer</a>
-<a href="parent.html">Parent Dashboard</a>
-<a href="results.html">Results</a>
-<a href="admin.html">Site Admin</a>
-</nav>
+  </nav>
 </div></header>
 <div class="max-w-6xl mx-auto p-4">
 <h1 class="text-2xl font-bold mb-1" id="pgTitle">Site Admin</h1>
@@ -124,7 +124,7 @@ function fmtMark(v,isTime){ if(v==null) return ''; if(isTime){ if(v>=60){ const 
 const inch=v/0.0254, ft=Math.floor(inch/12+1e-9), i=inch-ft*12; const r=Math.round(i*4)/4; return ft+'-'+(r%1?r.toFixed(2):String(r|0).padStart(2,'0')); }
 
 // ---- auth ----
-window.mountLoginWidget(sb,$('loginWidget'),{hint:'Sign in with your site-admin account.'});
+window.mountLoginWidget(sb,$('loginWidget'),{hint:'Sign in with your site-admin account.', benefit:'League settings, teams, records and seasons.'});
 sb.auth.onAuthStateChange(async(_e,s)=>{
 if(!s||window.__authDone===s.user.id) return; window.__authDone=s.user.id;
 sb=supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{auth:{lock:(n,t,fn)=>fn()}}); // fresh client after sign-in redirect
