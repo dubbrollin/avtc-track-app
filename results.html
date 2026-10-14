@@ -26,6 +26,13 @@
   .bdg{display:inline-block;font-size:10px;font-weight:800;border-radius:4px;padding:0 5px;margin-left:4px;vertical-align:middle}
   .bq{background:#dcfce7;color:#166534}
   .bcr{background:#fef3c7;color:#92400e}
+  .livebar{background:#fff;border:1px solid #fecaca;border-radius:12px;padding:10px 12px;margin-bottom:10px}
+  .livedot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#dc2626;margin-right:6px;vertical-align:middle;animation:livepulse 1.6s ease-in-out infinite}
+  @keyframes livepulse{0%,100%{opacity:1}50%{opacity:.3}}
+  @media (prefers-reduced-motion:reduce){.livedot{animation:none}}
+  .liveposted{font-size:11px;color:#6b7280;margin:0 0 3px 4px}
+  .bnew{background:#fee2e2;color:#b91c1c}
+  tr.mine td{background:#fef9c3}
   .stdline td{font-size:11px;color:#166534;background:#f0fdf4;padding:2px 6px;border-top:2px dashed #86efac;font-weight:600}
 </style>
 </head><body class="bg-gray-50 text-gray-900"><header class="topnav"><div class="topnav-inner">
@@ -47,6 +54,7 @@
   </div>
   <div id="app" class="hidden">
     <div class="flex rounded-lg overflow-hidden border text-sm mb-3 w-fit">
+      <button id="modeLive" class="seg">🔴 Live</button>
       <button id="modeSeason" class="seg">Season Rankings</button>
       <button id="modeMeet" class="seg">Meet Results</button>
       <button id="modeRecords" class="seg">🏆 All-Time Records</button>
@@ -57,6 +65,18 @@
     <div id="meetPicker" class="hidden flex flex-wrap items-center gap-2 mb-2">
       <select id="meet" class="border rounded p-2 flex-1"></select>
       <label class="text-xs text-gray-600 flex items-center gap-1"><input type="checkbox" id="meetRecord"> meet record (best ever, all years)</label>
+    </div>
+
+    <div id="livePanel" class="hidden livebar">
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="font-bold text-red-700"><span class="livedot"></span>Live results</span>
+        <select id="liveMeet" class="border rounded p-1 text-sm flex-1 min-w-0"></select>
+        <button id="liveRefresh" type="button" class="border rounded px-3 py-1 text-sm font-semibold">Refresh now</button>
+      </div>
+      <div class="flex flex-wrap items-center gap-3 mt-1">
+        <span id="liveStatus" class="text-xs text-gray-600"></span>
+        <label id="mineWrap" class="hidden text-xs text-gray-700 flex items-center gap-1"><input type="checkbox" id="mineOnly"> only my athletes</label>
+      </div>
     </div>
 
     <div class="flex flex-wrap gap-2 mb-2">
@@ -79,6 +99,7 @@ $('club').textContent=CFG.CLUB_NAME;
 let sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // avoid cross-tab navigator.locks deadlock when multiple app pages are open at once
 let allResults=[], seasonBest=[], meets=[], mode='season';
 let lastGroups=[];
+let myIds=new Set(), myNames=[]; // the signed-in parent's own athletes (highlighted in results; "only my athletes" on the Live tab)
 DIVISIONS.forEach(d=>$('div').add(new Option(d.name,d.name)));
 
 window.mountLoginWidget(sb, $('loginWidget'), {hint:"Sign in with the email you registered with."});
@@ -86,11 +107,13 @@ window.mountLoginWidget(sb, $('loginWidget'), {hint:"Sign in with the email you 
 $('modeSeason').onclick=()=>setMode('season');
 $('modeMeet').onclick=()=>setMode('meet');
 $('modeRecords').onclick=()=>setMode('records');
+$('modeLive').onclick=()=>setMode('live');
 function setMode(m){
   mode=m;
-  ['modeSeason','modeMeet','modeRecords'].forEach(id=>$(id).classList.toggle('active', id==='mode'+m[0].toUpperCase()+m.slice(1)));
+  ['modeLive','modeSeason','modeMeet','modeRecords'].forEach(id=>$(id).classList.toggle('active', id==='mode'+m[0].toUpperCase()+m.slice(1)));
   $('meetPicker').classList.toggle('hidden', mode!=='meet');
-  $('yearPick').classList.toggle('hidden', mode==='records');
+  $('yearPick').classList.toggle('hidden', mode==='records'||mode==='live');
+  $('livePanel').classList.toggle('hidden', mode!=='live');
   $('qOnlyWrap').classList.toggle('hidden', mode!=='season');
   $('conf').classList.toggle('hidden', mode==='records');
   render();
@@ -99,11 +122,22 @@ function setMode(m){
 sb.auth.onAuthStateChange(async(_e,s)=>{ if(!s||window.__authDone===s.user.id) return; window.__authDone=s.user.id; sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } } /* rebuild: original client can wedge after an OAuth redirect */); $('login').classList.add('hidden'); $('app').classList.remove('hidden');
   const {data:m}=await sb.from('meets').select('id,name,meet_date,is_championship,season_year').order('meet_date',{ascending:false});
   meets=m||[];
-  await loadAll();
+  const [,{data:mine}]=await Promise.all([loadAll(), sb.from('registrations').select('id,first_name,last_name').eq('email',s.user.email)]);
+  myIds=new Set((mine||[]).map(r=>r.id)); myNames=(mine||[]).map(r=>`${r.first_name} ${r.last_name}`.toLowerCase());
+  $('mineWrap').classList.toggle('hidden',!myIds.size);
   buildYearPicker();
+  fillLiveSelect();
+  // On meet day the Live tab opens first; ?live=<meet id> (the link on the upload screen) opens that meet live.
+  const liveWant=new URLSearchParams(location.search).get('live');
+  if(liveWant&&meets.some(x=>x.id===liveWant)){ fillLiveSelect(liveWant); mode='live'; }
+  else if(liveMeets().length) mode='live';
   const want=new URLSearchParams(location.search).get('meet'); if(want){ const wm=meets.find(x=>x.id===want); if(wm&&wm.season_year){ const cb=document.querySelector(`#yearPick input[value="${wm.season_year}"]`); if(cb) cb.checked=true; } fillMeetSelect(); $('meet').value=want; mode='meet'; }
   setMode(mode);
-  ['meet','meetRecord','evt','div','gen','conf','qOnly'].forEach(i=>$(i).onchange=render); $('q').oninput=render;
+  ['meet','meetRecord','evt','div','gen','conf','qOnly','mineOnly'].forEach(i=>$(i).onchange=render); $('q').oninput=render;
+  $('liveMeet').onchange=()=>{ liveSig={}; refreshLive(); };
+  $('liveRefresh').onclick=()=>refreshLive();
+  setInterval(()=>{ if(mode==='live'&&!document.hidden) refreshLive(); },30000); // checks for newly uploaded results every 30 seconds
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&mode==='live') refreshLive(); }); // phone unlocked / tab reopened: catch up right away
 });
 
 // ---- Season (year) checkboxes: one per season that has results; the latest is checked to start ----
@@ -147,6 +181,7 @@ async function loadAll(){
 function baseRows(){
   const ys=selYears(), inYears=allResults.filter(r=>ys.has(r.season_year));
   if(mode==='records') return seasonBest;
+  if(mode==='live') return allResults.filter(r=>r.meet_id===$('liveMeet').value);
   if(mode==='season') return inYears.filter(r=>r.mark_value!=null); // ranked best-per-athlete within the checked season(s)
   const m=meets.find(x=>x.id===$('meet').value); if(!m) return inYears;
   if($('meetRecord').checked) return allResults.filter(r=>r.meet_name===m.name); // meet record looks at every year
@@ -170,6 +205,7 @@ function render(){
   const isMeetRecord = mode==='meet' && $('meetRecord').checked;
   const cap = mode==='records' ? 1 : (mode==='season' ? 50 : null);
   if(mode==='records'){ renderRecordBoxes(d,g,ev,q); return; }
+  if(mode==='live'){ renderLive(conf?rs.filter(r=>r.conference===conf):rs); return; }
   if(mode==='meet' && !$('meet').value){ renderAllMeets(d,g,ev,q,conf); return; }
   if(mode==='meet' && !isMeetRecord){ renderSingleMeet(conf?rs.filter(r=>r.conference===conf):rs); return; }
   const qOnly = mode==='season' && $('qOnly').checked;
@@ -274,7 +310,7 @@ function heatBlocks(rows,meet){
         return `<div class="heatblk"><div class="heathead">${title}</div><table class="w-full text-sm">${hr.map(r=>{
           const badges=[]; r.q=isQ(r,std); if(r.q) badges.push('<span class="bdg bq" title="Met the qualifying standard">Q</span>');
           if(meet&&meet.is_championship&&rec&&r.mark_value!=null&&better(r.is_time,r.mark_value,rec.mark_value)) badges.push('<span class="bdg bcr" title="New conference record — conference records can only be broken at conference championship meets">CR</span>');
-          return `<tr class="border-t"><td class="py-1 w-8 text-gray-500">${r.place>0?r.place:''}</td><td class="py-1">${r.athlete_name}${r.team_code?` <span class="text-xs text-gray-400">${r.team_code}</span>`:''}${r.relay_runners?`<div class="text-xs text-gray-500">${r.relay_runners}</div>`:''}</td><td class="py-1 font-mono text-right font-semibold">${r.mark}${r.wind?` <span class="text-xs text-gray-400">w${r.wind}</span>`:''} ${badges.join(' ')}</td></tr>`; }).join('')}</table></div>`;
+          return `<tr class="border-t${isMine(r)?' mine':''}"><td class="py-1 w-8 text-gray-500">${r.place>0?r.place:''}</td><td class="py-1">${r.athlete_name}${r.team_code?` <span class="text-xs text-gray-400">${r.team_code}</span>`:''}${r.relay_runners?`<div class="text-xs text-gray-500">${r.relay_runners}</div>`:''}</td><td class="py-1 font-mono text-right font-semibold">${r.mark}${r.wind?` <span class="text-xs text-gray-400">w${r.wind}</span>`:''} ${badges.join(' ')}</td></tr>`; }).join('')}</table></div>`;
       }).join('');
     }).join('');
     return `<div class="bg-white rounded-xl shadow p-3 mb-3"><div class="font-bold">${label}</div>${ref?`<div class="text-xs text-gray-500 mt-0.5">${ref}</div>`:''}${body}</div>`;
@@ -308,11 +344,66 @@ function renderAllMeets(d,g,ev,q,conf){
     det.addEventListener('toggle',()=>{ if(det.open){ openMeets.add(det.dataset.m); fillMeetWindow(det,d,g,ev,q,conf); } else openMeets.delete(det.dataset.m); });
   });
 }
+// ---------- Live results (like Athletic.net's live results): the meet going on today, newest events first, re-checked every 30 seconds ----------
+const isMine=r=>myIds.has(r.registration_id)||(!!r.relay_runners&&myNames.some(n=>r.relay_runners.toLowerCase().includes(n)));
+const localDay=(t=new Date())=>`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+// A meet is live on its meet day, and for 12 hours after its latest upload (late uploads after a long meet still show).
+function liveMeets(){
+  const today=localDay(), cutoff=Date.now()-12*3600e3;
+  return meets.filter(m=>String(m.meet_date).slice(0,10)===today||allResults.some(r=>r.meet_id===m.id&&Date.parse(r.created_at)>cutoff));
+}
+function fillLiveSelect(want){
+  const live=liveMeets(), keep=want||$('liveMeet').value;
+  const list=live.length?live:meets.filter(m=>m.id===keep);
+  $('liveMeet').innerHTML=list.map(m=>`<option value="${m.id}">${m.name} — ${fmtDate(m.meet_date)}</option>`).join('');
+  if(list.some(m=>m.id===keep)) $('liveMeet').value=keep;
+  $('liveMeet').classList.toggle('hidden',!list.length);
+}
+let liveSig={}, liveChecked=null, liveBusy=false; const liveNew=new Set();
+const liveKey=r=>[r.division,r.gender,r.event_name].join('|');
+async function refreshLive(){
+  const id=$('liveMeet').value; if(!id||liveBusy){ if(!id) render(); return; }
+  liveBusy=true; $('liveRefresh').disabled=true;
+  try{
+    const fresh=await pageAll(()=>sb.from('results').select('*, meets(name,meet_date)').eq('meet_id',id).order('id'));
+    const rows=attachConference(fresh.map(r=>({...r,meet_name:r.meets?.name,meet_date:r.meets?.meet_date,season_year:meetYear(r.meet_id)})),{});
+    allResults=allResults.filter(r=>r.meet_id!==id).concat(rows);
+    // Which events changed since the last check? Those get a "NEW" tag (nothing is tagged on the first look).
+    const sig={}; rows.forEach(r=>{ const k=liveKey(r); sig[k]=(sig[k]||'')+[r.athlete_name,r.mark,r.place,r.heat,r.round].join(',')+';'; });
+    const first=!liveSig.__meet||liveSig.__meet!==id;
+    if(first) liveNew.clear(); else Object.keys(sig).forEach(k=>{ if(sig[k]!==liveSig[k]) liveNew.add(k); });
+    liveSig={...sig,__meet:id}; liveChecked=new Date();
+  } finally { liveBusy=false; $('liveRefresh').disabled=false; }
+  if(mode==='live') render();
+}
+const clock=t=>t.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'});
+function ago(ms){ const m=Math.round((Date.now()-ms)/60000); return m<1?'just now':m<60?`${m} min ago`:`${Math.floor(m/60)} hr ${m%60} min ago`; }
+function renderLive(rs){
+  const m=meets.find(x=>x.id===$('liveMeet').value);
+  if(!m){
+    const today=localDay(), next=meets.filter(x=>String(x.meet_date).slice(0,10)>=today).sort((a,b)=>String(a.meet_date).localeCompare(String(b.meet_date)))[0];
+    lastGroups=[]; $('liveStatus').textContent=''; $('hint').textContent='';
+    $('list').innerHTML=`<div class="bg-white rounded-xl shadow p-4 text-gray-600"><p class="font-semibold text-gray-800">No meet is going on right now.</p><p class="text-sm mt-1">On meet day, results show up here as soon as the timers upload them — events appear one by one while the meet is running, newest first, and the page updates itself every 30 seconds.</p>${next?`<p class="text-sm mt-2">Next meet: <b>${next.name}</b> — ${fmtDate(next.meet_date)}</p>`:''}</div>`;
+    return;
+  }
+  if($('mineOnly').checked) rs=rs.filter(isMine);
+  if(!liveSig.__meet||liveSig.__meet!==m.id){ $('list').innerHTML='<p class="text-gray-500">Loading live results…</p>'; refreshLive(); return; }
+  const all=allResults.filter(r=>r.meet_id===m.id);
+  const latest=all.reduce((a,r)=>Math.max(a,Date.parse(r.created_at)||0),0);
+  $('liveStatus').textContent=`${new Set(all.map(liveKey)).size} events posted`+(latest?` · last upload ${clock(new Date(latest))} (${ago(latest)})`:'')+(liveChecked?` · checked ${clock(liveChecked)}, updates every 30 seconds`:'');
+  $('hint').textContent='Newest events at the top. Results are unofficial until the meet is over. "NEW" = posted or changed since you opened this page.'+(myIds.size?' Your athletes are highlighted.':'');
+  const groups={}; rs.forEach(r=>{ (groups[liveKey(r)]??=[]).push(r); });
+  const list=Object.entries(groups).map(([k,g])=>({k,g,t:g.reduce((a,r)=>Math.max(a,Date.parse(r.created_at)||0),0)})).sort((a,b)=>b.t-a.t);
+  lastGroups=[];
+  $('list').innerHTML=list.map(({k,g,t})=>{ const {html,pdfGroups}=heatBlocks(g,m); lastGroups.push(...pdfGroups);
+    return `<div class="liveposted">Posted ${clock(new Date(t))}${liveNew.has(k)?' <span class="bdg bnew">NEW</span>':''}</div>${html}`; }).join('')
+    ||`<p class="text-gray-500">${all.length?'No results match these filters.':'No results posted yet for this meet — they show up here as soon as the first events are uploaded. This page checks every 30 seconds.'}</p>`;
+}
 $('pdfBtn').onclick=async()=>{
   if(mode==='meet' && !$('meet').value) return alert('Pick one meet from the meet list first — the PDF is made one meet at a time.');
   if(!lastGroups.length) return alert('Nothing to put in a PDF yet — pick a meet or change the filters first.');
-  const meetName = mode==='meet' ? ($('meet').selectedOptions[0]?.textContent||'Meet') : '';
-  const title = mode==='meet' ? meetName+' - Results' : mode==='records' ? 'All-Time Records' : 'Season Rankings';
+  const meetName = mode==='meet' ? ($('meet').selectedOptions[0]?.textContent||'Meet') : mode==='live' ? ($('liveMeet').selectedOptions[0]?.textContent||'Meet') : '';
+  const title = mode==='live' ? meetName+' - Live Results (unofficial)' : mode==='meet' ? meetName+' - Results' : mode==='records' ? 'All-Time Records' : 'Season Rankings';
   const bits=[ $('div').value, $('gen').value?($('gen').value==='Boy'?'Boys':'Girls'):'', $('evt').value, $('conf').value?$('conf').value+'ern League':'' ].filter(Boolean);
   const bytes=await window.resultsPdf(lastGroups,{title, subtitle:bits.length?bits.join('  |  '):'All divisions, boys & girls'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
