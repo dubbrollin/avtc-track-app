@@ -171,11 +171,13 @@ function renderSchedule(myTeams){
   const tName=c=>(window.VYC_TEAMS.find(t=>t.code===c)||{}).name||c;
   const when=d=>d?new Date(String(d).slice(0,10)+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}):'Date to be announced';
   const vs=m=>{ const L=(m.team_codes||[]); if(!L.length) return 'All VYC teams'; const o=L.filter(c=>!myTeams.includes(c)); return o.length?o.map(tName).join(', '):'Your team only'; };
+  const T=window.MEET_DAY;
   const row=(m,past)=>{ const mine=myTeams.filter(c=>window.meetHasTeam(m,c));
     return `<div class="py-2 border-t first:border-t-0 ${past?'opacity-60':''}">
       <div class="flex flex-wrap items-baseline gap-x-2"><b class="text-sm" style="color:var(--act,#1764c8)">${esc(when(m.meet_date))}</b><span class="font-bold">${esc(m.name)}</span>
         ${m.is_championship?'<span class="pill" style="background:#fef3c7;color:#92400e">Championship</span>':''}${m.is_invitational?'<span class="pill" style="background:#e5e7eb">Invitational</span>':''}${past?'<span class="pill" style="background:#e5e7eb">Done</span>':''}</div>
       ${myTeams.length>1?`<div class="text-xs text-gray-500">${mine.map(tName).map(esc).join(', ')}</div>`:''}
+      ${T&&!past?`<div class="text-sm mt-0.5"><span class="text-gray-500">Start time:</span> <b>${esc(T.start)}</b> — first race is the ${esc(T.firstRace)} <span class="text-gray-400">·</span> <span class="text-gray-500">Field events start:</span> <b>${esc(T.field)}</b></div>`:''}
       <div class="text-sm mt-0.5"><span class="text-gray-500">Against:</span> ${esc(vs(m))}</div>
       <div class="text-sm">${m.location?`<span class="text-gray-500">Where:</span> <a class="text-blue-700 underline" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.location)}">${esc(m.location)} — open in Google Maps ↗</a>`:'<span class="text-gray-500">Where: to be announced</span>'}</div></div>`; };
   const up=meets.filter(m=>!m.meet_date||m.meet_date>=today), past=meets.filter(m=>m.meet_date&&m.meet_date<today).reverse();
