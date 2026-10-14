@@ -270,6 +270,7 @@ async function resultsPanel(m){
   p.innerHTML=`<div class="border rounded p-3 bg-purple-50">
     <p class="text-sm mb-2"><b>${count||0}</b> results stored for this meet. <a class="underline" href="results.html?meet=${m.id}" target="_blank">View</a></p>
     <p class="text-sm font-semibold">Upload the results file</p>
+    <p class="text-xs text-green-800 bg-green-50 border border-green-200 rounded p-2 mb-1"><b>🔴 Live results during the meet:</b> export the results from Meet Manager and upload the file here after every few events — as often as you like. Each upload replaces the events in the file (nothing gets doubled), and parents see them on the Results page's <a class="underline" href="results.html?live=${m.id}" target="_blank">Live tab</a> within 30 seconds. Upload the final file once more at the end of the meet.</p>
     <p class="text-xs text-gray-600 mb-1">Either the semicolon-delimited Meet Manager export, or your Team Manager's own "TCL01-01.tcl" results file (auto-detected). The semicolon-delimited file keeps every team in the meet, so the results page can show the whole conference. (The .tcl format only ever contains your own team.)</p>
     <input type="file" id="rf-${m.id}" accept=".txt,.csv,.sd3,.tcl,text/plain" class="text-sm">
     <label class="text-xs ml-2"><input type="checkbox" id="rall-${m.id}" checked> keep all teams (semicolon format)</label>
@@ -309,7 +310,7 @@ async function resultsPanel(m){
     let rows, summary;
     if(isTeamFile){
       const parsed=window.parseHytekTeamFile(text, regs);
-      rows=parsed.rows.map(r=>({registration_id:r.registration_id, athlete_name:r.athlete_name, gender:r.gender, division:r.division,
+      rows=parsed.rows.map(r=>({registration_id:r.registration_id, athlete_name:r.athlete_name, gender:r.gender, division:r.division, team_code:parsed.teamCode||CFG.TEAM_CODE,
         event_code:r.event_name, event_name:r.event_name, is_relay:false, round:r.round, mark:r.mark, mark_value:r.mark_value,
         is_time:r.is_time, place:r.place, source:'hytek-tm'}));
       if(!rows.length) return pv.innerHTML='<span class="text-red-600">No results found in that .tcl file.</span>';
@@ -324,9 +325,10 @@ async function resultsPanel(m){
     }
     pv.innerHTML=summary+`<br><button id="rgo-${m.id}" class="btn bg-purple-600 text-white text-sm mt-2">Save these results</button>`;
     $('rgo-'+m.id).onclick=async()=>{
-      const toSave=rows.map(r=>({...r,meet_id:m.id}));
-      const {error}=await sb.from('results').insert(toSave);
-      pv.innerHTML=error?`<span class="text-red-600">${error.message}</span>`:`Saved ${toSave.length} results.`; if(!error) setTimeout(()=>resultsPanel(m),1200);
+      // Replaces the events in this file (safe to upload the same meet again and again during the meet — live results).
+      const allTeams=!isTeamFile && $('rall-'+m.id).checked;
+      const {data:n,error}=await sb.rpc('replace_meet_results',{p_meet:m.id,p_rows:rows,p_all_teams:allTeams});
+      pv.innerHTML=error?`<span class="text-red-600">${/replace_meet_results/.test(error.message)?'Live upload is not switched on in the database yet — run supabase/2026-10-14-live-results.sql once, then upload again.':error.message}</span>`:`Saved ${n??rows.length} results — they're live on the Results page now.`; if(!error) setTimeout(()=>resultsPanel(m),1500);
     };
   };
 }
