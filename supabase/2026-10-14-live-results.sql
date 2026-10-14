@@ -27,6 +27,7 @@ begin
   end if;
   if jsonb_typeof(p_rows) <> 'array' or jsonb_array_length(p_rows) = 0 then return 0; end if;
 
+  drop table if exists _up;
   create temp table _up on commit drop as
     select * from jsonb_to_recordset(p_rows) as x(
       registration_id uuid, athlete_name text, gender text, division text, team_code text, event_code text, event_name text,
