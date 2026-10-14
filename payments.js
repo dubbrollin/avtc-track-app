@@ -15,7 +15,7 @@ window.renderFeeCard=async function(el, o){
   catch(e){ el.innerHTML=`<p class="text-sm text-red-700">${esc(e.message||e)}</p>`; return; }
   const r=d.registration, s=d.settings, f=d.fee, team=d.team_name||r.team_code;
   const who=`${esc(r.first_name)} ${esc(r.last_name)}`;
-  if(!s||!(+s.fee_amount>0)){ el.innerHTML=`<div class="font-bold">${o.compact?'Team fee':who+' — '+esc(team)+' team fee'}</div><p class="text-sm text-gray-600 mt-1"><b>${esc(team)} hasn't posted its team fee here yet</b>, so there's nothing to pay in the app right now. Your team admin can add it on their Payments tab, and this page (and your Parent Dashboard) will then show the amount and the ways to pay.</p>`; return; }
+  if(!s||!(+s.fee_amount>0)){ el.innerHTML=`<div class="font-bold">${o.compact?'Team fee':who+' — '+esc(team)+' team fee'}</div><p class="text-sm text-gray-600 mt-1"><b>${esc(team)} hasn't posted its team fee here yet</b>, so there's nothing to pay in the app right now. Your team admin can add it on their Payments tab, and this page (and My Athletes) will then show the amount and the ways to pay.</p>`; return; }
   if(!f){ el.innerHTML=`<p class="text-sm text-gray-600">${esc(team)}'s fee is <b>${money(s.fee_amount)}</b> per athlete${s.fee_note?` (${esc(s.fee_note)})`:''}. Your athlete's fee hasn't been added yet — check back shortly or ask your team.</p>`; return; }
   // Paying online and having the app track payments is a paid team extra. Without it the parent simply sees what the team charges.
   let extras=false; try{ const {data:x}=await o.sb.from('team_messaging').select('enabled').eq('team_code',r.team_code).maybeSingle(); extras=!!(x&&x.enabled); }catch(e){}

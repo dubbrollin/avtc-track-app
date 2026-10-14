@@ -5,79 +5,125 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#001C3B"><link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="VYC Track"><meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>Valley Youth Conference</title>
+<meta name="description" content="Youth track & field for the Antelope Valley and San Fernando Valley. Register, sign up for meets and see results.">
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="theme.css?v=b1">
-<script src="theme.js?v=b2"></script>
+<link rel="stylesheet" href="theme.css?v=b3">
+<script src="theme.js?v=b3"></script>
 <script src="config.js"></script><script src="shared.js"></script>
-<style>
-  body{background:#f3f4f6}
-  .card{background:#fff;border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
-  .tile{display:block;background:#fff;border-radius:14px;padding:18px;box-shadow:0 1px 3px rgba(0,0,0,.08);text-decoration:none;color:inherit;border:2px solid transparent;transition:border-color .15s}
-  .tile:hover{border-color:#2563eb}
-  #logoImg{display:none}
-</style>
 </head>
 <body class="text-gray-900">
 <header class="topnav"><div class="topnav-inner">
-  <a class="brand" href="home.html">VYC <b>Track &amp; Field</b></a>
+  <a class="brand" href="home.html"><span class="brand-name">Valley Youth Conference</span><span class="brand-sub">Track &amp; Field</span></a>
   <nav>
     <a href="home.html">Home</a>
     <a href="index.html">Register</a>
-    <a href="coach.html">Coach Dashboard</a>
-    <a href="meets-admin.html?view=timer">Timer</a>
-    <a href="entries.html">Meet Register</a>
+    <a href="parent.html">My Athletes</a>
     <a href="results.html">Results</a>
+    <a href="coach.html">Coach Dashboard</a>
+    <a href="entries.html">Meet Entries</a>
+    <a href="meets-admin.html?view=timer">Timer</a>
   </nav>
 </div></header>
 
-<div class="max-w-3xl mx-auto p-3">
-  <div class="card text-center">
-    <img id="logoImg" src="logo.png" alt="Valley Youth Conference logo" style="max-height:120px;margin:0 auto 10px" onload="this.style.display='block'" onerror="this.style.display='none'">
-    <h1 class="text-2xl font-bold">Valley Youth Conference</h1>
-    <p class="text-gray-600 mt-1">Youth track &amp; field for the Antelope Valley and San Fernando Valley — regular season and the Valley United Striders postseason team.</p>
-    <p class="text-sm mt-2"><a class="text-blue-600 underline" href="https://valleyconference.org/" target="_blank">Conference rules, policies &amp; more at valleyconference.org →</a></p>
-  </div>
+<main class="home">
+  <!-- Hero. To use a photo, save it as images/hero.jpg (wide action shot, about 1600px across) — it shows up automatically. -->
+  <section class="hero">
+    <div class="hero-photo" id="heroPhoto" aria-hidden="true"></div>
+    <div class="hero-inner">
+      <img class="hero-logo" src="logo.png" alt="Valley Youth Conference logo" width="96" height="96" onerror="this.remove()">
+      <h1>Valley Youth Conference</h1>
+      <p class="hero-lede">Youth track &amp; field for the Antelope Valley and San Fernando Valley.</p>
+      <div class="hero-actions">
+        <a class="hbtn hbtn-pri" href="index.html">Register your athlete</a>
+        <a class="hbtn hbtn-sec" href="results.html">See results</a>
+      </div>
+    </div>
+  </section>
 
-  <style>#getApp:not([hidden]){display:flex;gap:12px;align-items:center;flex-wrap:wrap}</style>
-  <div id="getApp" class="card mt-3" hidden>
-    <img src="icons/icon-192.png" alt="" width="52" height="52" style="border-radius:12px">
-    <div style="flex:1;min-width:200px"><div class="font-bold">Get the VYC Track app</div>
-      <p class="text-sm text-gray-600" data-how></p></div>
-    <button type="button" class="btn bg-blue-600 text-white px-4 py-2" data-install hidden>Install app</button>
-  </div>
+  <div class="home-wrap">
+    <section class="now" aria-label="Meets">
+      <article class="now-card" id="nextMeet">
+        <div class="now-label">Next meet</div>
+        <div class="now-body" data-body><p class="now-empty">The meet schedule is posted once the season starts.</p></div>
+      </article>
+      <article class="now-card" id="lastMeet">
+        <div class="now-label">Latest results</div>
+        <div class="now-body" data-body><p class="now-empty">Season rankings, meet results and all-time records.</p><a class="now-link" href="results.html">Open results →</a></div>
+      </article>
+    </section>
 
-  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-    <a class="tile" href="index.html">
-      <div class="text-lg font-bold"><span class="tile-ic" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span>Register</div>
-      <p class="text-sm text-gray-600 mt-1">New here? Register your athlete, register as a coach, or sign up for the Valley United Striders postseason team.</p>
-    </a>
-    <a class="tile" href="coach.html">
-      <div class="text-lg font-bold"><span class="tile-ic" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg></span>Coach Dashboard</div>
-      <p class="text-sm text-gray-600 mt-1">Approved coaches: review your team's registrations, manage coach approvals, and jump to meet entries.</p>
-    </a>
-    <a class="tile" href="entries.html">
-      <div class="text-lg font-bold"><span class="tile-ic" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>Meet Register</div>
-      <p class="text-sm text-gray-600 mt-1">Coaches: add your team into races. Parents who registered with their email can enter their own athlete too.</p>
-    </a>
-    <a class="tile" href="results.html">
-      <div class="text-lg font-bold"><span class="tile-ic" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0Z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg></span>Results &amp; Rankings</div>
-      <p class="text-sm text-gray-600 mt-1">See season rankings by division, top 50 per event, and Eastern/Western Conference standings.</p>
-    </a>
-  </div>
+    <section class="quick" aria-label="Shortcuts">
+      <a class="quick-item" href="index.html">
+        <span class="quick-ic" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span>
+        <span><b>Register</b><small>Athletes, coaches, Valley United Striders</small></span>
+      </a>
+      <a class="quick-item" href="parent.html">
+        <span class="quick-ic" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/></svg></span>
+        <span><b>My Athletes</b><small>Meet sign-ups, fees, team messages</small></span>
+      </a>
+      <a class="quick-item" href="results.html">
+        <span class="quick-ic" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0Z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg></span>
+        <span><b>Results</b><small>Rankings, meet results, records</small></span>
+      </a>
+    </section>
 
-  <div class="card mt-4 text-sm text-gray-600">
-    <p id="eastList"><b>Eastern Conference:</b> Antelope Valley Track Club, Burbank Vikings, Flying Phoenix, Northridge Pacers, Palmdale Bullets, Thimsha Tigers, Village Christian Schools, West Valley Eagles.</p>
-    <p class="mt-1" id="westList"><b>Western Conference:</b> Calabasas Cheetahs, Lancaster Runnin Rebels, Lane 5, Los Angeles Falcons, North Valley Golden Bears, San Fernando Valley Rush, Santa Clarita Storm, Santa Clarita Warriors, Valley Raiders.</p>
-    <p class="mt-2 text-xs text-gray-400">Conference alignment current as of the 2027 season per club records — not yet reflected on valleyconference.org.</p>
+    <p class="staff-line">Coaches &amp; officials: <a href="coach.html">Coach Dashboard</a> · <a href="entries.html">Meet Entries</a> · <a href="meets-admin.html?view=timer">Timer</a></p>
+
+    <style>#getApp:not([hidden]){display:flex;gap:12px;align-items:center;flex-wrap:wrap}</style>
+    <div id="getApp" class="card" hidden>
+      <img src="icons/icon-192.png" alt="" width="48" height="48" style="border-radius:12px">
+      <div style="flex:1;min-width:200px"><div class="font-bold">Get the VYC Track app</div>
+        <p class="text-sm text-gray-600" data-how></p></div>
+      <button type="button" class="btn bg-blue-600 text-white px-4 py-2" data-install hidden>Install app</button>
+    </div>
+
+    <section class="teams" aria-label="Member clubs">
+      <h2>Member clubs</h2>
+      <div class="teams-grid">
+        <div><h3>Eastern Conference</h3><ul id="eastList"><li>Antelope Valley Track Club</li><li>Burbank Vikings</li><li>Flying Phoenix</li><li>Northridge Pacers</li><li>Palmdale Bullets</li><li>Thimsha Tigers</li><li>Village Christian Schools</li><li>West Valley Eagles</li></ul></div>
+        <div><h3>Western Conference</h3><ul id="westList"><li>Calabasas Cheetahs</li><li>Lancaster Runnin Rebels</li><li>Lane 5</li><li>Los Angeles Falcons</li><li>North Valley Golden Bears</li><li>San Fernando Valley Rush</li><li>Santa Clarita Storm</li><li>Santa Clarita Warriors</li><li>Valley Raiders</li></ul></div>
+      </div>
+      <p class="teams-foot">Rules and policies: <a href="https://valleyconference.org/" target="_blank" rel="noopener">valleyconference.org</a></p>
+    </section>
   </div>
-</div>
+</main>
 <script>
-function drawTeams(){ const act=window.VYC_TEAMS.filter(t=>t.active!==false); const list=c=>act.filter(t=>t.conference===c).map(t=>t.name).join(', ')+'.';
-  document.getElementById('eastList').innerHTML='<b>Eastern Conference:</b> '+list('East'); document.getElementById('westList').innerHTML='<b>Western Conference:</b> '+list('West'); }
-if(window.leagueReady) window.leagueReady.then(drawTeams);
+(function(){
+  // Hero photo: used only if images/hero.jpg exists.
+  var im=new Image(); im.onload=function(){ var el=document.getElementById('heroPhoto'); el.style.backgroundImage='url(images/hero.jpg)'; el.classList.add('on'); }; im.src='images/hero.jpg';
+
+  var esc=function(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+  var day=function(iso){ var d=new Date(iso+'T12:00:00'); return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}); };
+  function drawTeams(){ var act=window.VYC_TEAMS.filter(function(t){ return t.active!==false; });
+    ['East','West'].forEach(function(c){ var L=act.filter(function(t){ return t.conference===c; }).map(function(t){ return '<li>'+esc(t.name)+'</li>'; }).join('');
+      if(L) document.getElementById(c==='East'?'eastList':'westList').innerHTML=L; }); }
+  if(window.leagueReady) window.leagueReady.then(drawTeams);
+
+  // Next meet and most recent meet — public schedule, no sign-in needed.
+  var C=window.APP_CONFIG; if(!C||!C.SUPABASE_URL) return;
+  var h={apikey:C.SUPABASE_ANON_KEY,Authorization:'Bearer '+C.SUPABASE_ANON_KEY};
+  var today=new Date(); today=new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);
+  var get=function(q){ return fetch(C.SUPABASE_URL+'/rest/v1/meets?'+q,{headers:h}).then(function(r){ return r.ok?r.json():[]; }).catch(function(){ return []; }); };
+  get('select=id,name,meet_date,location,entries_close,status&meet_date=gte.'+today+'&order=meet_date.asc&limit=1').then(function(r){
+    var m=r&&r[0]; if(!m) return;
+    var open=m.status==='open'&&new Date(m.entries_close)>new Date();
+    var close=new Date(m.entries_close).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    document.querySelector('#nextMeet [data-body]').innerHTML=
+      '<div class="now-date">'+esc(day(m.meet_date))+'</div><div class="now-name">'+esc(m.name)+'</div>'+
+      (m.location?'<div class="now-meta">'+esc(m.location)+'</div>':'')+
+      '<div class="now-meta">'+(open?'Sign-ups close '+esc(close):'Sign-ups closed')+'</div>'+
+      (open?'<a class="now-link" href="parent.html">Sign up your athlete →</a>':'');
+  });
+  get('select=id,name,meet_date&meet_date=lt.'+today+'&order=meet_date.desc&limit=1').then(function(r){
+    var m=r&&r[0]; if(!m) return;
+    document.querySelector('#lastMeet [data-body]').innerHTML=
+      '<div class="now-date">'+esc(day(m.meet_date))+'</div><div class="now-name">'+esc(m.name)+'</div>'+
+      '<a class="now-link" href="results.html?meet='+encodeURIComponent(m.id)+'">See the results →</a>';
+  });
+})();
 </script>
 </body>
 </html>

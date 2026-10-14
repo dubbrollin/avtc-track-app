@@ -9,8 +9,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="theme.css?v=b1">
-<script src="theme.js?v=b2"></script>
+<link rel="stylesheet" href="theme.css?v=b3">
+<script src="theme.js?v=b3"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="config.js"></script>
@@ -60,14 +60,15 @@
 </style>
 </head>
 <body class="text-gray-900"><header class="topnav"><div class="topnav-inner">
-  <a class="brand" href="home.html">VYC <b>Track &amp; Field</b></a>
+  <a class="brand" href="home.html"><span class="brand-name">Valley Youth Conference</span><span class="brand-sub">Track &amp; Field</span></a>
   <nav>
     <a href="home.html">Home</a>
     <a href="index.html">Register</a>
-    <a href="coach.html">Coach Dashboard</a>
-    <a href="meets-admin.html?view=timer">Timer</a>
-    <a href="parent.html">Parent Dashboard</a>
+    <a href="parent.html">My Athletes</a>
     <a href="results.html">Results</a>
+    <a href="coach.html">Coach Dashboard</a>
+    <a href="entries.html">Meet Entries</a>
+    <a href="meets-admin.html?view=timer">Timer</a>
   </nav>
 </div></header>
 <div class="max-w-6xl mx-auto p-3">
@@ -254,7 +255,7 @@ function roleLabel(c){
 // ---- auth ----
 const WANT_TEAM_ADMIN=new URLSearchParams(location.search).get('view')==='roster';
 if(WANT_TEAM_ADMIN) document.title='Team Admin';
-window.mountLoginWidget(sb, $('loginWidget'), WANT_TEAM_ADMIN?{hint:'Team admins: sign in with the email you registered with. (You don\'t need to be a coach.)'}:{});
+window.mountLoginWidget(sb, $('loginWidget'), WANT_TEAM_ADMIN?{hint:'Team admins: sign in with the email you registered with. (You don\'t need to be a coach.)', benefit:'Manage your team roster, fees and coaches.'}:{benefit:'Review your team\'s registrations, approve coaches and message families.'});
 $('logout').onclick=async()=>{window.clearRoleFlags(); await sb.auth.signOut(); location.reload();};
 document.querySelectorAll('.signout-btn').forEach(b=>b.onclick=async()=>{window.clearRoleFlags(); await sb.auth.signOut(); location.reload();});
 sb.auth.onAuthStateChange(async(_e,session)=>{
@@ -641,7 +642,8 @@ $('runChecks').onclick=()=>runChecks(rows.filter(r=>r.dob_check_status==='pendin
 
 async function makePdf(id){
   const r=rows.find(x=>x.id===id);
-  const bytes=await buildRegistrationPdf(r, CFG.CLUB_NAME);
+  const team=(window.VYC_TEAMS||[]).find(t=>t.code===r.team_code);
+  const bytes=await buildRegistrationPdf(r, team?team.name:CFG.LEAGUE_NAME);
   const blob=new Blob([bytes],{type:'application/pdf'}); const a=document.createElement('a');
   a.href=URL.createObjectURL(blob); a.download=`VYC_${r.last_name}_${r.first_name}_${r.season_year}.pdf`; a.click();
 }

@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#001C3B"><link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="VYC Track"><meta name="apple-mobile-web-app-status-bar-style" content="default">
-<title>VYC / AVTC Registration</title>
+<title>Valley Youth Conference Registration</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="theme.css?v=b1">
-<script src="theme.js?v=b2"></script>
+<link rel="stylesheet" href="theme.css?v=b3">
+<script src="theme.js?v=b3"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&display=swap" rel="stylesheet">
@@ -47,14 +47,15 @@
 </head>
 <body class="text-gray-900">
 <header class="topnav"><div class="topnav-inner">
-  <a class="brand" href="home.html">VYC <b>Track &amp; Field</b></a>
+  <a class="brand" href="home.html"><span class="brand-name">Valley Youth Conference</span><span class="brand-sub">Track &amp; Field</span></a>
   <nav>
     <a href="home.html">Home</a>
     <a href="index.html">Register</a>
-    <a href="coach.html">Coach Dashboard</a>
-    <a href="meets-admin.html?view=timer">Timer</a>
-    <a href="parent.html">Parent Dashboard</a>
+    <a href="parent.html">My Athletes</a>
     <a href="results.html">Results</a>
+    <a href="coach.html">Coach Dashboard</a>
+    <a href="entries.html">Meet Entries</a>
+    <a href="meets-admin.html?view=timer">Timer</a>
   </nav>
 </div></header>
 
@@ -180,7 +181,7 @@
     </div>
     <label class="flex items-start gap-2 text-sm mt-3">
       <input type="checkbox" id="viaEmail" class="mt-1" checked>
-      <span>Create a parent dashboard login with this registration's email (above), so I can view the meet schedule, enter my athlete into meets, and see results/rankings.</span>
+      <span>Create a "My Athletes" login with this email so I can see the meet schedule, enter my athlete into meets and pay fees.</span>
     </label>
     <div id="parentAcctWrap" class="mt-3 border-t pt-3">
       <div id="parentAcctGoogleDone" class="hidden text-sm text-green-700 font-semibold mb-2"></div>
@@ -216,7 +217,7 @@
   <div class="card">
     <h2 class="font-bold text-lg mb-2">Parent/Guardian Consent &amp; Contract</h2>
     <div class="legal">
-      <p>I certify that the information provided in this registration is true and accurate, including my child's date of birth as shown on the uploaded proof of birth. I give permission for my child to participate in Valley Youth Conference track &amp; field activities, including travel to away meets. I release the Antelope Valley Track Club, the Valley Youth Conference, its coaches, officials, and volunteers from liability for injuries sustained during normal participation, except to the extent caused by gross negligence. I have read and agree to the Code of Conduct and zero-tolerance policy above, and I understand that violating it can result in immediate removal from the program without refund. I agree to notify the team of any change in my child's medical condition or contact information.</p>
+      <p>I certify that the information provided in this registration is true and accurate, including my child's date of birth as shown on the uploaded proof of birth. I give permission for my child to participate in Valley Youth Conference track &amp; field activities, including travel to away meets. I release the Valley Youth Conference, its member clubs, coaches, officials, and volunteers from liability for injuries sustained during normal participation, except to the extent caused by gross negligence. I have read and agree to the Code of Conduct and zero-tolerance policy above, and I understand that violating it can result in immediate removal from the program without refund. I agree to notify the team of any change in my child's medical condition or contact information.</p>
     </div>
     <label class="flex items-center gap-2 text-sm mt-2 req"><input type="checkbox" id="parentAgree" required> I am the parent/guardian named above and I agree to this contract (VYC-2026).</label>
     <div class="mt-2"><label class="f">Parent/guardian signature</label><div id="parentSigWrap"></div></div>
@@ -1094,6 +1095,7 @@ $('parentForm').addEventListener('submit', async(e)=>{
     };
     const {error}=await sb.from('registrations').insert(row);
     if(error) throw error;
+    if(window.regClearDraft) window.regClearDraft();
     const who=`${row.first_name} ${row.last_name}`; familyDone.push(who);
     familyRegIds.push(row.id);
     const payLink=`pay.html?regs=${encodeURIComponent(familyRegIds.join(','))}&email=${encodeURIComponent(row.email.toLowerCase())}&new=1`;
@@ -1124,7 +1126,8 @@ let familyDone=[], familyRegIds=[];
     if(saved.lastName) $('lastName').value=saved.lastName;
     familyDone=saved.done||[]; familyRegIds=saved.regs||[];
     try{ if($('teamCode').value){ $('teamCode').dispatchEvent(new Event('change')); } }catch(e){}
-    $('parentMsg').innerHTML=`<p class="text-sm text-gray-700">Welcome back — your family's details are filled in. Just add the next athlete.${familyDone.length?' Already registered: '+familyDone.map(esc).join(', '):''}</p>`;
+    const wb=`Welcome back — your family's details are filled in. Just add the next athlete.${familyDone.length?' Already registered: '+familyDone.map(esc).join(', '):''}`;
+    if(window.regStepNote){ window.regStepNote(wb); window.regGoStep(0); } else $('parentMsg').innerHTML=`<p class="text-sm text-gray-700">${wb}</p>`;
     const form=$('parentForm'), h=[...form.querySelectorAll('h2')].find(x=>/Athlete Information/.test(x.textContent));
     (h||form).scrollIntoView({behavior:'smooth',block:'start'}); setTimeout(()=>$('firstName').focus(),400);
   },300); });
@@ -1144,7 +1147,8 @@ function clearAthleteFields(form, everything){
 }
 function startNextChild(form){
   clearAthleteFields(form,false);
-  $('parentMsg').innerHTML=`<p class="text-sm text-gray-700">Registering your next child. Already registered: ${familyDone.map(esc).join(', ')}</p>`;
+  const nc=`Registering your next child. Already registered: ${familyDone.map(esc).join(', ')}`;
+  if(window.regStepNote){ window.regStepNote(nc); $('parentMsg').innerHTML=''; window.regGoStep(0); } else $('parentMsg').innerHTML=`<p class="text-sm text-gray-700">${nc}</p>`;
   const h=[...form.querySelectorAll('h2')].find(x=>/Athlete Information/.test(x.textContent));
   (h||form).scrollIntoView({behavior:'smooth',block:'start'}); setTimeout(()=>$('firstName').focus(),400);
 }
@@ -1219,5 +1223,6 @@ $('vusForm').addEventListener('submit', async(e)=>{
 
 bgCheckHint(); addVusEventRow();
 </script>
+<script src="reg-steps.js?v=1"></script>
 </body>
 </html>
