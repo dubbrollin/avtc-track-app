@@ -83,6 +83,7 @@
         <li>Use the <b>timing laptop</b> (the one with Meet Manager) and open this page in <b>Google Chrome</b> or <b>Microsoft Edge</b>.</li>
         <li>Sign in with the email you registered with as a timer.</li>
         <li>On the meet below, click <b>Download entries (Hy-Tek)</b>. In Meet Manager use <b>File › Import › Semi-Colon Delimited Entries</b> and pick that file.</li>
+        <li><b>Open the meet in Meet Manager in multi-user mode.</b> In single-user mode Meet Manager locks the meet file and live results can't read it.</li>
         <li>Practice once: click <b>Upload results</b>, tick <b>Test only</b>, and connect (step 2). It shows what it reads without posting anything.</li>
       </ol>
 
@@ -91,8 +92,9 @@
       <div class="opt bg-red-50 border border-red-200">
         <p class="font-bold text-red-800">A. Fully automatic (recommended)</p>
         <ol>
+          <li>Make sure Meet Manager has the meet open in <b>multi-user mode</b>.</li>
           <li>Click the red button <b>Fully automatic: connect to the Meet Manager database</b>.</li>
-          <li>Pick this meet's <b>.mdb</b> file — usually in <code>C:\Hy-Sport\TFMM</code> (Meet Manager's <b>File › Open</b> shows where it is).</li>
+          <li>Pick this meet's <b>.mdb</b> file — for example in <code>C:\tfmeets6</code> (Meet Manager's <b>File › Open</b> shows where it is).</li>
           <li>The first time, open <b>Which event is which</b> and pick an event for any <span class="bg-orange-100 px-1 rounded">orange</span> row. You only do this once per meet.</li>
           <li>That's it. Every result you accept in Meet Manager goes live by itself; the page checks every 30 seconds.</li>
         </ol>
@@ -131,8 +133,9 @@
       <h3>Something not right?</h3>
       <ul>
         <li><b>"This browser can't watch files"</b> → open this page in Chrome or Edge on the Windows timing laptop.</li>
+        <li><b>"Can't read the meet file" / "could not be read"</b> → Meet Manager is in single-user mode. Close the meet and open it again in <b>multi-user mode</b>; the page connects on its next try.</li>
         <li><b>"Doesn't look like a Meet Manager database"</b> → you picked the wrong file; pick the meet's <b>.mdb</b>.</li>
-        <li><b>Field marks look wrong</b> → in <b>Which event is which</b>, change the unit (meters / inches / centimeters).</li>
+        <li><b>Field marks look wrong</b> → field marks are read in the unit Meet Manager recorded them in. If one still doesn't match, open <b>Which event is which</b> and set <b>Field marks</b> to always inches or always meters.</li>
         <li><b>Still stuck</b> → click <b>Download a database report</b> (no athlete names in it) and send it to your site admin.</li>
         <li><b>Posted something by mistake?</b> Ask a team admin to remove it.</li>
       </ul>

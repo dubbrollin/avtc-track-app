@@ -163,10 +163,14 @@ window.mmGuessEvent=function(e){
   if(dist){ const hurdles=+col(e,['num_hurdles','hurdles','hurdle_ht'])>0||stroke==='H'; return {code:dist+(hurdles?'H':''),relay:false}; }
   return null;
 };
-// tables (from readMeetManagerTables) -> result rows. opts: {regs, eventMap:{key:{code,relay}|'skip'}, fieldUnit:'m'|'in'|'cm'}
+// tables (from readMeetManagerTables) -> result rows. opts: {regs, eventMap:{key:{code,relay}|'skip'}, fieldUnit:'auto'|'m'|'in'|'cm'}
+// Field marks: Meet Manager stores each mark with its own unit — Fin_course/Pre_course 'E' (English) = inches, 'M' (metric) = meters
+// (checked in four 2026 VYC meet databases: every field mark is 'E', in inches). 'auto' uses that; the others force one unit.
 window.buildRowsFromMeetManager=function(tb, opts){
   opts=opts||{}; const byKey={}; (opts.regs||[]).forEach(r=>{ byKey[nk(r.last_name,r.first_name)]=r; });
-  const unit=opts.fieldUnit||'m', toMeters=v=>unit==='in'?v*0.0254:unit==='cm'?v/100:v;
+  const unit=opts.fieldUnit||'auto';
+  const toMeters=(v,course,evMeas)=>{ const u=unit!=='auto'?unit:({E:'in',M:'m'})[String(course||evMeas||'').trim().toUpperCase()]||'in';
+    return u==='in'?v*0.0254:u==='cm'?v/100:v; };
   const ath={}; tb.athletes.forEach(a=>{ ath[col(a,['ath_no'])]=a; });
   const team={}; tb.teams.forEach(t=>{ team[col(t,['team_no'])]=t; });
   const divs={}; tb.divisions.forEach(d=>{ divs[col(d,['div_no'])]=col(d,['div_name','div_abbr']); });
@@ -176,15 +180,15 @@ window.buildRowsFromMeetManager=function(tb, opts){
     if(!g){ needMap.add(key); return; } if(g==='skip') return;
     const std=STD().find(x=>x.code===g.code&&!!x.relay===!!g.relay);
     const lo=col(e,['low_age']), hi=col(e,['high_age']);
-    evs[col(e,['event_ptr'])]={ code:g.code, relay:!!g.relay, field:std?!!std.field:/^(LJ|HJ|TJ|PV|SP|JT|DT|HT)$/.test(g.code), name:std?std.name:g.code,
+    evs[col(e,['event_ptr'])]={ code:g.code, relay:!!g.relay, field:std?!!std.field:/^(LJ|HJ|TJ|PV|SP|JT|DT|HT)$/.test(g.code), name:std?std.name:g.code, meas:col(e,['res_meas']),
       gender:genderFrom(col(e,['event_gender','event_sex'])), division:divFromText(divs[col(e,['div_no'])])||(lo!=null&&hi!=null?divFromAges(+lo,+hi):null) };
   });
   const STAT={D:'DQ',Q:'DQ',N:'DNF',F:'FS'};
   // One row per scored round of an entry: finals from the Fin_* columns, prelims from the Pre_* columns.
-  const scored=(x,p,isTime)=>{
+  const scored=(x,p,isTime,evMeas)=>{
     const v=+col(x,[p+'_time',p+'_mark',p+'_result',p+'_meas'])||0, st=STAT[String(col(x,[p+'_stat'])||'').toUpperCase()];
     if(!(v>0)&&!st) return null;
-    const val=v>0?(isTime?v:toMeters(v)):null;
+    const val=v>0?(isTime?v:toMeters(v,col(x,[p+'_course']),evMeas)):null;
     return { mark:st&&!(v>0)?st:(isTime?fmtTime(val):fmtFeet(val)), mark_value:st?null:val,
       place:+col(x,[p+'_heatplace',p+'_place'])||null, overall_place:+col(x,[p+'_place'])||null, heat:+col(x,[p+'_heat'])||null,
       wind:(w=>w==null||w===''?null:String(w))(col(x,[p+'_wind'])) };
@@ -196,7 +200,7 @@ window.buildRowsFromMeetManager=function(tb, opts){
     const reg=byKey[nk(last,first)]; if(!reg) unmatched.add(`${first} ${last}`);
     const t=team[col(a,['team_no'])]; const tc=t?window.normTeamCode(col(t,['team_abbr','team_short'])||''):null;
     const age=+col(a,['ath_age','age']); const div=e.division||reg?.division||(age&&window.divisionFor?window.divisionFor(age):null)||null;
-    for(const [p,rd] of [['fin','F'],['pre','P']]){ const s=scored(x,p,!e.field); if(!s) continue;
+    for(const [p,rd] of [['fin','F'],['pre','P']]){ const s=scored(x,p,!e.field,e.meas); if(!s) continue;
       rows.push({ registration_id:reg?.id||null, athlete_name:`${first} ${last}`, gender:e.gender||genderFrom(col(a,['ath_sex']))||reg?.gender||'Mixed', division:div,
         team_code:tc||reg?.team_code||null, event_code:e.code, event_name:e.name, is_relay:false, relay_runners:null, round:rd, ...s, is_time:!e.field, source:'hytek-live' }); }
   });
@@ -245,7 +249,7 @@ window.mountLiveConnect=function(host, ctx){
     </div>
     <label class="text-xs text-gray-700 flex items-center gap-1"><input type="checkbox" data-k="test"> Test only — show what it reads, don't post anything</label>
     <details class="text-xs text-gray-600 mt-2"><summary class="cursor-pointer font-semibold">How to set it up</summary>
-      <p class="mt-1"><b>Fully automatic (database):</b> click the red button and pick this meet's database file — in Meet Manager it's the meet's <b>.mdb</b> file (File &gt; Open shows where it is, usually under C:\\Hy-Sport\\TFMM). From then on, every result the timer accepts in Meet Manager shows up on the Live tab by itself. The first time, this page may ask you to say which event is which — once per meet.</p>
+      <p class="mt-1"><b>Fully automatic (database):</b> Meet Manager must have the meet open in <b>multi-user mode</b> — in single-user mode it locks the file and nothing can read it. Then click the red button and pick this meet's database file — in Meet Manager it's the meet's <b>.mdb</b> file (File &gt; Open shows where it is, for example under C:\\tfmeets6). From then on, every result the timer accepts in Meet Manager shows up on the Live tab by itself. The first time, this page may ask you to say which event is which — once per meet.</p>
       <p class="mt-1"><b>One key per event (needs Meet Manager's Pro option):</b> in Meet Manager go to Run &gt; Web &gt; Log-in, tick <b>Do not upload</b>, and make sure F11/F12 are turned on. Then click the white button and pick the <b>C:\\Realtime</b> folder. Each time the timer opens a finished event in Run and presses <b>F12</b>, it goes live. You can also save a semicolon-delimited results export into that folder any time and it's picked up too.</p>
       <p class="mt-1">Either way, sending an event again replaces it — nothing is ever doubled. Tick "Test only" before the first meet to check the results look right.</p>
     </details>
@@ -254,7 +258,7 @@ window.mountLiveConnect=function(host, ctx){
     <div data-k="log" class="text-xs text-gray-600 mt-2 max-h-48 overflow-y-auto"></div>
   </div>`;
   const $k=k=>el.querySelector(`[data-k="${k}"]`);
-  let timer=null, busy=false, sig={}, lastSeen={}, wake=null, mode=null, handle=null, fieldUnit='m';
+  let timer=null, busy=false, sig={}, lastSeen={}, wake=null, mode=null, handle=null, fieldUnit='auto';
   const log=(msg,cls='')=>{ const d=document.createElement('div'); d.className=cls; d.textContent=`${new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit',second:'2-digit'})} — ${msg}`; $k('log').prepend(d); while($k('log').children.length>200) $k('log').lastChild.remove(); };
   const status=html=>{ $k('status').innerHTML=html; };
   async function keepAwake(){ try{ if('wakeLock' in navigator){ wake=await navigator.wakeLock.request('screen'); } }catch(e){} }
@@ -304,7 +308,7 @@ window.mountLiveConnect=function(host, ctx){
         <td class="py-1"><select data-map="${esc(k)}" class="border rounded p-1"><option value="">— pick —</option>${opts.map(v=>`<option value="${v}" ${v===val?'selected':''}>${esc(optLabel(v))}</option>`).join('')}<option value="skip" ${val==='skip'?'selected':''}>Don't post this event</option></select></td></tr>`; }).join('');
     box.innerHTML=`<details ${needMap.length?'open':''} class="text-xs"><summary class="cursor-pointer font-semibold">Which event is which (${Object.keys(kinds).length} kinds of events in this meet)</summary>
       <p class="text-gray-600 my-1">Checked automatically — only fix a row if it's wrong. Orange rows couldn't be worked out and won't go live until you pick the event.</p>
-      <label class="flex items-center gap-1 mb-1">Field marks in this database are stored in <select data-k="unit" class="border rounded p-1"><option value="m">meters</option><option value="in">inches</option><option value="cm">centimeters</option></select> <span class="text-gray-500">(check a mark in Test mode against Meet Manager)</span></label>
+      <label class="flex items-center gap-1 mb-1">Field marks: <select data-k="unit" class="border rounded p-1"><option value="auto">Automatic (as Meet Manager recorded them)</option><option value="in">always inches</option><option value="m">always meters</option><option value="cm">always centimeters</option></select> <span class="text-gray-500">(only change this if a mark in Test mode doesn't match Meet Manager)</span></label>
       <table class="w-full">${html}</table></details>`;
     box.querySelector('[data-k="unit"]').value=fieldUnit;
     box.querySelector('[data-k="unit"]').onchange=ev=>{ fieldUnit=ev.target.value; sig={}; lastSeen={}; tick(); };
@@ -330,7 +334,11 @@ window.mountLiveConnect=function(host, ctx){
     if(!handle||busy) return; busy=true;
     try{ if(mode==='db') await readDb(); else await readFolder(); }
     catch(e){ if(e.wrongFile){ stop(); status(`<span class="text-red-700 font-semibold">${esc(e.message)}</span>`); return; }
-      log((mode==='db'?'Could not read the database this time (Meet Manager may be saving) — trying again. ':'Could not read the folder — trying again. ')+e.message,'text-orange-700'); status(`<span class="text-orange-700 font-semibold">● Retrying…</span> ${esc(e.message)}`); }
+      // Meet Manager in single-user mode locks the meet file so nothing else can read it (Chrome reports NotReadableError).
+      const locked=mode==='db'&&(e.name==='NotReadableError'||/could not be read|permission/i.test(e.message||''));
+      if(locked){ log('Meet Manager has the meet file locked. Switch Meet Manager to multi-user mode (see the guide) — this keeps trying and connects as soon as it can read the file.','text-red-700');
+        status(`<span class="text-red-700 font-semibold">● Can't read the meet file — Meet Manager is in single-user mode.</span> In Meet Manager, close the meet and open it again in <b>multi-user mode</b>. This page keeps trying every 30 seconds.`); }
+      else { log((mode==='db'?'Could not read the database this time (Meet Manager may be saving) — trying again. ':'Could not read the folder — trying again. ')+e.message,'text-orange-700'); status(`<span class="text-orange-700 font-semibold">● Retrying…</span> ${esc(e.message)}`); } }
     finally{ busy=false; }
   }
   async function start(m){
