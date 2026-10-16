@@ -76,6 +76,7 @@
     <select id="team" class="border rounded p-2 text-sm"><option value="">All teams</option></select>
   </div>
 
+  <div id="notice" class="hidden mb-3 text-sm rounded-xl p-3" style="background:#fef3c7;border:1px solid #fcd34d;color:#78350f"></div>
   <div id="keyWrap" class="hidden"><div class="sechead">Key dates</div><div id="keyd" class="keyd"></div></div>
   <div id="list"><p class="text-gray-500">Loading…</p></div>
   <div id="calWrap" class="hidden">
@@ -96,14 +97,16 @@ const tName=c=>(window.VYC_TEAMS.find(t=>t.code===c)||{}).name||c;
 const dt=d=>new Date(String(d).slice(0,10)+'T12:00:00');
 const fmtShort=d=>dt(d).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
 const mapUrl=a=>'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(a);
-let meets=[], keyDates=[], resCount={}, view='list';
+let meets=[], keyDates=[], notices={}, resCount={}, view='list';
 const T=window.MEET_DAY||{}; $('tField').textContent=T.field||''; $('tRace').textContent=T.firstRace||''; $('tRaceAt').textContent=T.firstRaceAt||'';
 
 (async()=>{
   const season=+(await window.currentSeason());
-  const [m,k]=await Promise.all([
+  const [m,k,n]=await Promise.all([
     sb.from('meets').select(MEET_COLS).order('meet_date').order('week_no').order('name'),
-    sb.from('season_dates').select('season_year,event_date,label,note').order('event_date')]);
+    sb.from('season_dates').select('season_year,event_date,label,note').order('event_date'),
+    sb.from('app_settings').select('key,value').like('key','schedule_notice_%')]); // e.g. a "sample schedule" banner, set per season
+  (n.data||[]).forEach(r=>{ if(r.value) notices[r.key.replace('schedule_notice_','')]=r.value; });
   if(m.error){ $('list').innerHTML='<p class="text-red-700">Couldn\'t load the schedule: '+esc(m.error.message)+'</p>'; return; }
   meets=m.data||[]; keyDates=k.data||[];
   const years=[...new Set([...meets.map(x=>x.season_year),...keyDates.map(x=>x.season_year)].filter(Boolean))].sort((a,b)=>b-a);
@@ -126,6 +129,7 @@ const visitors=m=>{ const L=m.team_codes||[]; if(!L.length) return (m.host_team_
 
 function render(){
   const y=+$('season').value; $('title').textContent=y+' Season Schedule'; document.title=y+' Season Schedule';
+  const note=notices[String(y)]; $('notice').classList.toggle('hidden',!note); $('notice').innerHTML=note?'<b>Note:</b> '+esc(note):'';
   const keys=seasonKeys();
   $('keyWrap').classList.toggle('hidden',!keys.length);
   $('keyd').innerHTML=keys.map(k=>`<span class="${k.event_date<today?'past':''}"><b>${esc(fmtShort(k.event_date))}</b> · ${esc(k.label)}${k.note?' — '+esc(k.note):''}</span>`).join('');
