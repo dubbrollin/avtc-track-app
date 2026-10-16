@@ -75,6 +75,12 @@
       <div id="myResults"><p class="text-sm text-gray-500">Loading…</p></div>
     </div>
 
+    <div class="card" id="seasonCard">
+      <h2 class="font-bold mb-1">Every meet this season</h2>
+      <p class="text-xs text-gray-500 mb-2">Know your athlete will miss a meet? Tell the coaches now — you can answer for any meet on the schedule, as far ahead as you like, and change it later. Use <b>details</b> to pick events or add a note.</p>
+      <div id="seasonAtt"><p class="text-sm text-gray-500">Loading…</p></div>
+    </div>
+
     <div class="card" id="registerCard">
       <h2 class="font-bold mb-1" id="signupTitle">Meet attendance</h2>
       <p class="text-xs text-gray-500 mb-2" id="signupHint">Your team's coaches enter the athletes into events. Your part: tell them whether your athlete is coming to the meet below.</p>
@@ -165,7 +171,46 @@ window.mountLockoutNotice($('lockBanner'),{sb,teams:myTeams,parent:true});
   const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
   const pick=meets.find(m=>evCount[m.id]&&m.meet_date>=today)||meets.find(m=>m.meet_date>=today)||meets.find(m=>evCount[m.id]&&isOpen(m))||meets.find(m=>evCount[m.id])||meets[0]; if(pick) $('meet').value=pick.id; // start on the current/next meet
   $('meet').onchange=loadMeet; if(meets.length) await loadMeet(); else $('meetInfo').textContent='';
+  renderSeason();
 }
+
+// ---- Every meet this season: one quick Coming / Missing answer per athlete per meet, so parents can tell the coaches
+// ahead of time. Same answer_attendance as the one-meet form below (event picks and notes already given are kept). ----
+let seasonAtt=[];
+async function renderSeason(){
+  const el=$('seasonAtt'); if(!el) return;
+  const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
+  const up=meets.filter(m=>!m.meet_date||m.meet_date>=today);
+  const kids=myRegs.filter(r=>r.status!=='rejected');
+  if(!kids.length){ el.innerHTML='<p class="text-sm text-gray-500">Once your athlete is registered, their team\'s meets show here.</p>'; return; }
+  if(!up.length){ el.innerHTML='<p class="text-sm text-gray-500">No more meets on the schedule this season.</p>'; return; }
+  const {data}=await sb.from('meet_attendance').select('*').in('registration_id',kids.map(r=>r.id)).in('meet_id',up.map(m=>m.id)); seasonAtt=data||[];
+  const tName=c=>(window.VYC_TEAMS.find(t=>t.code===c)||{}).name||c;
+  const where=m=>m.host_team_code?(kids.some(k=>k.team_code===m.host_team_code)?'Home meet':'@ '+tName(m.host_team_code)):m.name;
+  const day=d=>new Date(String(d).slice(0,10)+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+  el.innerHTML=up.map(m=>{ const at=kids.filter(k=>window.meetHasTeam(m,k.team_code)); if(!at.length) return '';
+    const dl=window.attendanceDeadline(m.meet_date), late=dl&&Date.now()>dl.getTime();
+    return `<div class="border-t first:border-t-0 py-2">
+      <div class="flex flex-wrap items-baseline gap-x-2"><b class="text-sm" style="color:var(--act,#1764c8)">${m.meet_date?esc(day(m.meet_date)):'Date TBA'}</b><span class="font-semibold text-sm">${esc(m.week_no?'Week '+m.week_no+' · ':'')}${esc(where(m)||m.name)}</span>
+        <button type="button" class="text-xs underline text-gray-600" data-detail="${m.id}">details</button>
+        ${dl?`<span class="text-xs ${late?'text-red-700':'text-gray-500'}">${late?'Deadline passed — answering now is a late add':'Answer by '+esc(window.fmtDeadline(dl))}</span>`:''}</div>
+      ${at.map(k=>{ const a=seasonAtt.find(x=>x.meet_id===m.id&&x.registration_id===k.id), yes=a&&a.attending, no=a&&!a.attending;
+        return `<div class="flex flex-wrap items-center gap-2 mt-1 text-sm"><span class="min-w-[7rem]">${esc(k.first_name)}</span>
+          <button type="button" class="px-2 py-1 rounded border text-xs font-semibold ${yes?'bg-green-600 text-white border-green-600':'bg-white'}" data-q="${m.id}|${k.id}|yes">${yes?'✓ ':''}Coming</button>
+          <button type="button" class="px-2 py-1 rounded border text-xs font-semibold ${no?'bg-gray-700 text-white border-gray-700':'bg-white'}" data-q="${m.id}|${k.id}|no">${no?'✓ ':''}Missing</button>
+          ${a?'':'<span class="text-xs text-gray-400">not answered</span>'}${a&&a.late?'<span class="text-xs font-bold text-red-700">late add</span>':''}</div>`; }).join('')}
+    </div>`; }).join('')||'<p class="text-sm text-gray-500">No more meets on the schedule for your athlete\'s team this season.</p>';
+}
+document.addEventListener('click',async e=>{
+  const d=e.target.closest('#seasonAtt [data-detail]');
+  if(d){ $('meet').value=d.dataset.detail; await loadMeet(); $('registerCard').scrollIntoView({behavior:'smooth',block:'start'}); return; }
+  const b=e.target.closest('#seasonAtt [data-q]'); if(!b) return;
+  const [mid,rid,v]=b.dataset.q.split('|'), yes=v==='yes', prev=seasonAtt.find(x=>x.meet_id===mid&&x.registration_id===rid);
+  b.disabled=true;
+  const {error}=await sb.rpc('answer_attendance',{p_meet:mid,p_reg:rid,p_attending:yes,p_event1:yes?prev?.event_1||null:null,p_event2:yes?prev?.event_2||null:null,p_event3:yes?prev?.event_3||null:null,p_note:prev?.note||null});
+  if(error){ b.disabled=false; alert(error.message.replace(/^.*?: /,'')); return; }
+  await renderSeason(); if($('meet').value===mid) await loadMeet();
+});
 // ---- Schedule: this season's meets for my athletes' team(s) — when, where they're going, who they're up against (opens Google Maps) ----
 function renderSchedule(myTeams){ window.mountTeamSchedule($('schedule'),{sb,teams:myTeams}); } // shared with the Coach Dashboard (shared.js)
 const cur=()=>meets.find(m=>m.id===$('meet').value);
@@ -232,7 +277,7 @@ document.addEventListener('click',async e=>{
   b.disabled=true; msg.textContent='Sending…';
   const {error}=await sb.rpc('answer_attendance',{p_meet:m.id,p_reg:aId,p_attending:yes,p_event1:ev(1),p_event2:ev(2),p_event3:ev(3),p_note:box.querySelector('[data-note]').value||null});
   if(error){ msg.textContent=error.message.replace(/^.*?: /,''); b.disabled=false; return; }
-  await loadMeet();
+  await loadMeet(); renderSeason();
 });
 
 async function toggle(ev){
