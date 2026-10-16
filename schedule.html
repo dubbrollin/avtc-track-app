@@ -147,7 +147,7 @@ function setView(v){ view=v; $('vList').classList.toggle('active',v==='list'); $
 const seasonMeets=()=>{ const y=+$('season').value, t=$('team').value; return meets.filter(m=>m.season_year===y&&(!t||window.meetHasTeam(m,t))); };
 const seasonKeys=()=>keyDates.filter(k=>k.season_year===+$('season').value);
 const weekLabel=m=>m.week_no?'Week '+m.week_no:(m.name||'Meet');
-const visitors=m=>{ const L=m.team_codes||[]; if(!L.length) return (m.host_team_code||m.week_no)?null:'all'; /* a week's meet with no teams picked yet = not announced */ return L.filter(c=>c!==m.host_team_code); };
+const visitors=m=>{ const L=m.team_codes||[]; if(!L.length) return (m.host_team_code||(m.week_no&&!m.is_invitational&&!m.is_championship))?null:'all'; /* a week's meet with no teams picked yet = not announced */ return L.filter(c=>c!==m.host_team_code); };
 
 function render(){
   const y=+$('season').value; $('title').textContent=y+' Season Schedule'; document.title=y+' Season Schedule';
@@ -164,7 +164,9 @@ function row(m,team){
   const v=visitors(m), mark=c=>c===team?`<span class="mine">${esc(tName(c))}</span>`:esc(tName(c));
   const host=m.host_team_code?mark(m.host_team_code):m.week_no&&/^week\s*\d+/i.test(m.name||'')?'<span class="tba">To be announced</span>':esc(m.name||'Meet');
   const tags=(m.is_championship?'<span class="pill" style="background:#fef3c7;color:#92400e;margin-left:0">Championship</span>':'')+(m.is_invitational?'<span class="pill" style="background:#e5e7eb;margin-left:0">Invitational</span>':'');
-  const vis=v==='all'?'All VYC teams':v===null||!v.length?'<span class="tba">To be announced</span>':v.map(c=>`<div>${mark(c)}</div>`).join('');
+  // A meet open to every team (invitational, IEC) lists every team by name, like the league site.
+  const all=()=>window.VYC_TEAMS.filter(t=>t.active!==false).slice().sort((a,b)=>a.name.localeCompare(b.name)).map(t=>`<div>${mark(t.code)}</div>`).join('');
+  const vis=v==='all'?all():v===null||!v.length?'<span class="tba">To be announced</span>':v.map(c=>`<div>${mark(c)}</div>`).join('');
   const place=m.venue||m.location;
   const notes=place?`<a class="text-blue-700 underline" target="_blank" rel="noopener" href="${mapUrl([m.venue,m.location].filter(Boolean).join(', '))}">@ ${esc(place)}</a>${m.venue&&m.location?`<div class="city">${esc(m.location)}</div>`:''}`:'<span class="tba">Location to come</span>';
   const res=resCount[m.id]?`<a class="font-semibold" style="color:var(--act)" href="results.html?meet=${m.id}">Results →</a>`:m.meet_date&&m.meet_date<today?'<span class="text-gray-400">—</span>':'';
