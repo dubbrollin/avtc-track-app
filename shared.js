@@ -248,6 +248,8 @@ window.mountTeamSchedule = async function(el, opts){
         ${T&&next&&m.id===next.id?`<div class="text-xs text-gray-600 mt-0.5">Field events ${esc(T.field)} · first race (${esc(T.firstRace)}) ${esc(T.firstRaceAt)}</div>`:''}
       </div><div class="ts-side">${side}</div></div>`; };
   el.innerHTML=`<div>${meets.map(row).join('')}</div><p class="text-xs mt-2"><a class="underline" style="color:var(--act,#1764c8)" href="schedule.html">Full league schedule →</a></p>`;
+  // In a fixed-height box (Coach Dashboard), open on the next meet instead of the top of the season.
+  const nx=el.querySelector('.ts-row.next'); if(nx&&el.scrollHeight>el.clientHeight) el.scrollTop=Math.max(0,nx.offsetTop-el.offsetTop-8);
 };
 // ---- Results lockout notice (Coach + Parent dashboards): a conference president or the Commissioner has locked this
 // team's results (whole team, relays included) because fees/fines are owed, so they're hidden on the Results pages until it's unlocked.

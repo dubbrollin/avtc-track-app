@@ -21,6 +21,7 @@
   /* Coach dashboard sections: roster on the left in its own scroll box, meet tools on the right; on phones they stack. Only the roster box scrolls. */
   .dash2{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-items:start}
   @media(min-width:900px){ .dash2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)} }
+  .schedScroll{max-height:460px;overflow-y:auto;padding-right:4px}
   .rosterScroll{max-height:52vh;overflow-y:auto;padding-right:6px;border:1px solid #e5e7eb;border-radius:8px;padding:8px}
   @media(min-width:900px){ .rosterScroll{max-height:calc(100vh - 250px);min-height:260px} }
   .sexhead{font-size:12px;font-weight:700;color:#1d4ed8;margin:6px 0 2px}
@@ -185,9 +186,19 @@
         <div id="lockBanner" class="max-w-6xl mx-auto"></div>
         <div id="xferBanner" class="max-w-6xl mx-auto"></div>
         <div class="max-w-6xl mx-auto dash2">
+          <!-- Left: roster + who's coming. Right: team admin, meet registration, our schedule (fixed height, scrolls) — keeps both columns about even -->
+          <div id="leftCol">
           <div class="card" id="rosterSection">
             <div class="col-head"><h2 class="flex-1">My roster <span id="dashCount" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
             <div id="dashRoster" class="text-sm rosterScroll"></div>
+          </div>
+
+          <div class="card" id="comingCard">
+            <div class="col-head"><h2 class="flex-1">Who's coming to the meet <span id="comingCount" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
+            <p class="text-xs text-gray-500 mb-2">Parents answer "Is my athlete coming?" on their dashboard and can ask for up to two events. You enter the events on Meet Registration.</p>
+            <div class="flex flex-wrap items-center gap-2 mb-2"><select id="comingMeet" class="flex-1 min-w-0"></select></div>
+            <div id="comingList" class="text-sm"></div>
+          </div>
           </div>
 
           <div id="toolsSection">
@@ -206,11 +217,6 @@
             <p class="text-xs text-gray-500 mt-2">Uploading meet results and setting up meets happens on the <a class="underline" href="admin.html?tab=meetadmin">Meet Admin tab of the Admin page</a>.</p>
           </div>
 
-          <div class="card" id="teamSchedCard">
-            <div class="col-head"><h2 class="flex-1">Our schedule</h2></div>
-            <div id="teamSched" class="text-sm"></div>
-          </div>
-
           <div class="card">
             <div class="col-head"><h2>Meet registration &amp; results</h2></div>
             <p class="text-xs text-gray-500 mb-2">Enter your athletes into a meet's events (with each athlete's best times showing), or look up results.</p>
@@ -220,12 +226,11 @@
             </div>
           </div>
 
-          <div class="card" id="comingCard">
-            <div class="col-head"><h2 class="flex-1">Who's coming to the meet <span id="comingCount" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
-            <p class="text-xs text-gray-500 mb-2">Parents answer "Is my athlete coming?" on their dashboard and can ask for up to two events. You enter the events on Meet Registration.</p>
-            <div class="flex flex-wrap items-center gap-2 mb-2"><select id="comingMeet" class="flex-1 min-w-0"></select></div>
-            <div id="comingList" class="text-sm"></div>
+          <div class="card" id="teamSchedCard">
+            <div class="col-head"><h2 class="flex-1">Our schedule</h2></div>
+            <div id="teamSched" class="text-sm schedScroll"></div>
           </div>
+
           </div>
 
       </div>
