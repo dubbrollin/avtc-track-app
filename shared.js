@@ -13,7 +13,7 @@ window.VYC_TEAMS = [
   {code:"NPTC", name:"Northridge Pacers", conference:"East"},
   {code:"PB",   name:"Palmdale Bullets", conference:"East"},
   {code:"SFR",  name:"San Fernando Valley Rush", conference:"West"},
-  {code:"SCTC", name:"Santa Clarita Storm", conference:"West"},
+  {code:"SCTC", name:"Santa Clarita Track Club", conference:"West"},
   {code:"TT",   name:"Thimsha Tigers", conference:"East"},
   {code:"VRTC", name:"Valley Raiders", conference:"West"},
   {code:"VC",   name:"Village Christian Schools", conference:"East"},
