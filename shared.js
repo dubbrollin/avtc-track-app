@@ -249,3 +249,21 @@ window.mountTeamSchedule = async function(el, opts){
       </div><div class="ts-side">${side}</div></div>`; };
   el.innerHTML=`<div>${meets.map(row).join('')}</div><p class="text-xs mt-2"><a class="underline" style="color:var(--act,#1764c8)" href="schedule.html">Full league schedule →</a></p>`;
 };
+// ---- Results lockout notice (Coach + Parent dashboards): a conference president or the Commissioner has locked this
+// team's or athlete's results because fees/fines are owed, so they're hidden on the Results pages until it's unlocked.
+// mountLockoutNotice(el, {sb, teams:['AVTC'], regIds:[...], parent:true})
+window.mountLockoutNotice = async function(el, o){
+  if(!el) return; el.innerHTML=''; const teams=(o.teams||[]).filter(Boolean), ids=(o.regIds||[]).filter(Boolean); if(!teams.length&&!ids.length) return;
+  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const season=+(await window.currentSeason());
+  const {data,error}=await o.sb.from('results_lockouts').select('team_code,registration_id,athlete_name,reason,locked_at').eq('season_year',season).is('lifted_at',null);
+  if(error||!data) return;
+  const tName=c=>(window.VYC_TEAMS.find(t=>t.code===c)||{}).name||c;
+  const teamL=data.filter(l=>!l.registration_id&&teams.includes(l.team_code));
+  const athL=data.filter(l=>l.registration_id&&(ids.includes(l.registration_id)||(!o.parent&&teams.includes(l.team_code))));
+  if(!teamL.length&&!athL.length) return;
+  const items=teamL.map(l=>`<li><b>All ${esc(tName(l.team_code))} results</b> — ${esc(l.reason)}</li>`).concat(athL.map(l=>`<li><b>${esc(l.athlete_name)}</b>'s results — ${esc(l.reason)}</li>`)).join('');
+  el.innerHTML=`<div class="card" style="border:1px solid #dc2626;background:#fef2f2"><b>🔒 Results locked</b>
+    <p class="text-sm mt-1">${o.parent?'The league has locked these results because fees or fines are owed. They won\'t show on the Results pages until it\'s paid and unlocked. Please contact your team.':'The league has locked these results because fees or fines are owed. They\'re hidden from everyone (including your team) until your conference president or the Commissioner unlocks them.'}</p>
+    <ul class="text-sm mt-1 list-disc ml-5">${items}</ul></div>`;
+};

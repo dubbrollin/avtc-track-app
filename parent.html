@@ -52,6 +52,7 @@
     <!-- With Team Messenger on, wide screens show the messages to the RIGHT of the athletes so a parent with several kids doesn't scroll for them. -->
     <!-- New-message notice: stays at the top until the messages have been read -->
     <button type="button" id="msgAlert" class="hidden w-full text-left rounded-lg mb-3 font-semibold" style="background:#D2451E;color:#fff;padding:.7rem 1rem;border:0;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.18)"></button>
+    <div id="lockBanner"></div>
     <div id="cols">
     <div class="card" id="athCard">
       <h2 class="font-bold mb-2">My athletes</h2>
@@ -158,6 +159,7 @@ async function loadMeets(){
   const myTeams=[...new Set(myRegs.filter(r=>r.status!=='rejected').map(r=>r.team_code))];
   meets=(data||[]).filter(m=>myTeams.some(c=>window.meetHasTeam(m,c))); // only meets at least one of my athletes' teams is competing at
   renderSchedule(myTeams);
+window.mountLockoutNotice($('lockBanner'),{sb,teams:myTeams,regIds:myRegs.map(r=>r.id),parent:true});
   const {data:evc}=await sb.from('meet_events').select('meet_id'); const evCount={}; (evc||[]).forEach(x=>evCount[x.meet_id]=(evCount[x.meet_id]||0)+1);
   $('meet').innerHTML=meets.map(m=>`<option value="${m.id}">${m.name} — ${fmtDate(m.meet_date)}${evCount[m.id]?'':' (no events set up yet)'}</option>`).join('')||'<option value="">No meets posted yet</option>';
   const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});

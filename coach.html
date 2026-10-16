@@ -182,6 +182,7 @@
       <div id="dashView">
         <!-- New-message notice: stays at the top until the messages (at the bottom of the dashboard) have been read -->
         <div class="max-w-6xl mx-auto"><button type="button" id="msgAlert" class="hidden w-full text-left rounded-lg mb-3 font-semibold" style="background:#D2451E;color:#fff;padding:.7rem 1rem;border:0;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.18)"></button></div>
+        <div id="lockBanner" class="max-w-6xl mx-auto"></div>
         <div id="xferBanner" class="max-w-6xl mx-auto"></div>
         <div class="max-w-6xl mx-auto dash2">
           <div class="card" id="rosterSection">
@@ -381,6 +382,7 @@ async function load(){
   render();
   loadComing();
   window.mountTeamSchedule($('teamSched'),{sb,teams:[myCoach&&myCoach.team_code]});
+  window.mountLockoutNotice($('lockBanner'),{sb,teams:[myCoach&&myCoach.team_code]});
   const pending=rows.filter(r=>r.dob_check_status==='pending');
   if(fullAccess && pending.length) runChecks(pending);
 
