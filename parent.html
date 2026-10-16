@@ -159,7 +159,7 @@ async function loadMeets(){
   const myTeams=[...new Set(myRegs.filter(r=>r.status!=='rejected').map(r=>r.team_code))];
   meets=(data||[]).filter(m=>myTeams.some(c=>window.meetHasTeam(m,c))); // only meets at least one of my athletes' teams is competing at
   renderSchedule(myTeams);
-window.mountLockoutNotice($('lockBanner'),{sb,teams:myTeams,regIds:myRegs.map(r=>r.id),parent:true});
+window.mountLockoutNotice($('lockBanner'),{sb,teams:myTeams,parent:true});
   const {data:evc}=await sb.from('meet_events').select('meet_id'); const evCount={}; (evc||[]).forEach(x=>evCount[x.meet_id]=(evCount[x.meet_id]||0)+1);
   $('meet').innerHTML=meets.map(m=>`<option value="${m.id}">${m.name} — ${fmtDate(m.meet_date)}${evCount[m.id]?'':' (no events set up yet)'}</option>`).join('')||'<option value="">No meets posted yet</option>';
   const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});

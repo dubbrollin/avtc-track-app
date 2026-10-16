@@ -721,7 +721,7 @@ if(await run(sb.from('meets').delete().eq('id',id),'Meet deleted')) paintMeets()
 });
 
 /* ============================ RESULTS LOCKOUT ============================ */
-// A president (own conference) or the Commissioner (any team) hides a team's or an athlete's results while fees/fines are owed.
+// A president (own conference) or the Commissioner (any team) hides a WHOLE team's results (relays too) while fees/fines are owed.
 // Hidden from everyone except presidents, the Commissioner and site admins; other athletes keep their places. Manual only.
 // The database enforces all of it (results_lockouts + results read policies, lock_results / unlock_results).
 const canLock=code=>COMM||(PRES&&(teams.find(t=>t.code===code)||{}).conference===PRES);
@@ -747,32 +747,21 @@ const teamRow=t=>{ const l=teamLock(t.code), o=owed(t.code), ok=feesOk(t.code), 
   <td>${money_}${ok?'':' <span class="pill warn">season fees not cleared</span>'}</td>
   <td>${l?`<span class="pill bad">🔒 Locked</span> <span class="text-xs text-gray-600">${esc(when(l.locked_at))} by ${who(l.locked_by)} — ${esc(l.reason)}</span>`:'<span class="text-gray-500 text-sm">Results showing</span>'}</td>
   <td class="whitespace-nowrap">${can?(l?`<button class="btn grn" data-unlock="${l.id}">Unlock</button>`:`<button class="btn red" data-lockteam="${esc(t.code)}" data-owed="${o}">Lock team results</button>`):''}</td></tr>`; };
-const athRows=active.filter(l=>l.registration_id).map(l=>`<tr><td><b>${esc(l.athlete_name)}</b> <span class="text-xs text-gray-500">${esc(teamName(l.team_code))}</span></td>
-  <td class="text-xs text-gray-600">${esc(when(l.locked_at))} by ${who(l.locked_by)} — ${esc(l.reason)}</td><td>${canLock(l.team_code)?`<button class="btn grn" data-unlock="${l.id}">Unlock</button>`:''}</td></tr>`).join('');
 $('pane').innerHTML=`<div class="card"><h3 class="font-bold mb-1">${esc(SEASON)} results lockout</h3>
-<p class="text-sm text-gray-600 mb-1">Lock a team's or an athlete's results while fees or fines are owed. Locked results are <b>hidden from everyone</b> — the public, the team's own coaches and parents — except the conference presidents, the Commissioner and site admins. Everyone else keeps the place they earned. Nothing locks by itself; unlock when it's paid.</p>
-<p class="text-xs text-gray-500 mb-2">${COMM?'As Commissioner you can lock or unlock any team.':PRES?`As ${CONF_NAME[PRES]} Conference President you can lock or unlock ${CONF_NAME[PRES]} teams and athletes.`:'View only — locking is done by the conference presidents and the Commissioner.'} "Owed" = unpaid fees and fines on the Fees &amp; Fines tab.</p>
+<p class="text-sm text-gray-600 mb-1">Lock a team's results while the team owes fees or fines. Every result for that team this season is locked, relays included. Locked results are <b>hidden from everyone</b> — the public, the team's own coaches and parents — except the conference presidents, the Commissioner and site admins. Everyone else keeps the place they earned. Nothing locks by itself; unlock when it's paid.</p>
+<p class="text-xs text-gray-500 mb-2">${COMM?'As Commissioner you can lock or unlock any team.':PRES?`As ${CONF_NAME[PRES]} Conference President you can lock or unlock ${CONF_NAME[PRES]} teams.`:'View only — locking is done by the conference presidents and the Commissioner.'} "Owed" = unpaid fees and fines on the Fees &amp; Fines tab.</p>
 <div class="scroll"><table class="t"><thead><tr><th>Team</th><th>Fees &amp; fines</th><th>Results</th><th></th></tr></thead><tbody>${scopeTeams.map(teamRow).join('')}</tbody></table></div></div>
-<div class="card"><h3 class="font-bold mb-1">Locked athletes</h3><p class="text-sm text-gray-600 mb-2">Lock one athlete's results without locking the whole team (their relay results stay; a team lock hides relays).</p>
-${athRows?`<div class="scroll mb-3"><table class="t"><thead><tr><th>Athlete</th><th>Locked</th><th></th></tr></thead><tbody>${athRows}</tbody></table></div>`:'<p class="text-sm text-gray-500 mb-3">No athletes locked.</p>'}
-${(COMM||PRES)?`<div class="flex flex-wrap gap-2 items-center"><input id="lkFind" placeholder="Find an athlete — last name (3+ letters)" style="min-width:16rem"><span class="text-xs text-gray-500">${COMM?'Any team':CONF_NAME[PRES]+' Conference teams'}</span></div><div id="lkHits" class="mt-2"></div>`:''}</div>
 ${lifted.length?`<div class="card"><details><summary class="cursor-pointer font-bold">Unlocked earlier (${lifted.length})</summary><div class="scroll mt-2"><table class="t"><thead><tr><th>Team / athlete</th><th>Locked</th><th>Unlocked</th></tr></thead><tbody>
 ${lifted.map(l=>`<tr><td>${esc(l.athlete_name||teamName(l.team_code))}${l.athlete_name?` <span class="text-xs text-gray-500">${esc(teamName(l.team_code))}</span>`:''}</td><td class="text-xs">${esc(when(l.locked_at))} by ${who(l.locked_by)} — ${esc(l.reason)}</td><td class="text-xs">${esc(when(l.lifted_at))} by ${who(l.lifted_by)}${l.lift_note?' — '+esc(l.lift_note):''}</td></tr>`).join('')}</tbody></table></div></details></div>`:''}`;
-const f=$('lkFind'); if(f){ let h; f.oninput=()=>{ clearTimeout(h); h=setTimeout(async()=>{ const q=f.value.trim(); if(q.length<3){ $('lkHits').innerHTML=''; return; }
-  let qq=sb.from('registrations').select('id,first_name,last_name,team_code,division,status').eq('season_year',SEASON).ilike('last_name',q+'%').neq('status','rejected').order('last_name').limit(25);
-  if(!COMM) qq=qq.in('team_code',teams.filter(t=>t.conference===PRES).map(t=>t.code));
-  const {data,error}=await qq; if(error){ $('lkHits').innerHTML='<p class="text-red-700 text-sm">'+esc(error.message)+'</p>'; return; }
-  $('lkHits').innerHTML=(data||[]).length?`<table class="t"><tbody>${data.map(r=>{ const o=charges.filter(c=>c.registration_id===r.id).reduce((s,c)=>s+(+c.amount||0),0), on=active.find(l=>l.registration_id===r.id);
-    return `<tr><td>${esc(r.first_name+' '+r.last_name)} <span class="text-xs text-gray-500">${esc(teamName(r.team_code))} · ${esc(r.division||'')}</span></td><td>${o?`<b class="text-red-700">${money(o)} owed</b>`:''}</td>
-    <td>${on?'<span class="pill bad">🔒 Locked</span>':`<button class="btn red" data-lockath="${r.id}" data-name="${esc(r.first_name+' '+r.last_name)}" data-owed="${o}">Lock results</button>`}</td></tr>`; }).join('')}</tbody></table>`:'<p class="text-sm text-gray-500">No athletes found.</p>'; },250); }; }
+
 }
 document.addEventListener('click',async e=>{
-if(tab!=='lockout') return; const b=e.target.closest('#pane button[data-lockteam],#pane button[data-lockath],#pane button[data-unlock]'); if(!b) return;
+if(tab!=='lockout') return; const b=e.target.closest('#pane button[data-lockteam],#pane button[data-unlock]'); if(!b) return;
 if(b.dataset.unlock){ const note=prompt('Unlock these results so everyone can see them again.\nOptional note (for example: paid in full 3/20):',''); if(note===null) return;
   if(await run(sb.rpc('unlock_results',{p_lock:b.dataset.unlock,p_note:note}),'Unlocked — results are showing again')) paintLockout(); return; }
-const o=+b.dataset.owed||0, team=b.dataset.lockteam, name=team?teamName(team):b.dataset.name;
-const reason=prompt(`Lock ${team?'ALL results for '+name:'the results for '+name}?\nThey'll be hidden from everyone except the presidents, the Commissioner and site admins.\n\nReason:`, o?`Fees/fines owed: ${money(o)}`:'Fees/fines owed'); if(reason===null) return;
-if(await run(sb.rpc('lock_results',{p_team:team||null,p_registration:b.dataset.lockath||null,p_reason:reason}),'Locked')) paintLockout();
+const o=+b.dataset.owed||0, team=b.dataset.lockteam, name=teamName(team);
+const reason=prompt(`Lock ALL results for ${name}?\nThey'll be hidden from everyone except the presidents, the Commissioner and site admins.\n\nReason:`, o?`Fees/fines owed: ${money(o)}`:'Fees/fines owed'); if(reason===null) return;
+if(await run(sb.rpc('lock_results',{p_team:team,p_registration:null,p_reason:reason}),'Locked')) paintLockout();
 });
 
 /* ============================ SEASON SCHEDULE ============================ */
