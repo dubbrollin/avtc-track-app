@@ -49,6 +49,7 @@ table.t td{padding:5px 6px;border-top:1px solid #f3f4f6;vertical-align:middle}
 <a href="coach.html">Coach Dashboard</a>
     <a href="meets-admin.html?view=timer">Timer</a>
 <a href="parent.html">Parent Dashboard</a>
+<a href="schedule.html">Schedule</a>
 <a href="results.html">Results</a>
 <a href="admin.html">Site Admin</a>
 </nav>
@@ -69,6 +70,7 @@ table.t td{padding:5px 6px;border-top:1px solid #f3f4f6;vertical-align:middle}
 <button class="tab" data-tab="fees">Fees &amp; Fines <span id="feeBadge" class="pill bad hide"></span></button>
 <button class="tab" data-tab="payments">Payments</button>
 <button class="tab" data-tab="messages">Paid Extras</button>
+<button class="tab" data-tab="schedule">Schedule</button>
 <button class="tab" data-tab="meets">Meets &amp; Results</button>
 <button class="tab" data-tab="meetadmin">Meet Admin</button>
 <button class="tab" data-tab="records">Records &amp; Standards</button>
@@ -160,7 +162,7 @@ refreshClrBadge(); refreshCertBadge(); showFeeNotice();
 });
 async function loadTeams(){ const {data}=await sb.from('league_teams').select('*').order('sort_order').order('name'); teams=data||[]; }
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>show(b.dataset.tab));
-function show(t){ tab=t; document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===t)); ({people:paintPeople,athletes:paintAthletes,cert:paintCert,clearances:paintClearances,fees:paintFees,payments:paintPayments,messages:paintMessages,meets:paintMeets,meetadmin:paintMeetAdmin,records:paintRecords,league:paintLeague})[t](); }
+function show(t){ tab=t; document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===t)); ({people:paintPeople,athletes:paintAthletes,cert:paintCert,clearances:paintClearances,fees:paintFees,payments:paintPayments,messages:paintMessages,schedule:paintSchedule,meets:paintMeets,meetadmin:paintMeetAdmin,records:paintRecords,league:paintLeague})[t](); }
 
 /* ============================ PEOPLE & ACCESS ============================ */
 // NOTE: the `coaches` table has no `id` column — its primary key is `email`.
@@ -714,6 +716,87 @@ if(act==='delres'){ if(!confirm(`Delete ALL results for "${name}"? This can't be
 if(act==='delmeet'){ if(prompt(`Delete the meet "${name}" AND all its events, entries and results?\nType DELETE to confirm.`)!=='DELETE') return;
 for(const t of ['results','entries','meet_events']) if(!await run(sb.from(t).delete().eq('meet_id',id))) return;
 if(await run(sb.from('meets').delete().eq('id',id),'Meet deleted')) paintMeets(); }
+});
+
+/* ============================ SEASON SCHEDULE ============================ */
+// What the public Schedule page (schedule.html) shows: key dates, then each meet's week, date, host, visiting teams and location.
+// Each meet is a normal meets row; a week with meets at several schools = one row per host site.
+let schedMeets=[], schedKeys=[];
+const hostOf=c=>teams.find(t=>t.code===c)||{};
+const visLabel=(codes,host)=>{ const v=(codes||[]).filter(c=>c!==host); return v.length?v.join(', '):'pick teams'; };
+async function paintSchedule(){
+$('pane').innerHTML='<p class="text-sm text-gray-500">Loading…</p>';
+const season=await window.currentSeason();
+const [m,k]=await Promise.all([sb.from('meets').select('*').eq('season_year',season).order('meet_date').order('week_no').order('name'),
+  sb.from('season_dates').select('*').eq('season_year',season).order('event_date')]);
+if(m.error||k.error){ $('pane').innerHTML='<p class="text-red-700">'+esc((m.error||k.error).message)+' — has the 2026-10-16-season-schedule.sql update been run?</p>'; return; }
+schedMeets=m.data||[]; schedKeys=k.data||[];
+const act=teams.filter(t=>t.active!==false);
+const visPick=(mt)=>`<details class="vis"><summary class="cursor-pointer text-xs underline" data-vlabel>${esc(visLabel(mt.team_codes,mt.host_team_code))}</summary>
+<div class="bg-white border rounded p-2 mt-1 shadow" style="position:absolute;z-index:20;max-height:260px;overflow:auto">${act.map(t=>`<label class="flex items-center gap-1 text-xs whitespace-nowrap"><input type="checkbox" data-vis value="${esc(t.code)}" ${(mt.team_codes||[]).includes(t.code)&&t.code!==mt.host_team_code?'checked':''}> ${esc(t.name)}</label>`).join('')}
+<p class="text-xs text-gray-500 mt-1 whitespace-normal" style="max-width:14rem">No teams ticked and no host = every team.</p></div></details>`;
+const mRow=mt=>`<tr data-id="${mt.id||''}" data-host="${esc(mt.host_team_code||'')}"><td><input type="number" min="1" max="20" data-f="week_no" value="${esc(mt.week_no??'')}" style="width:3.5rem" placeholder="—"></td>
+<td><input type="date" data-f="meet_date" value="${esc(mt.meet_date||'')}"></td><td><input data-f="name" value="${esc(mt.name||'')}" style="width:10rem"></td>
+<td><select data-f="host_team_code">${teamOpts(mt.host_team_code,'— none / TBA —')}</select></td><td style="position:relative">${visPick(mt)}</td>
+<td><input data-f="venue" value="${esc(mt.venue||'')}" style="width:10rem" placeholder="School / field"></td><td><input data-f="location" value="${esc(mt.location||'')}" style="width:13rem" placeholder="Street, city"></td>
+<td><input type="checkbox" data-f="is_championship" ${mt.is_championship?'checked':''}></td>
+<td class="whitespace-nowrap"><button class="btn pri" data-sact="save">Save</button></td></tr>`;
+const kRow=kd=>`<tr data-kid="${kd.id||''}"><td><input type="date" data-k="event_date" value="${esc(kd.event_date||'')}"></td><td><input data-k="label" value="${esc(kd.label||'')}" style="width:14rem"></td>
+<td><input data-k="note" value="${esc(kd.note||'')}" style="width:14rem" placeholder="optional"></td><td class="whitespace-nowrap"><button class="btn pri" data-kact="save">Save</button> <button class="btn red" data-kact="del">Delete</button></td></tr>`;
+const tRow=t=>`<tr data-code="${esc(t.code)}"><td>${esc(t.name)} <span class="text-xs text-gray-500">${esc(t.code)}</span></td><td><input data-h="home_venue" value="${esc(t.home_venue||'')}" style="width:12rem" placeholder="School / field"></td>
+<td><input data-h="home_address" value="${esc(t.home_address||'')}" style="width:16rem" placeholder="Street, city, ZIP"></td><td><button class="btn pri" data-hact="save">Save</button></td></tr>`;
+$('pane').innerHTML=`<div class="card"><h3 class="font-bold mb-1">${esc(season)} key dates</h3><p class="text-sm text-gray-600 mb-2">Dates that aren't meets (first practice, certification…). They show at the top of the <a class="underline" href="schedule.html" target="_blank">Schedule</a> page and on its calendar.</p>
+<div class="scroll"><table class="t"><thead><tr><th>Date</th><th>What</th><th>Note</th><th></th></tr></thead><tbody id="keyBody">${schedKeys.map(kRow).join('')}</tbody></table></div>
+<button class="btn grn mt-2" id="keyAdd">+ Add a key date</button></div>
+<div class="card"><h3 class="font-bold mb-1">${esc(season)} meet schedule</h3><p class="text-sm text-gray-600 mb-2">Week number, date, host and visiting teams, and location for each meet. Picking a host fills in its home field (set below). Leave Week blank for Open / League / IEC.
+If a week has meets at more than one school, add one row per host site with the same week number. The teams you pick here are also the only teams that can enter that meet. Delete a meet on <b>Meets &amp; Results</b>; add its events in <b>Meet Admin</b>.</p>
+<div class="scroll" style="min-height:300px"><table class="t"><thead><tr><th>Week</th><th>Date</th><th>Name</th><th>Host</th><th>Visiting teams</th><th>Venue</th><th>Address</th><th>Champ.</th><th></th></tr></thead><tbody id="schedBody">${schedMeets.map(mRow).join('')}</tbody></table></div>
+<button class="btn grn mt-2" id="schedAdd">+ Add a meet / another host site</button></div>
+<div class="card"><h3 class="font-bold mb-1">Team home fields</h3><p class="text-sm text-gray-600 mb-2">Where each team hosts. Used to fill in the location when the team is picked as host.</p>
+<div class="scroll"><table class="t"><thead><tr><th>Team</th><th>Home field</th><th>Address</th><th></th></tr></thead><tbody id="homeBody">${act.map(tRow).join('')}</tbody></table></div></div>`;
+viewOnly($('pane'));
+$('keyAdd')&&($('keyAdd').onclick=()=>{ const t=document.createElement('tbody'); t.innerHTML=kRow({}); $('keyBody').appendChild(t.firstChild); });
+$('schedAdd')&&($('schedAdd').onclick=()=>{ const t=document.createElement('tbody'); const last=schedMeets[schedMeets.length-1]||{}; t.innerHTML=mRow({week_no:last.week_no||'',meet_date:last.meet_date||'',name:last.week_no?'Week '+last.week_no:''}); const tr=t.firstChild; $('schedBody').appendChild(tr); tr.scrollIntoView({block:'center'}); });
+}
+// Visiting-team ticks: keep the summary label current. Host change: fill venue/address from the host's home field when they're empty or still the old host's.
+document.addEventListener('change',e=>{
+if(tab!=='schedule') return; const tr=e.target.closest('#schedBody tr'); if(!tr) return;
+const host=tr.querySelector('[data-f=host_team_code]').value;
+if(e.target.matches('[data-f=host_team_code]')){
+  const old=hostOf(tr.dataset.host||''), nh=hostOf(host), v=tr.querySelector('[data-f=venue]'), a=tr.querySelector('[data-f=location]'), n=tr.querySelector('[data-f=name]'), wk=tr.querySelector('[data-f=week_no]').value;
+  if(!v.value||v.value===(old.home_venue||'')) v.value=nh.home_venue||'';
+  if(!a.value||a.value===(old.home_address||'')) a.value=nh.home_address||'';
+  if(wk&&(!n.value||/^week\s*\d+/i.test(n.value))) n.value=`Week ${wk}`+(host?` @ ${teamName(host)}`:'');
+  tr.dataset.host=host; const hb=tr.querySelector(`[data-vis][value="${host}"]`); if(hb) hb.checked=false;
+}
+const vis=[...tr.querySelectorAll('[data-vis]:checked')].map(x=>x.value).filter(c=>c!==host);
+tr.querySelector('[data-vlabel]').textContent=visLabel(vis,host);
+});
+document.addEventListener('click',async e=>{
+if(tab!=='schedule') return;
+const b=e.target.closest('#pane button[data-sact],#pane button[data-kact],#pane button[data-hact]'); if(!b) return;
+const tr=b.closest('tr');
+if(b.dataset.hact){ const patch={}; tr.querySelectorAll('[data-h]').forEach(el=>patch[el.dataset.h]=el.value.trim()||null);
+  if(await run(sb.from('league_teams').update(patch).eq('code',tr.dataset.code),'Saved')){ Object.assign(hostOf(tr.dataset.code),patch); } return; }
+if(b.dataset.kact){ const id=tr.dataset.kid;
+  if(b.dataset.kact==='del'){ if(!id){ tr.remove(); return; } if(!confirm('Delete this key date?')) return; if(await run(sb.from('season_dates').delete().eq('id',id),'Deleted')) tr.remove(); return; }
+  const g=k=>tr.querySelector(`[data-k=${k}]`).value.trim(); if(!g('event_date')||!g('label')){ toast('A key date needs a date and a name.',true); return; }
+  const patch={event_date:g('event_date'),label:g('label'),note:g('note')||null,season_year:+(await window.currentSeason())};
+  const {data,error}=id?await sb.from('season_dates').update(patch).eq('id',id).select('id'):await sb.from('season_dates').insert(patch).select('id');
+  if(error){ toast(error.message,true); return; } toast('Saved'); if(!id&&data&&data[0]) tr.dataset.kid=data[0].id; return; }
+// a meet row
+const id=tr.dataset.id, f=k=>tr.querySelector(`[data-f=${k}]`);
+const host=f('host_team_code').value||null, date=f('meet_date').value, name=f('name').value.trim(), wk=f('week_no').value;
+if(!date||!name){ toast('A meet needs a date and a name.',true); return; }
+const vis=[...tr.querySelectorAll('[data-vis]:checked')].map(x=>x.value).filter(c=>c!==host);
+const patch={meet_date:date,name,week_no:wk?+wk:null,host_team_code:host,team_codes:(host||vis.length)?[...(host?[host]:[]),...vis]:null,
+  venue:f('venue').value.trim()||null,location:f('location').value.trim()||null,is_championship:f('is_championship').checked};
+const prev=schedMeets.find(x=>x.id===id);
+if(!prev||prev.meet_date!==date){ const dl=window.attendanceDeadline(date); if(dl) patch.entries_close=dl.toISOString(); } // entries close the Thursday before, 8 PM
+if(!id) Object.assign(patch,{season_year:+(await window.currentSeason()),status:'open',created_by:me.email});
+const {data,error}=id?await sb.from('meets').update(patch).eq('id',id).select('*'):await sb.from('meets').insert(patch).select('*');
+if(error){ toast(error.message,true); return; } toast('Saved');
+if(data&&data[0]){ const row=data[0]; tr.dataset.id=row.id; const i=schedMeets.findIndex(x=>x.id===row.id); if(i>=0) schedMeets[i]=row; else schedMeets.push(row); }
 });
 
 // Team admins see league-wide tabs exactly as site admins do, but view-only (the database blocks edits too).

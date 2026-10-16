@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#001C3B"><link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="VYC Track"><meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Season Schedule</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css?v=b1">
+<script src="theme.js?v=b2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script><script src="shared.js"></script>
+<style>
+.seg{padding:.5rem .9rem;font-size:.875rem;cursor:pointer;background:#fff}
+.seg.active{background:var(--brand);color:#fff}
+.segbar{display:flex;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;width:fit-content}
+.segbar .seg+.seg{border-left:1px solid #e5e7eb}
+.sechead{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#4b5563;margin:14px 0 8px}
+/* Key dates strip */
+.keyd{display:flex;flex-wrap:wrap;gap:8px}
+.keyd span{background:#fff;border:1px solid #e5e7eb;border-radius:999px;padding:4px 12px;font-size:13px}
+.keyd b{color:var(--act)}
+.keyd .past{opacity:.55}
+/* One row per meet: week + date on the left, who and where on the right */
+.mrow{display:grid;grid-template-columns:92px 1fr;gap:12px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;margin-bottom:8px;scroll-margin-top:90px}
+.mrow.next{border-color:var(--act);box-shadow:0 0 0 3px var(--act-soft)}
+.mrow.done{background:#fafafa}
+.mrow.flash{animation:flash 1.6s ease-out}
+@keyframes flash{0%{box-shadow:0 0 0 6px #fde68a}100%{box-shadow:none}}
+@media (prefers-reduced-motion:reduce){.mrow.flash{animation:none}}
+.wk{font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:20px;line-height:1;color:var(--navy,#001C3B);text-transform:uppercase}
+.wk.post{font-size:15px;color:#92400e}
+.wkdate{font-size:13px;color:#4b5563;margin-top:4px;font-weight:600}
+.kv{font-size:14px;line-height:1.45}
+.kv .k{color:#6b7280;display:inline-block;min-width:4.6rem}
+.tba{color:#9ca3af;font-style:italic}
+.pill{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:1px 8px;margin-left:4px;vertical-align:middle}
+.mine{background:#fef9c3}
+/* Calendar */
+.months{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.month{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:10px}
+.month h3{font-weight:700;margin:0 0 6px;text-align:center}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;font-size:12px}
+.cal .dow{text-align:center;color:#9ca3af;font-weight:600;padding-bottom:2px}
+.cal .day{min-height:46px;border-radius:6px;padding:2px 3px;background:#f9fafb}
+.cal .day.blank{background:transparent}
+.cal .day.today{outline:2px solid var(--act)}
+.cal .n{color:#6b7280;font-size:11px}
+.chip{display:block;width:100%;text-align:left;font-size:10.5px;font-weight:700;line-height:1.2;border-radius:4px;padding:2px 3px;margin-top:1px;cursor:pointer;border:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip.meet{background:var(--act);color:#fff}
+.chip.champ{background:#f59e0b;color:#fff}
+.chip.key{background:#e5e7eb;color:#374151;cursor:default}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:#4b5563;margin:8px 0}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px;margin-right:4px}
+</style>
+</head><body class="bg-gray-50 text-gray-900"><header class="topnav"><div class="topnav-inner">
+  <a class="brand" href="home.html">VYC <b>Track &amp; Field</b></a>
+  <nav>
+    <a href="home.html">Home</a>
+    <a href="index.html">Register</a>
+    <a href="coach.html">Coach Dashboard</a>
+    <a href="meets-admin.html?view=timer">Timer</a>
+    <a href="parent.html">Parent Dashboard</a>
+    <a href="schedule.html">Schedule</a>
+    <a href="results.html">Results</a>
+  </nav>
+</div></header>
+<div class="max-w-3xl mx-auto p-4">
+  <h1 class="text-2xl font-bold" id="title">Season Schedule</h1>
+  <p class="text-gray-600 mb-3">Every meet this season: the week, the date, who's hosting, who's visiting, and where. Tap an address for directions.</p>
+
+  <div class="flex flex-wrap items-center gap-2 mb-3">
+    <div class="segbar text-sm"><button id="vList" class="seg active">List</button><button id="vCal" class="seg">Calendar</button></div>
+    <select id="season" class="border rounded p-2 text-sm"></select>
+    <select id="team" class="border rounded p-2 text-sm"><option value="">All teams</option></select>
+  </div>
+
+  <div id="keyWrap" class="hidden"><div class="sechead">Key dates</div><div id="keyd" class="keyd"></div></div>
+  <div id="list"><p class="text-gray-500">Loading…</p></div>
+  <div id="calWrap" class="hidden">
+    <div class="legend"><span><i style="background:var(--act)"></i>Meet</span><span><i style="background:#f59e0b"></i>Championship</span><span><i style="background:#e5e7eb"></i>Key date</span></div>
+    <div id="cal" class="months"></div>
+  </div>
+  <p class="text-xs text-gray-400 mt-4">Field events start at <span id="tField"></span>; the first race (<span id="tRace"></span>) at <span id="tRaceAt"></span>. Results for each meet appear on the <a class="underline" href="results.html">Results</a> page.</p>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const CFG=window.APP_CONFIG;
+const sb=supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{auth:{lock:(n,t,fn)=>fn()}});
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// Public page: ask only for the meet columns open to everyone.
+const MEET_COLS='id,name,meet_date,location,venue,week_no,host_team_code,team_codes,status,is_championship,is_invitational,season_year';
+const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
+const tName=c=>(window.VYC_TEAMS.find(t=>t.code===c)||{}).name||c;
+const dt=d=>new Date(String(d).slice(0,10)+'T12:00:00');
+const fmtShort=d=>dt(d).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+const mapUrl=a=>'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(a);
+let meets=[], keyDates=[], resCount={}, view='list';
+const T=window.MEET_DAY||{}; $('tField').textContent=T.field||''; $('tRace').textContent=T.firstRace||''; $('tRaceAt').textContent=T.firstRaceAt||'';
+
+(async()=>{
+  const season=+(await window.currentSeason());
+  const [m,k]=await Promise.all([
+    sb.from('meets').select(MEET_COLS).order('meet_date').order('week_no').order('name'),
+    sb.from('season_dates').select('season_year,event_date,label,note').order('event_date')]);
+  if(m.error){ $('list').innerHTML='<p class="text-red-700">Couldn\'t load the schedule: '+esc(m.error.message)+'</p>'; return; }
+  meets=m.data||[]; keyDates=k.data||[];
+  const years=[...new Set([...meets.map(x=>x.season_year),...keyDates.map(x=>x.season_year)].filter(Boolean))].sort((a,b)=>b-a);
+  if(!years.includes(season)) years.unshift(season);
+  $('season').innerHTML=years.map(y=>`<option value="${y}" ${y===season?'selected':''}>${y} season</option>`).join('');
+  $('team').innerHTML='<option value="">All teams</option>'+window.VYC_TEAMS.filter(t=>t.active!==false).slice().sort((a,b)=>a.name.localeCompare(b.name)).map(t=>`<option value="${esc(t.code)}">${esc(t.name)}</option>`).join('');
+  try{ const t=localStorage.getItem('schedTeam'); if(t) $('team').value=t; }catch(e){}
+  $('season').onchange=render; $('team').onchange=()=>{ try{ localStorage.setItem('schedTeam',$('team').value); }catch(e){} render(); };
+  $('vList').onclick=()=>setView('list'); $('vCal').onclick=()=>setView('cal');
+  // Which meets already have results (a "Results →" link). Head-only counts: cheap.
+  await Promise.all(meets.filter(x=>x.meet_date&&x.meet_date<=today).map(async x=>{ const {count}=await sb.from('results').select('id',{count:'exact',head:true}).eq('meet_id',x.id); resCount[x.id]=count||0; }));
+  render();
+})();
+
+function setView(v){ view=v; $('vList').classList.toggle('active',v==='list'); $('vCal').classList.toggle('active',v==='cal'); render(); }
+const seasonMeets=()=>{ const y=+$('season').value, t=$('team').value; return meets.filter(m=>m.season_year===y&&(!t||window.meetHasTeam(m,t))); };
+const seasonKeys=()=>keyDates.filter(k=>k.season_year===+$('season').value);
+const weekLabel=m=>m.week_no?'Week '+m.week_no:(m.name||'Meet');
+const visitors=m=>{ const L=m.team_codes||[]; if(!L.length) return (m.host_team_code||m.week_no)?null:'all'; /* a week's meet with no teams picked yet = not announced */ return L.filter(c=>c!==m.host_team_code); };
+
+function render(){
+  const y=+$('season').value; $('title').textContent=y+' Season Schedule'; document.title=y+' Season Schedule';
+  const keys=seasonKeys();
+  $('keyWrap').classList.toggle('hidden',!keys.length);
+  $('keyd').innerHTML=keys.map(k=>`<span class="${k.event_date<today?'past':''}"><b>${esc(fmtShort(k.event_date))}</b> · ${esc(k.label)}${k.note?' — '+esc(k.note):''}</span>`).join('');
+  $('list').classList.toggle('hidden',view!=='list'); $('calWrap').classList.toggle('hidden',view!=='cal');
+  view==='list'?renderList():renderCal();
+}
+
+function row(m,nextId){
+  const team=$('team').value, done=m.meet_date&&m.meet_date<today;
+  const v=visitors(m);
+  const host=m.host_team_code?esc(tName(m.host_team_code)):(m.team_codes||[]).length||m.week_no?'<span class="tba">To be announced</span>':'<span class="tba">League meet</span>';
+  const vis=v==='all'?'All VYC teams':v===null?'<span class="tba">To be announced</span>':v.length?v.map(c=>c===team?`<mark class="mine">${esc(tName(c))}</mark>`:esc(tName(c))).join(', '):'<span class="tba">To be announced</span>';
+  const hostHtml=m.host_team_code&&m.host_team_code===team?`<mark class="mine">${host}</mark>`:host;
+  const where=m.location?`${m.venue?esc(m.venue)+'<br>':''}<a class="text-blue-700 underline" target="_blank" rel="noopener" href="${mapUrl((m.venue?m.venue+', ':'')+m.location)}">${esc(m.location)}</a>`:m.venue?esc(m.venue):'<span class="tba">To be announced</span>';
+  const tags=(m.week_no&&m.name&&!/^week\s*\d+$/i.test(m.name.trim())?`<div class="font-semibold text-sm mb-0.5">${esc(m.name)}</div>`:'')
+    +(m.is_championship?'<span class="pill" style="background:#fef3c7;color:#92400e;margin-left:0">Championship</span>':'')+(m.is_invitational?'<span class="pill" style="background:#e5e7eb">Invitational</span>':'')
+    +(m.id===nextId?'<span class="pill" style="background:var(--act-soft);color:var(--act)">Next up</span>':'')+(done?'<span class="pill" style="background:#e5e7eb;color:#4b5563">Done</span>':'');
+  return `<div class="mrow ${m.id===nextId?'next':''} ${done?'done':''}" id="m-${m.id}">
+    <div><div class="wk ${m.week_no?'':'post'}">${esc(weekLabel(m))}</div><div class="wkdate">${m.meet_date?esc(fmtShort(m.meet_date)):'Date TBA'}</div></div>
+    <div class="kv">${tags?`<div class="mb-1">${tags}</div>`:''}
+      <div><span class="k">Host</span> ${hostHtml}</div>
+      <div><span class="k">Visiting</span> ${vis}</div>
+      <div><span class="k">Location</span> <span style="display:inline-block;vertical-align:top">${where}</span></div>
+      ${resCount[m.id]?`<div class="mt-1"><a class="font-semibold" style="color:var(--act)" href="results.html?meet=${m.id}">Results →</a></div>`:''}
+    </div></div>`;
+}
+function renderList(){
+  const L=seasonMeets(), team=$('team').value;
+  if(!L.length){ $('list').innerHTML=`<p class="text-sm text-gray-500 bg-white border rounded-xl p-4">${team?esc(tName(team))+' has no meets on the schedule for this season yet.':'No meets are on the schedule for this season yet. Check back soon.'}</p>`; return; }
+  const next=L.find(m=>m.meet_date&&m.meet_date>=today), nextId=next&&next.id;
+  const reg=L.filter(m=>m.week_no), lastReg=(reg[reg.length-1]||{}).meet_date;
+  const post=L.filter(m=>!m.week_no&&(!lastReg||(m.meet_date&&m.meet_date>=lastReg))), other=L.filter(m=>!reg.includes(m)&&!post.includes(m));
+  $('list').innerHTML=(reg.length?'<div class="sechead">Regular season</div>'+reg.map(m=>row(m,nextId)).join(''):'')
+    +(post.length?`<div class="sechead">${reg.length?'Postseason':'Meets'}</div>`+post.map(m=>row(m,nextId)).join(''):'')
+    +(other.length?'<div class="sechead">Other meets</div>'+other.map(m=>row(m,nextId)).join(''):'');
+}
+function renderCal(){
+  // Only the season's own calendar year (a stray test meet the fall before shouldn't add empty months).
+  const y=String($('season').value), inYr=d=>String(d).slice(0,4)===y;
+  const L=seasonMeets().filter(m=>m.meet_date&&inYr(m.meet_date)), K=seasonKeys().filter(k=>inYr(k.event_date));
+  const ds=[...L.map(m=>m.meet_date),...K.map(k=>k.event_date)].sort();
+  if(!ds.length){ $('cal').innerHTML='<p class="text-sm text-gray-500">Nothing on the calendar for this season yet.</p>'; return; }
+  const first=dt(ds[0]), last=dt(ds[ds.length-1]); let html='';
+  for(let y=first.getFullYear(),mo=first.getMonth(); y<last.getFullYear()||(y===last.getFullYear()&&mo<=last.getMonth()); mo===11?(y++,mo=0):mo++){
+    const start=new Date(y,mo,1), days=new Date(y,mo+1,0).getDate();
+    let cells='SMTWTFS'.split('').map(d=>`<div class="dow">${d}</div>`).join('')+'<div class="day blank"></div>'.repeat(start.getDay());
+    for(let d=1;d<=days;d++){
+      const iso=`${y}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const chips=L.filter(m=>m.meet_date===iso).map(m=>`<button class="chip ${m.is_championship?'champ':'meet'}" data-go="${m.id}" title="${esc(weekLabel(m)+(m.host_team_code?' @ '+tName(m.host_team_code):''))}">${esc(m.week_no?'Wk '+m.week_no+(m.host_team_code?' '+m.host_team_code:''):m.name)}</button>`).join('')
+        +K.filter(k=>k.event_date===iso).map(k=>`<span class="chip key" title="${esc(k.label)}">${esc(k.label)}</span>`).join('');
+      cells+=`<div class="day ${iso===today?'today':''}"><div class="n">${d}</div>${chips}</div>`;
+    }
+    html+=`<div class="month"><h3>${start.toLocaleDateString('en-US',{month:'long',year:'numeric'})}</h3><div class="cal">${cells}</div></div>`;
+  }
+  $('cal').innerHTML=html;
+  document.querySelectorAll('#cal [data-go]').forEach(b=>b.onclick=()=>{ setView('list'); const el=$('m-'+b.dataset.go); if(el){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); } });
+}
+</script>
+</body></html>

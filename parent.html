@@ -32,6 +32,7 @@
     <a href="coach.html">Coach Dashboard</a>
     <a href="meets-admin.html?view=timer">Timer</a>
     <a href="parent.html">Parent Dashboard</a>
+    <a href="schedule.html">Schedule</a>
     <a href="results.html">Results</a>
   </nav>
 </div></header>
@@ -64,7 +65,7 @@
     </div>
 
     <div class="card" id="schedCard">
-      <h2 class="font-bold mb-2">Schedule</h2>
+      <h2 class="font-bold mb-2">Schedule <a class="text-sm font-normal underline ml-2" style="color:var(--act)" href="schedule.html">Full league schedule &amp; calendar →</a></h2>
       <div id="schedule"><p class="text-sm text-gray-500">Loading…</p></div>
     </div>
 
@@ -179,7 +180,9 @@ function renderSchedule(myTeams){
         ${m.is_championship?'<span class="pill" style="background:#fef3c7;color:#92400e">Championship</span>':''}${m.is_invitational?'<span class="pill" style="background:#e5e7eb">Invitational</span>':''}${past?'<span class="pill" style="background:#e5e7eb">Done</span>':''}</div>
       ${myTeams.length>1?`<div class="text-xs text-gray-500">${mine.map(tName).map(esc).join(', ')}</div>`:''}
       ${T&&!past?`<div class="text-sm mt-0.5"><span class="text-gray-500">Field events start:</span> <b>${esc(T.field)}</b> <span class="text-gray-400">·</span> <span class="text-gray-500">First race (${esc(T.firstRace)}):</span> <b>${esc(T.firstRaceAt)}</b></div>`:''}
+      ${m.host_team_code?`<div class="text-sm mt-0.5"><span class="text-gray-500">Host:</span> ${esc(tName(m.host_team_code))}${m.week_no?` <span class="text-gray-400">· Week ${esc(m.week_no)}</span>`:''}</div>`:''}
       <div class="text-sm mt-0.5"><span class="text-gray-500">Against:</span> ${esc(vs(m))}</div>
+      ${m.venue?`<div class="text-sm"><span class="text-gray-500">Venue:</span> ${esc(m.venue)}</div>`:''}
       <div class="text-sm">${m.location?`<span class="text-gray-500">Where:</span> <a class="text-blue-700 underline" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.location)}">${esc(m.location)} — open in Google Maps ↗</a>`:'<span class="text-gray-500">Where: to be announced</span>'}</div></div>`; };
   const up=meets.filter(m=>!m.meet_date||m.meet_date>=today), past=meets.filter(m=>m.meet_date&&m.meet_date<today).reverse();
   el.innerHTML=(up.length?up.map(m=>row(m,false)).join(''):'<p class="text-sm text-gray-500">No more meets coming up this season.</p>')

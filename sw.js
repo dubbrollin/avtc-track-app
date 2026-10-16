@@ -1,8 +1,8 @@
 // Service worker for the installable app. Pages and app files are fetched fresh whenever there is a connection
 // (so every push shows up right away) and the last good copy is kept for when there isn't.
 // Supabase (all app data, sign-in, uploads) is never cached — it always goes straight to the network.
-var VERSION = 'vyc-app-1';
-var SHELL = ['./', 'home.html', 'index.html', 'parent.html', 'coach.html', 'entries.html', 'results.html',
+var VERSION = 'vyc-app-2';
+var SHELL = ['./', 'home.html', 'index.html', 'parent.html', 'coach.html', 'entries.html', 'results.html', 'schedule.html',
   'theme.css', 'theme.js', 'config.js', 'shared.js', 'events.js', 'logo.png', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/apple-touch-icon.png'];
 var CDN = ['cdn.tailwindcss.com', 'cdn.jsdelivr.net', 'cdnjs.cloudflare.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
