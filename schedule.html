@@ -22,21 +22,43 @@
 .keyd span{background:#fff;border:1px solid #e5e7eb;border-radius:999px;padding:4px 12px;font-size:13px}
 .keyd b{color:var(--act)}
 .keyd .past{opacity:.55}
-/* One row per meet: week + date on the left, who and where on the right */
-.mrow{display:grid;grid-template-columns:92px 1fr;gap:12px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;margin-bottom:8px;scroll-margin-top:90px}
-.mrow.next{border-color:var(--act);box-shadow:0 0 0 3px var(--act-soft)}
-.mrow.done{background:#fafafa}
-.mrow.flash{animation:flash 1.6s ease-out}
-@keyframes flash{0%{box-shadow:0 0 0 6px #fde68a}100%{box-shadow:none}}
-@media (prefers-reduced-motion:reduce){.mrow.flash{animation:none}}
-.wk{font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:20px;line-height:1;color:var(--navy,#001C3B);text-transform:uppercase}
-.wk.post{font-size:15px;color:#92400e}
-.wkdate{font-size:13px;color:#4b5563;margin-top:4px;font-weight:600}
-.kv{font-size:14px;line-height:1.45}
-.kv .k{color:#6b7280;display:inline-block;min-width:4.6rem}
+/* League schedule, laid out like valleyconference.org's: one block per week (Week N + date), then Host | Visitors | Notes | Results */
+.wkblock{background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;margin-bottom:14px;scroll-margin-top:90px}
+.wkblock.next{border-color:var(--act);box-shadow:0 0 0 3px var(--act-soft)}
+.wkbar{display:flex;align-items:baseline;gap:14px;background:var(--navy,#001C3B);color:#fff;padding:8px 14px}
+.wkbar .wk{font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:20px;line-height:1;color:#fde047;text-transform:uppercase;min-width:4.5rem}
+.wkbar .wkdate{font-weight:700;font-size:15px}
+.wkbar .pill{margin-left:auto}
+table.sched{width:100%;border-collapse:collapse;font-size:14px;table-layout:fixed} /* fixed = columns line up week to week */
+table.sched th:nth-child(1){width:30%} table.sched th:nth-child(2){width:32%} table.sched th:nth-child(4){width:6.5rem}
+table.sched td{overflow-wrap:anywhere}
+table.sched th{text-align:left;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#6b7280;padding:7px 14px;border-bottom:1px solid #e5e7eb;background:#f9fafb}
+table.sched td{padding:9px 14px;border-top:1px solid #f1f5f9;vertical-align:top;line-height:1.4}
+table.sched tr:first-child td{border-top:0}
+table.sched td.host{font-weight:700;width:30%}
+table.sched td.res{text-align:right;white-space:nowrap;width:5.5rem}
+table.sched .vis div{white-space:nowrap}
+table.sched .city{font-size:12px;color:#6b7280}
+table.sched tr.flash td{animation:flash 1.6s ease-out}
+@keyframes flash{0%{background:#fde68a}100%{background:transparent}}
+@media (prefers-reduced-motion:reduce){table.sched tr.flash td{animation:none}}
+/* Phones: each meet becomes a small card (host on top, visitors + notes under it) */
+@media (max-width:560px){
+  table.sched thead{display:none}
+  table.sched tr{display:grid;grid-template-columns:1fr auto;border-top:1px solid #e5e7eb;padding:8px 12px}
+  table.sched tr:first-child{border-top:0}
+  table.sched td{border:0;padding:1px 0;width:auto!important}
+  table.sched td.host{grid-column:1}
+  table.sched td.res{grid-column:2;grid-row:1}
+  table.sched td.vis,table.sched td.notes{grid-column:1/-1}
+  table.sched td.vis::before{content:'vs ';color:#6b7280;font-weight:600}
+  table.sched .vis div{display:inline;white-space:normal}
+  table.sched .vis div+div::before{content:', '}
+}
 .tba{color:#9ca3af;font-style:italic}
 .pill{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:1px 8px;margin-left:4px;vertical-align:middle}
-.mine{background:#fef9c3}
+.mine{background:#fef9c3;border-radius:3px;padding:0 2px}
+tr.mine-row td{background:#fffbeb}
 /* Calendar */
 .months{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
 .month{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:10px}
@@ -73,7 +95,7 @@
   <div class="flex flex-wrap items-center gap-2 mb-3">
     <div class="segbar text-sm"><button id="vList" class="seg active">List</button><button id="vCal" class="seg">Calendar</button></div>
     <select id="season" class="border rounded p-2 text-sm"></select>
-    <select id="team" class="border rounded p-2 text-sm"><option value="">All teams</option></select>
+    <select id="team" class="border rounded p-2 text-sm" title="Highlight a team"><option value="">Highlight a team…</option></select>
   </div>
 
   <div id="notice" class="hidden mb-3 text-sm rounded-xl p-3" style="background:#fef3c7;border:1px solid #fcd34d;color:#78350f"></div>
@@ -112,7 +134,7 @@ const T=window.MEET_DAY||{}; $('tField').textContent=T.field||''; $('tRace').tex
   const years=[...new Set([...meets.map(x=>x.season_year),...keyDates.map(x=>x.season_year)].filter(Boolean))].sort((a,b)=>b-a);
   if(!years.includes(season)) years.unshift(season);
   $('season').innerHTML=years.map(y=>`<option value="${y}" ${y===season?'selected':''}>${y} season</option>`).join('');
-  $('team').innerHTML='<option value="">All teams</option>'+window.VYC_TEAMS.filter(t=>t.active!==false).slice().sort((a,b)=>a.name.localeCompare(b.name)).map(t=>`<option value="${esc(t.code)}">${esc(t.name)}</option>`).join('');
+  $('team').innerHTML='<option value="">Highlight a team…</option>'+window.VYC_TEAMS.filter(t=>t.active!==false).slice().sort((a,b)=>a.name.localeCompare(b.name)).map(t=>`<option value="${esc(t.code)}">${esc(t.name)}</option>`).join('');
   try{ const t=localStorage.getItem('schedTeam'); if(t) $('team').value=t; }catch(e){}
   $('season').onchange=render; $('team').onchange=()=>{ try{ localStorage.setItem('schedTeam',$('team').value); }catch(e){} render(); };
   $('vList').onclick=()=>setView('list'); $('vCal').onclick=()=>setView('cal');
@@ -137,35 +159,34 @@ function render(){
   view==='list'?renderList():renderCal();
 }
 
-function row(m,nextId){
-  const team=$('team').value, done=m.meet_date&&m.meet_date<today;
-  const v=visitors(m);
-  const host=m.host_team_code?esc(tName(m.host_team_code)):(m.team_codes||[]).length||m.week_no?'<span class="tba">To be announced</span>':'<span class="tba">League meet</span>';
-  const vis=v==='all'?'All VYC teams':v===null?'<span class="tba">To be announced</span>':v.length?v.map(c=>c===team?`<mark class="mine">${esc(tName(c))}</mark>`:esc(tName(c))).join(', '):'<span class="tba">To be announced</span>';
-  const hostHtml=m.host_team_code&&m.host_team_code===team?`<mark class="mine">${host}</mark>`:host;
-  const where=m.location?`${m.venue?esc(m.venue)+'<br>':''}<a class="text-blue-700 underline" target="_blank" rel="noopener" href="${mapUrl((m.venue?m.venue+', ':'')+m.location)}">${esc(m.location)}</a>`:m.venue?esc(m.venue):'<span class="tba">To be announced</span>';
-  const tags=(m.week_no&&m.name&&!/^week\s*\d+$/i.test(m.name.trim())?`<div class="font-semibold text-sm mb-0.5">${esc(m.name)}</div>`:'')
-    +(m.is_championship?'<span class="pill" style="background:#fef3c7;color:#92400e;margin-left:0">Championship</span>':'')+(m.is_invitational?'<span class="pill" style="background:#e5e7eb">Invitational</span>':'')
-    +(m.id===nextId?'<span class="pill" style="background:var(--act-soft);color:var(--act)">Next up</span>':'')+(done?'<span class="pill" style="background:#e5e7eb;color:#4b5563">Done</span>':'');
-  return `<div class="mrow ${m.id===nextId?'next':''} ${done?'done':''}" id="m-${m.id}">
-    <div><div class="wk ${m.week_no?'':'post'}">${esc(weekLabel(m))}</div><div class="wkdate">${m.meet_date?esc(fmtShort(m.meet_date)):'Date TBA'}</div></div>
-    <div class="kv">${tags?`<div class="mb-1">${tags}</div>`:''}
-      <div><span class="k">Host</span> ${hostHtml}</div>
-      <div><span class="k">Visiting</span> ${vis}</div>
-      <div><span class="k">Location</span> <span style="display:inline-block;vertical-align:top">${where}</span></div>
-      ${resCount[m.id]?`<div class="mt-1"><a class="font-semibold" style="color:var(--act)" href="results.html?meet=${m.id}">Results →</a></div>`:''}
-    </div></div>`;
+// One meet = one table row. Multi-team meets (Open, League, IEC, invitationals) show the meet's name in the Host column, like the league site.
+function row(m,team){
+  const v=visitors(m), mark=c=>c===team?`<span class="mine">${esc(tName(c))}</span>`:esc(tName(c));
+  const host=m.host_team_code?mark(m.host_team_code):m.week_no&&/^week\s*\d+/i.test(m.name||'')?'<span class="tba">To be announced</span>':esc(m.name||'Meet');
+  const tags=(m.is_championship?'<span class="pill" style="background:#fef3c7;color:#92400e;margin-left:0">Championship</span>':'')+(m.is_invitational?'<span class="pill" style="background:#e5e7eb;margin-left:0">Invitational</span>':'');
+  const vis=v==='all'?'All VYC teams':v===null||!v.length?'<span class="tba">To be announced</span>':v.map(c=>`<div>${mark(c)}</div>`).join('');
+  const place=m.venue||m.location;
+  const notes=place?`<a class="text-blue-700 underline" target="_blank" rel="noopener" href="${mapUrl([m.venue,m.location].filter(Boolean).join(', '))}">@ ${esc(place)}</a>${m.venue&&m.location?`<div class="city">${esc(m.location)}</div>`:''}`:'<span class="tba">Location to come</span>';
+  const res=resCount[m.id]?`<a class="font-semibold" style="color:var(--act)" href="results.html?meet=${m.id}">Results →</a>`:m.meet_date&&m.meet_date<today?'<span class="text-gray-400">—</span>':'';
+  const mine=team&&window.meetHasTeam(m,team)&&(m.team_codes||[]).length;
+  return `<tr id="m-${m.id}" class="${mine?'mine-row':''}"><td class="host">${host}${tags?'<div>'+tags+'</div>':''}</td><td class="vis">${vis}</td><td class="notes">${notes}</td><td class="res">${res}</td></tr>`;
 }
+const fmtLong=d=>dt(d).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'2-digit',year:'numeric'});
 function renderList(){
-  const L=seasonMeets(), team=$('team').value;
-  if(!L.length){ $('list').innerHTML=`<p class="text-sm text-gray-500 bg-white border rounded-xl p-4">${team?esc(tName(team))+' has no meets on the schedule for this season yet.':'No meets are on the schedule for this season yet. Check back soon.'}</p>`; return; }
-  const next=L.find(m=>m.meet_date&&m.meet_date>=today), nextId=next&&next.id;
-  const reg=L.filter(m=>m.week_no), lastReg=(reg[reg.length-1]||{}).meet_date;
-  const post=L.filter(m=>!m.week_no&&(!lastReg||(m.meet_date&&m.meet_date>=lastReg))), other=L.filter(m=>!reg.includes(m)&&!post.includes(m));
-  $('list').innerHTML=(reg.length?'<div class="sechead">Regular season</div>'+reg.map(m=>row(m,nextId)).join(''):'')
-    +(post.length?`<div class="sechead">${reg.length?'Postseason':'Meets'}</div>`+post.map(m=>row(m,nextId)).join(''):'')
-    +(other.length?'<div class="sechead">Other meets</div>'+other.map(m=>row(m,nextId)).join(''):'');
+  const y=+$('season').value, team=$('team').value;
+  const L=meets.filter(m=>m.season_year===y); // the league schedule shows everyone; the team picker only highlights
+  if(!L.length){ $('list').innerHTML='<p class="text-sm text-gray-500 bg-white border rounded-xl p-4">No meets are on the schedule for this season yet. Check back soon.</p>'; return; }
+  // Group by week (meets without a week number are grouped by date and labelled with their name).
+  const groups=[]; for(const m of L){ const k=m.week_no?'w'+m.week_no:'d'+m.meet_date; let g=groups.find(x=>x.k===k); if(!g) groups.push(g={k,wk:m.week_no,list:[]}); g.list.push(m); }
+  groups.sort((a,b)=>String(a.list[0].meet_date).localeCompare(String(b.list[0].meet_date)));
+  const nextG=groups.find(g=>g.list.some(m=>m.meet_date&&m.meet_date>=today));
+  $('list').innerHTML=groups.map(g=>{ const ds=[...new Set(g.list.map(m=>m.meet_date).filter(Boolean))].sort(), done=ds.length&&ds[ds.length-1]<today;
+    const when=ds.length?ds.map(fmtLong).join(' & '):'Date to come';
+    return `<section class="wkblock ${g===nextG?'next':''}"><div class="wkbar"><span class="wk">${g.wk?'Week '+g.wk:'Meet'}</span><span class="wkdate">${esc(when)}</span>${g===nextG?'<span class="pill" style="background:#fff;color:var(--act)">Next up</span>':done?'<span class="pill" style="background:rgba(255,255,255,.2);color:#fff">Done</span>':''}</div>
+      <table class="sched"><thead><tr><th>Host</th><th>Visitors</th><th>Notes</th><th style="text-align:right">Results</th></tr></thead><tbody>${g.list.map(m=>row(m,team)).join('')}</tbody></table></section>`; }).join('');
 }
+const chipLabel=m=>{ const t=$('team').value; if(!t) return m.week_no?'Week '+m.week_no:m.name;
+  return m.host_team_code?(m.host_team_code===t?'Home meet':'@ '+m.host_team_code):m.name; };
 function renderCal(){
   // Only the season's own calendar year (a stray test meet the fall before shouldn't add empty months).
   const y=String($('season').value), inYr=d=>String(d).slice(0,4)===y;
@@ -178,7 +199,9 @@ function renderCal(){
     let cells='SMTWTFS'.split('').map(d=>`<div class="dow">${d}</div>`).join('')+'<div class="day blank"></div>'.repeat(start.getDay());
     for(let d=1;d<=days;d++){
       const iso=`${y}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-      const chips=L.filter(m=>m.meet_date===iso).map(m=>`<button class="chip ${m.is_championship?'champ':'meet'}" data-go="${m.id}" title="${esc(weekLabel(m)+(m.host_team_code?' @ '+tName(m.host_team_code):''))}">${esc(m.week_no?'Wk '+m.week_no+(m.host_team_code?' '+m.host_team_code:''):m.name)}</button>`).join('')
+      // One chip per week (a week can have five meets at once); with a team picked, only that team's meet.
+      const seen=new Set(), day=L.filter(m=>m.meet_date===iso&&(!$('team').value||(m.team_codes||[]).length)).filter(m=>{ const k=$('team').value?m.id:(m.week_no||m.id); if(seen.has(k)) return false; seen.add(k); return true; });
+      const chips=day.map(m=>`<button class="chip ${m.is_championship?'champ':'meet'}" data-go="${m.id}" title="${esc(weekLabel(m)+(m.host_team_code?' @ '+tName(m.host_team_code):' · '+m.name))}">${esc(chipLabel(m))}</button>`).join('')
         +K.filter(k=>k.event_date===iso).map(k=>`<span class="chip key" title="${esc(k.label)}">${esc(k.label)}</span>`).join('');
       cells+=`<div class="day ${iso===today?'today':''}"><div class="n">${d}</div>${chips}</div>`;
     }

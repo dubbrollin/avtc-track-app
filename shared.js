@@ -204,3 +204,48 @@ document.addEventListener('DOMContentLoaded',function(){ try{
 }catch(e){} });
 window.setRoleFlags=function(c){ try{ localStorage.setItem('vyc_admin',(c&&(c.is_admin||c.team_admin))?'1':'0'); localStorage.setItem('vyc_team_admin',(c&&(c.is_admin||c.team_admin))?'1':'0'); localStorage.setItem('vyc_timer',(c&&c.role_type==='timer')?'1':'0'); localStorage.setItem('vyc_coach',(c&&c.role_type!=='timer')?'1':'0'); }catch(e){} };
 window.clearRoleFlags=function(){ try{ ['vyc_admin','vyc_team_admin','vyc_timer','vyc_coach'].forEach(k=>localStorage.removeItem(k)); }catch(e){} };
+
+// ---- "Our schedule" box on the Coach and Parent dashboards (like a team's season calendar on Athletic.net):
+// only the meets the team is at this season — date, where they're going (or home meet), who they're up against, the school
+// with directions, and Results → once results are posted. The league-wide schedule is schedule.html.
+// mountTeamSchedule(el, {sb, teams:['AVTC',...]})  — several teams = a parent with athletes on more than one team.
+window.mountTeamSchedule = async function(el, opts){
+  if(!el) return; const sb=opts.sb, teams=(opts.teams||[]).filter(Boolean);
+  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  if(!document.getElementById('tsStyle')){ const st=document.createElement('style'); st.id='tsStyle'; st.textContent=
+    '.ts-row{display:flex;gap:12px;align-items:flex-start;padding:10px 2px;border-top:1px solid #eef0f3}.ts-row:first-child{border-top:0}'+
+    '.ts-date{flex:none;width:52px;text-align:center;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;background:#fff;line-height:1.1}'+
+    '.ts-date .mo{background:var(--navy,#001C3B);color:#fff;font-size:10px;font-weight:800;letter-spacing:.06em;padding:2px 0}.ts-date .dy{font-size:20px;font-weight:800;padding-top:2px}.ts-date .wd{font-size:10px;color:#6b7280;padding-bottom:3px}'+
+    '.ts-main{flex:1;min-width:0;font-size:14px;line-height:1.4}.ts-title{font-weight:700}.ts-sub{color:#4b5563}.ts-where a{color:#1d4ed8;text-decoration:underline}.ts-where{font-size:13px}'+
+    '.ts-side{flex:none;text-align:right;font-size:13px;white-space:nowrap}.ts-pill{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:1px 8px}'+
+    '.ts-row.done{opacity:.6}.ts-row.next{background:var(--act-soft,#E6F0FC);border-radius:10px;padding-left:8px;padding-right:8px}'; document.head.appendChild(st); }
+  if(!teams.length){ el.innerHTML='<p class="text-sm text-gray-500">Your team\'s meets will show here once you\'re on a team.</p>'; return; }
+  el.innerHTML='<p class="text-sm text-gray-500">Loading…</p>';
+  const season=+(await window.currentSeason());
+  const {data,error}=await sb.from('meets').select('id,name,meet_date,location,venue,week_no,host_team_code,team_codes,is_championship,is_invitational,season_year').eq('season_year',season).order('meet_date').order('name');
+  if(error){ el.innerHTML='<p class="text-sm text-red-700">Couldn\'t load the schedule: '+esc(error.message)+'</p>'; return; }
+  // A team's meets: ones that list the team, plus league-wide meets with no team list (IEC, invitationals). A week's meet with no teams picked yet isn't anyone's.
+  const unassigned=m=>m.week_no&&!m.host_team_code&&!(m.team_codes||[]).length&&!m.is_invitational&&!m.is_championship;
+  const meets=(data||[]).filter(m=>!unassigned(m)&&teams.some(t=>window.meetHasTeam(m,t)));
+  const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
+  const tName=c=>(window.VYC_TEAMS.find(t=>t.code===c)||{}).name||c;
+  const res={}; await Promise.all(meets.filter(m=>m.meet_date&&m.meet_date<=today).map(async m=>{ const {count}=await sb.from('results').select('id',{count:'exact',head:true}).eq('meet_id',m.id); res[m.id]=count||0; }));
+  if(!meets.length){ el.innerHTML='<p class="text-sm text-gray-500">No meets on '+(teams.length>1?'your teams\'':'your team\'s')+' schedule yet this season. <a class="underline" href="schedule.html">See the league schedule →</a></p>'; return; }
+  const next=meets.find(m=>m.meet_date&&m.meet_date>=today), T=window.MEET_DAY;
+  const row=m=>{ const d=m.meet_date?new Date(m.meet_date+'T12:00:00'):null, done=m.meet_date&&m.meet_date<today;
+    const mine=teams.filter(t=>window.meetHasTeam(m,t)), t0=mine[0];
+    const title=(m.week_no?`Week ${m.week_no} · `:'')+(m.host_team_code?(mine.includes(m.host_team_code)?'Home meet':'@ '+tName(m.host_team_code)):m.name);
+    const opp=(m.team_codes||[]).filter(c=>!mine.includes(c));
+    const sub=!(m.team_codes||[]).length?'All VYC teams':!opp.length?'':opp.length<=5?'vs '+opp.map(tName).join(', '):'with '+opp.length+' other teams';
+    const place=[m.venue,m.location].filter(Boolean).join(', ');
+    const side=res[m.id]?`<a class="font-semibold" style="color:var(--act,#1764c8)" href="results.html?meet=${m.id}">Results →</a>`:next&&m.id===next.id?'<span class="ts-pill" style="background:var(--act,#1764c8);color:#fff">Next</span>':done?'<span class="ts-pill" style="background:#e5e7eb;color:#4b5563">Done</span>':'';
+    return `<div class="ts-row ${done?'done':''} ${next&&m.id===next.id?'next':''}">
+      <div class="ts-date">${d?`<div class="mo">${d.toLocaleDateString('en-US',{month:'short'}).toUpperCase()}</div><div class="dy">${d.getDate()}</div><div class="wd">${d.toLocaleDateString('en-US',{weekday:'short'})}</div>`:'<div class="mo">TBA</div><div class="dy">–</div>'}</div>
+      <div class="ts-main"><div class="ts-title">${esc(title)}${m.is_championship?' <span class="ts-pill" style="background:#fef3c7;color:#92400e">Championship</span>':''}${m.is_invitational?' <span class="ts-pill" style="background:#e5e7eb">Invitational</span>':''}</div>
+        ${sub?`<div class="ts-sub">${esc(sub)}</div>`:''}
+        ${teams.length>1?`<div class="text-xs text-gray-500">${esc(mine.map(tName).join(', '))}</div>`:''}
+        <div class="ts-where">${place?`<a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}">@ ${esc(m.venue||m.location)}</a>${m.venue&&m.location?` <span class="text-gray-500">· ${esc(m.location)}</span>`:''}`:'<span class="text-gray-400">Location to come</span>'}</div>
+        ${T&&next&&m.id===next.id?`<div class="text-xs text-gray-600 mt-0.5">Field events ${esc(T.field)} · first race (${esc(T.firstRace)}) ${esc(T.firstRaceAt)}</div>`:''}
+      </div><div class="ts-side">${side}</div></div>`; };
+  el.innerHTML=`<div>${meets.map(row).join('')}</div><p class="text-xs mt-2"><a class="underline" style="color:var(--act,#1764c8)" href="schedule.html">Full league schedule →</a></p>`;
+};

@@ -205,6 +205,11 @@
             <p class="text-xs text-gray-500 mt-2">Uploading meet results and setting up meets happens on the <a class="underline" href="admin.html?tab=meetadmin">Meet Admin tab of the Admin page</a>.</p>
           </div>
 
+          <div class="card" id="teamSchedCard">
+            <div class="col-head"><h2 class="flex-1">Our schedule</h2></div>
+            <div id="teamSched" class="text-sm"></div>
+          </div>
+
           <div class="card">
             <div class="col-head"><h2>Meet registration &amp; results</h2></div>
             <p class="text-xs text-gray-500 mb-2">Enter your athletes into a meet's events (with each athlete's best times showing), or look up results.</p>
@@ -375,6 +380,7 @@ async function load(){
   if(fullAccess){ await loadClearances(); loadFeeNotice(); }
   render();
   loadComing();
+  window.mountTeamSchedule($('teamSched'),{sb,teams:[myCoach&&myCoach.team_code]});
   const pending=rows.filter(r=>r.dob_check_status==='pending');
   if(fullAccess && pending.length) runChecks(pending);
 
