@@ -727,6 +727,7 @@ const curRegMeet=()=>regMeets.find(m=>m.id===$('regMeet').value);
 function regMeetOpen(m){ return m.status==='open' && new Date()<=new Date(m.entries_close); }
 async function loadRegMeet(){
   const m=curRegMeet(); if(!m) return;
+  regTestMode=await window.entryTestMode(); { let tb=$('regTestBanner'); if(!tb){ tb=document.createElement('div'); tb.id='regTestBanner'; $('regMeetInfo').before(tb); } tb.innerHTML=regTestMode?window.TEST_MODE_BANNER:''; }
   $('regMeetInfo').textContent=`${m.location||''} · Entries ${regMeetOpen(m)?'close':'closed'} ${new Date(m.entries_close).toLocaleString()}`;
   // Rule I.E gate: no meet entries until the Treasurer confirms the team's certification fees are paid (Commissioner / Conference President can overrule).
   try{ const {data:ok}=await sb.rpc('team_fees_cleared',{p_team:myCoach.team_code,p_season:m.season_year||await window.currentSeason()});
@@ -752,7 +753,13 @@ const RELAY_LEG={'400':'100','1600':'400','3200':'800'}; // which single event s
 const evSort=(x,y)=>((x.event_number??9999)-(y.event_number??9999))||x.name.localeCompare(y.name);
 // Eligible = verified athletes on THIS coach's team registered for the meet's season (admins too — never other teams, never last season's roster).
 const regSeason=()=>{ const m=curRegMeet(); return m&&m.season_year; };
-const myEligible=()=>rows.filter(r=>r.status==='verified'&&r.team_code===myCoach.team_code&&(!regSeason()||r.season_year==null||r.season_year===regSeason()));
+// Test mode (Site Admin > League Setup): last season's certified athletes count too — unless that athlete has already registered this season.
+let regTestMode=false;
+const nameKey=r=>((r.first_name||'')+(r.last_name||'')).toLowerCase().replace(/[^a-z]/g,'');
+const myEligible=()=>{ const s=regSeason(), team=rows.filter(r=>r.status==='verified'&&r.team_code===myCoach.team_code);
+  if(!s) return team; const now=team.filter(r=>r.season_year==null||r.season_year===s);
+  if(!regTestMode) return now; const have=new Set(now.map(nameKey));
+  return now.concat(team.filter(r=>r.season_year===s-1&&!have.has(nameKey(r)))); };
 // Current best per event (database athlete_bests): the best mark from the most recent season the athlete ran that event,
 // across all of their registrations (a returning athlete's 2026 results count).
 async function loadRegSeeds(){

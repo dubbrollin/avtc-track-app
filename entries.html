@@ -118,7 +118,8 @@ async function loadMeet(){
   $('meetInfo').textContent=`${m.location||''} · Entries ${isOpen(m)?'close':'closed'} ${new Date(m.entries_close).toLocaleString()}`;
   // Eligible = verified athletes registered for THIS meet's season: a coach's own team only (admins too), or a parent's own athletes.
   let athleteQuery=sb.from('registrations').select('id,first_name,last_name,division,gender,status,team_code,email,season_year').eq('status','verified').order('last_name');
-  if(m.season_year) athleteQuery = athleteQuery.eq('season_year', m.season_year);
+  const testMode=await window.entryTestMode(); // Site Admin > League Setup: last season's athletes count too while testing
+  if(m.season_year) athleteQuery = testMode ? athleteQuery.in('season_year',[m.season_year, m.season_year-1]) : athleteQuery.eq('season_year', m.season_year);
   if(isCoach) athleteQuery = athleteQuery.eq('team_code', myCoachRow.team_code);
   else athleteQuery = athleteQuery.eq('email', me);
   const [a,e,n]=await Promise.all([
@@ -127,6 +128,8 @@ async function loadMeet(){
     sb.from('entries').select('*').eq('meet_id',m.id)
   ]);
   athletes=a.data||[]; events=e.data||[]; entries=n.data||[];
+  if(testMode&&m.season_year){ const k=x=>(x.first_name+x.last_name).toLowerCase().replace(/[^a-z]/g,''), have=new Set(athletes.filter(x=>x.season_year===m.season_year).map(k)); athletes=athletes.filter(x=>x.season_year===m.season_year||!have.has(k(x))); } // this season's registration wins
+  { let tb=document.getElementById('testBanner'); if(!tb){ tb=document.createElement('div'); tb.id='testBanner'; $('meetInfo').before(tb); } tb.innerHTML=testMode?window.TEST_MODE_BANNER:''; }
   // Current best per event (most recent season the athlete ran it, across all their registrations)
   bests={}; for(let i=0;i<athletes.length;i+=150){ const {data:bd}=await sb.rpc('athlete_bests',{p_regs:athletes.slice(i,i+150).map(x=>x.id)}); (bd||[]).forEach(x=>bests[x.registration_id+'|'+x.event_code]=x); }
   $('none').textContent = isCoach ? 'No certified athletes on your team for this meet\'s season yet.' : 'No verified athletes found for this email. If you registered recently, a coach has to verify the athlete first, and you must have checked "use this email to sign in" on the registration.';

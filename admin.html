@@ -891,7 +891,10 @@ async function paintLeague(){
 await loadTeams(); const {data:st}=await sb.from('app_settings').select('*'); const S=Object.fromEntries((st||[]).map(x=>[x.key,x.value]));
 const fmtD=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}):'';
 const addDays=(d,n)=>{ const x=new Date(d+'T12:00:00'); x.setDate(x.getDate()+n); return x.toISOString().slice(0,10); };
-$('pane').innerHTML=`<div class="card"><h3 class="font-bold mb-2">Teams</h3>
+$('pane').innerHTML=`<div class="card" style="${S.entry_test_mode==='on'?'border:2px solid #f59e0b;background:#fffbeb':''}"><h3 class="font-bold mb-1">Meet entry test mode</h3>
+<label class="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" id="etm" ${S.entry_test_mode==='on'?'checked':''}> Test mode is ${S.entry_test_mode==='on'?'<span class="text-amber-700">ON</span>':'OFF'}</label>
+<p class="text-xs text-gray-600 mt-1">While ON, coaches can enter <b>last season's certified athletes</b> (their own team only) into this season's meets, so meet entry can be tested before this season's athletes are certified. Their current best times still show. The entry pages show a yellow "Test mode" banner. <b>Turn this OFF before go-live.</b></p></div>
+<div class="card"><h3 class="font-bold mb-2">Teams</h3>
 <p class="text-xs text-gray-500 mb-2">Full team name, Eastern or Western League, and whether the team is active. The team code (the short Hy-Tek code) can't be changed once created — add a new team instead. Changes show across the app the next time a page loads.</p>
 <div class="scroll"><table class="t"><thead><tr><th>Code</th><th>Team name</th><th>League</th><th>Active</th><th>Order</th><th></th></tr></thead><tbody id="tBody">
 ${teams.map(t=>`<tr data-code="${esc(t.code)}"><td class="font-mono font-bold">${esc(t.code)}</td><td><input data-f="name" value="${esc(t.name)}" style="width:17rem"></td><td><select data-f="conference"><option value="East" ${t.conference==='East'?'selected':''}>Eastern</option><option value="West" ${t.conference==='West'?'selected':''}>Western</option></select></td>
@@ -924,6 +927,7 @@ const {data:m2}=await sb.rpc('season_meet_date',{p_season:season,p_nth:2});
 const certInfo=()=>{ const d=$('certDate').value; $('certInfo').textContent=d?`Late registrations start ${fmtD(addDays(d,1))}; registration closes after ${m2?fmtD(m2)+' (2nd meet)':fmtD(addDays(d,14))+' (no schedule posted yet — 14-day fallback)'}.`:'Not set — nothing is marked late and registration never closes.'; };
 certInfo(); $('certDate').onchange=certInfo;
 $('certSave').onclick=()=>run(sb.from('app_settings').upsert({key:'certification_date_'+season,value:$('certDate').value||''}),'Certification date saved');
+$('etm').onchange=async e=>{ const on=e.target.checked; if(!confirm(on?'Turn meet entry TEST MODE on? Coaches will be able to enter last season\'s athletes into this season\'s meets.':'Turn test mode off? Only this season\'s certified athletes can be entered.')){ e.target.checked=!on; return; } if(await run(sb.from('app_settings').upsert({key:'entry_test_mode',value:on?'on':'off'}),on?'Test mode ON':'Test mode OFF')) paintLeague(); };
 $('feeSave').onclick=()=>run(sb.from('app_settings').upsert(['team','athlete','late','invitational'].map(k=>({key:'fee_'+k+'_'+season,value:$('fee_'+k).value||''}))),'Fees saved');
 const [{data:blocks},{data:used}]=await Promise.all([sb.from('comp_blocks').select('*').eq('season_year',season).order('sort_order'),
   sb.from('registrations').select('team_code,comp_number').eq('season_year',season).not('comp_number','is',null)]);

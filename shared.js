@@ -169,6 +169,7 @@ window.leagueReady = (async function(){
       window.TEAMS.splice(0,window.TEAMS.length,...window.VYC_TEAMS.filter(x=>x.active).map(x=>x.name));
     }
     if(Array.isArray(st)){ const y=st.find(x=>x.key==='season_year'); if(y&&+y.value) C.SEASON_YEAR=+y.value; }
+    if(Array.isArray(st)){ const tm=st.find(x=>x.key==='entry_test_mode'); C.ENTRY_TEST_MODE=!!(tm&&tm.value==='on'); }
   }catch(e){}
 })();
 // ---- VYC background screening: the league's official link (valleyconference.org > Background Screening, provider TCLogiQ) ----
@@ -190,6 +191,9 @@ window.MEET_DAY = { field:'8:30 AM', firstRace:'3000m', firstRaceAt:'8:45 AM' };
 // Which teams compete at a meet: meets.team_codes (empty = every team).
 window.meetHasTeam = function(m, code){ const L=(m&&m.team_codes)||[]; return !L.length || L.includes(code); };
 window.meetTeamsLabel = function(m){ const L=(m&&m.team_codes)||[]; if(!L.length) return 'All teams'; return L.map(c=>(window.VYC_TEAMS.find(t=>t.code===c)||{}).name||c).join(', '); };
+// Meet entry test mode (Site Admin > League Setup): last season's certified athletes may be entered into this season's meets.
+window.entryTestMode = async function(){ try{ if(window.leagueReady) await window.leagueReady; }catch(e){} return !!(window.APP_CONFIG||{}).ENTRY_TEST_MODE; };
+window.TEST_MODE_BANNER = '<div class="rounded-lg border-2 border-amber-400 bg-amber-50 p-2 text-sm mb-2"><b>Test mode:</b> last season&rsquo;s athletes are included so meet entry can be tested. A site admin turns this off before go-live.</div>';
 window.currentSeason = async function(){ try{ if(window.leagueReady) await window.leagueReady; }catch(e){} return (window.APP_CONFIG||{}).SEASON_YEAR; };
 // ---- Role-based menu items, only for people who have that access (flags are set when they sign in on the Coach Dashboard
 //      or Site Admin page, and cleared when they sign out): "Team Admin" for team admins, "Timer" for timers, "Site Admin" for admins ----
