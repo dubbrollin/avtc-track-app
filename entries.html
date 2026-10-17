@@ -116,16 +116,20 @@ function isOpen(m){ return m.status==='open' && new Date()<=new Date(m.entries_c
 async function loadMeet(){
   const m=cur(); if(!m) return;
   $('meetInfo').textContent=`${m.location||''} · Entries ${isOpen(m)?'close':'closed'} ${new Date(m.entries_close).toLocaleString()}`;
-  let athleteQuery=sb.from('registrations').select('id,first_name,last_name,division,gender,status,team_code,email').eq('status','verified').order('last_name');
-  if(isCoach && !myCoachRow.is_admin) athleteQuery = athleteQuery.eq('team_code', myCoachRow.team_code);
-  else if(!isCoach) athleteQuery = athleteQuery.eq('email', me);
+  // Eligible = verified athletes registered for THIS meet's season: a coach's own team only (admins too), or a parent's own athletes.
+  let athleteQuery=sb.from('registrations').select('id,first_name,last_name,division,gender,status,team_code,email,season_year').eq('status','verified').order('last_name');
+  if(m.season_year) athleteQuery = athleteQuery.eq('season_year', m.season_year);
+  if(isCoach) athleteQuery = athleteQuery.eq('team_code', myCoachRow.team_code);
+  else athleteQuery = athleteQuery.eq('email', me);
   const [a,e,n]=await Promise.all([
     athleteQuery,
     sb.from('meet_events').select('*').eq('meet_id',m.id),
     sb.from('entries').select('*').eq('meet_id',m.id)
   ]);
   athletes=a.data||[]; events=e.data||[]; entries=n.data||[];
-  $('none').textContent = isCoach ? 'No verified athletes found for your team yet.' : 'No verified athletes found for this email. If you registered recently, a coach has to verify the athlete first, and you must have checked "use this email to sign in" on the registration.';
+  // Current best per event (most recent season the athlete ran it, across all their registrations)
+  bests={}; for(let i=0;i<athletes.length;i+=150){ const {data:bd}=await sb.rpc('athlete_bests',{p_regs:athletes.slice(i,i+150).map(x=>x.id)}); (bd||[]).forEach(x=>bests[x.registration_id+'|'+x.event_code]=x); }
+  $('none').textContent = isCoach ? 'No certified athletes on your team for this meet\'s season yet.' : 'No verified athletes found for this email. If you registered recently, a coach has to verify the athlete first, and you must have checked "use this email to sign in" on the registration.';
   $('none').classList.toggle('hidden',athletes.length>0);
   renderViewToggle();
 }
@@ -135,6 +139,14 @@ function render(){
   if(view==='race') renderRaceView(); else renderAthleteView();
 }
 
+// Current best for this event (relays: the leg's single event), with the season when it isn't this one.
+let bests={};
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const RELAY_LEG={'400':'100','1600':'400','3200':'800'};
+function bestTag(a,ev){ const code=ev.is_relay?(RELAY_LEG[ev.code]||ev.code):ev.code, b=bests[a.id+'|'+code], m=cur();
+  if(!b) return '<span class="text-xs text-gray-400 ml-2 font-mono">NT</span>';
+  const old=m&&m.season_year&&b.season_year<m.season_year;
+  return `<span class="text-xs ml-2 font-mono" title="${esc((b.meet_name||'')+(b.meet_date?' · '+b.meet_date:''))}">best <b>${esc(b.mark)}</b>${old?` <span class="text-gray-400 font-sans">'${String(b.season_year).slice(2)}</span>`:''}</span>`; }
 // ---- BY RACE: pick division + gender + one event, then check off eligible athletes ----
 function renderRaceView(){
   const divsPresent=[...new Set(athletes.map(a=>a.division))];
@@ -176,7 +188,7 @@ function renderRaceView(){
         :en.seed_mark?`<span class="text-xs text-gray-600 ml-2">seed ${en.seed_mark}</span>`:'';
       return `<label class="flex items-center gap-2 py-1.5 border-t ${err&&!en?'opacity-40':''}">
         <input type="checkbox" data-a="${a.id}" data-e="${rEventId}" ${en?'checked':''} ${(!open)||(err&&!en)?'disabled':''}>
-        <span class="flex-1">${a.first_name} ${a.last_name} <span class="text-xs text-gray-500">(${mine.length}/${rule.max} events)</span></span>${seed}</label>`;
+        <span class="flex-1">${a.first_name} ${a.last_name} <span class="text-xs text-gray-500">(${mine.length}/${rule.max} events)</span></span>${bestTag(a,ev)}${seed}</label>`;
     }).join('') : '<p class="text-sm text-gray-500 py-2">No athletes in this division/gender on your team.</p>'}
   </div>`;
   document.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.onchange=toggle);
@@ -206,7 +218,7 @@ function renderAthleteView(){
           :en.seed_mark?`<span class="text-xs text-gray-600 ml-auto">seed ${en.seed_mark}</span>`:`<span class="text-xs text-gray-400 ml-auto">no seed</span>`;
         return `<label class="flex items-center gap-2 py-1 ${err&&!en?'opacity-40':''}">
           <input type="checkbox" data-a="${a.id}" data-e="${v.id}" ${en?'checked':''} ${(!open)||(err&&!en)?'disabled':''}>
-          <span>${v.name}${v.is_relay?' <span class="text-xs bg-yellow-100 px-1 rounded">relay</span>':''}</span>${seed}</label>`;
+          <span>${v.name}${v.is_relay?' <span class="text-xs bg-yellow-100 px-1 rounded">relay</span>':''}</span>${bestTag(a,v)}${seed}</label>`;
       }).join(''):'<p class="text-sm text-gray-500">No events offered for this division at this meet.</p>'}
     </div>`;
   }).join('');
