@@ -221,7 +221,7 @@ async function mountHub(myTeams){
     athletes:[...new Set(mine.map(x=>x.first_name+' '+x.last_name))],
     slots:{left:[$('athCard'),$('registerCard'),$('seasonCard'),$('resCard')],right:[$('msgCard')]},
     teams:myTeams, onTeam:code=>{ hubTeam=code; mountHub(myTeams); },
-    tab:q.get('tab'), meet:q.get('meet'), album:q.get('album'),
+    tab:q.get('tab'), meet:q.get('meet'), album:q.get('album'), parentView:true,
     onTab:t=>{ const u=new URL(location.href); if(t==='home'){ u.searchParams.delete('tab'); u.searchParams.delete('meet'); } else u.searchParams.set('tab',t); history.replaceState(null,'',u); },
     onMeet:id=>{ const u=new URL(location.href); u.searchParams.set('meet',id); history.replaceState(null,'',u); },
     showRegister:false});

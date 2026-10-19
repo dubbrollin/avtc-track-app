@@ -293,7 +293,8 @@ TeamHub.mountVolunteers=async function(el, ctx){
   css(); el.classList.add('th'); const sb=ctx.sb, team=ctx.team, role=ctx.role;
   if(!role){ el.innerHTML='<p class="text-sm text-gray-600">Sign in to see the volunteer duties for your team\'s meets.</p>'; return 'none'; }
   // Coaches work one meet at a time (a picker). Parents see EVERY meet their team is at, stacked, so nothing is missed.
-  const allMode=role==='parent';
+  // ctx.parentView (the Parent Dashboard) forces the parent view even when the login is a coach or admin: managing happens on the Coach Dashboard.
+  const parentView=role==='parent'||!!ctx.parentView, allMode=parentView;
   let meets=[], meet=null, shown=[], duties=[], vols=[], slots=[], counts={}, scounts={}, host=false, mgrTeam=false;
   try{ meets=await teamMeets(sb,[team]); }catch(e){ el.innerHTML=`<p class="text-sm text-red-700">${esc(clean(e))}</p>`; return 'none'; }
   const td=today(); const upcoming=meets.filter(m=>m.meet_date>=td);
@@ -307,8 +308,8 @@ TeamHub.mountVolunteers=async function(el, ctx){
     const [{data:d,error},{data:v},{data:s}]=await Promise.all([sb.from('meet_duties').select('*').in('meet_id',ids).order('sort_order').order('name'), sb.from('meet_volunteers').select('*').in('meet_id',ids).order('created_at'), sb.from('duty_slots').select('*').in('meet_id',ids).order('sort_order')]);
     if(error) throw error; duties=d||[]; vols=v||[]; slots=s||[]; counts={}; scounts={};
     await Promise.all(ids.map(async id=>{ const [{data:c},{data:sc}]=await Promise.all([sb.rpc('duty_counts',{p_meet:id}),sb.rpc('duty_slot_counts',{p_meet:id})]); (c||[]).forEach(x=>counts[x.duty_id]=x.taken); (sc||[]).forEach(x=>scounts[x.slot_id]=x.taken); }));
-    mgrTeam=role!=='parent'; };
-  const canHost=()=>role!=='parent'&&(host||role==='admin'&&ctx.siteAdmin);
+    mgrTeam=!parentView; };
+  const canHost=()=>!parentView&&(host||role==='admin'&&ctx.siteAdmin);
   const meetOf=d=>meets.find(m=>m.id===d.meet_id)||meet;
   const mine=d=>d.team_code===team, myVols=d=>vols.filter(v=>v.duty_id===d.id), taken=d=>counts[d.id]??myVols(d).length, full=d=>taken(d)>=d.slots;
   const slotsOf=d=>d.slot_mode&&d.slot_mode!=='all'?slots.filter(s=>s.duty_id===d.id):[], sVols=s=>vols.filter(v=>v.slot_id===s.id), sTaken=s=>scounts[s.id]??sVols(s).length, sFull=s=>sTaken(s)>=s.slots;
@@ -319,12 +320,12 @@ TeamHub.mountVolunteers=async function(el, ctx){
   const dlText=m=>{ const dl=deadlineOf(m); return dl?window.fmtDeadline(dl):''; };
   const dlBanner=()=>{ const dl=deadlineOf(meet); if(!dl) return ''; return passedOf(meet)?`<div class="note warn"><b>The deadline for picking duties has passed</b> (${esc(dlText(meet))}). Anything that was still open has been assigned to a visiting team. ${canHost()?'You can still move duties around by hand.':'Ask the host team if something needs to change.'}</div>`
     :`<div class="note warn"><b>Visiting teams: take your field event by ${esc(dlText(meet))}.</b> First come, first served — one team per event. Anything still open at the deadline is assigned to a visiting team automatically.</div>`; };
-  const openList=()=>{ if(role==='parent'||canHost()||!mgrTeam) return ''; const open=duties.filter(d=>!d.team_code&&!d.host_only); if(!open.length) return '';
+  const openList=()=>{ if(parentView||canHost()||!mgrTeam) return ''; const open=duties.filter(d=>!d.team_code&&!d.host_only); if(!open.length) return '';
     if(passedOf(meet)) return ''; return `<div class="note" style="border-color:var(--ok);background:var(--ok-bg)"><b>Open duties at this meet — take one for ${esc(TEAM(team))}:</b>
       <div class="mt-2 flex flex-wrap gap-2">${open.map(d=>`<button class="sbtn grn" data-claim="${d.id}">${dname(d)} · ${d.slots} people</button>`).join('')}</div>
       <div class="text-xs text-gray-600 mt-1">Once you take one it's yours and closed to the other teams. Then set up its sign-up list (by division, by time shift, or your own list) and add your people, or let parents sign themselves up.</div></div>`; };
   const homeMeets=()=>meets.filter(m=>m.host_team_code===team&&m.meet_date>=td);
-  const hostStrip=()=>{ if(role==='parent') return ''; const H=homeMeets(); if(!H.length) return `<div class="note soft"><b>${esc(TEAM(team))} isn't hosting a meet this season</b> (per the league schedule), so there's no duty list to set up — just take open duties at the meets you visit.</div>`;
+  const hostStrip=()=>{ if(parentView) return ''; const H=homeMeets(); if(!H.length) return `<div class="note soft"><b>${esc(TEAM(team))} isn't hosting a meet this season</b> (per the league schedule), so there's no duty list to set up — just take open duties at the meets you visit.</div>`;
     return `<div class="note" style="border-color:var(--act);background:var(--act-soft)"><b>You host ${H.length===1?'a meet':H.length+' meets'} this season.</b> As the host you set up the duty list — pick the meet: ${H.map(m=>`<button class="sbtn ${m.id===meet.id?'pri':''}" data-gomeet="${m.id}" style="margin:2px">${esc(fmtD(m.meet_date))}${m.week_no?' · Week '+m.week_no:''}</button>`).join('')}</div>`; };
   const meetPick=()=>`<div class="bar"><label class="text-sm font-semibold">Meet</label><select data-meet>${meets.map(m=>`<option value="${m.id}" ${m.id===meet.id?'selected':''}>${esc(meetLabel(m))}${m.meet_date<td?' (past)':''}</option>`).join('')}</select>
     ${host?'<span class="pill act">We host this meet</span>':meet.host_team_code?`<span class="pill">Host: ${esc(TEAM(meet.host_team_code))}</span>`:''}</div>
@@ -335,7 +336,7 @@ TeamHub.mountVolunteers=async function(el, ctx){
   const meter=(t,n)=>`<span class="text-xs text-gray-600" style="white-space:nowrap">${t} of ${n}</span><span class="meter"><i style="width:${Math.min(100,100*t/n)}%"></i></span>`;
   // the sign-up control for one duty (no slots) or one slot of it
   const joinBtn=(d,s)=>{ const L=s?sVols(s):myVols(d), me=L.some(isMe), isFull=s?sFull(s):full(d); const key=s?`data-slot="${s.id}" data-signup="${d.id}"`:`data-signup="${d.id}"`;
-    if(role==='parent') return me?`<span class="pill ok">You're signed up ✓</span>`:isFull?'<span class="pill">Full — thank you!</span>':`<button class="sbtn grn" ${key}>Sign me up</button>`;
+    if(parentView) return me?`<span class="pill ok">You're signed up ✓</span>`:isFull?'<span class="pill">Full — thank you!</span>':`<button class="sbtn grn" ${key}>Sign me up</button>`;
     return isFull?'<span class="pill">Full</span>':`<button class="sbtn grn" ${s?`data-slot="${s.id}" data-addp="${d.id}"`:`data-addp="${d.id}"`}>+ Add a person</button>`; };
   const slotRows=d=>slotsOf(d).map(s=>`<div class="slot"><span class="sl">${esc(s.label)}</span>${meter(sTaken(s),s.slots)}<span style="flex:1"></span>${d.team_code&&(mine(d)||canHost())?joinBtn(d,s):''}${people(d,sVols(s))}</div>`).join('');
   const dutyCard=d=>{ const S=slotsOf(d), m=meetOf(d), hostHere=canHost(), pastDl=passedOf(m);
@@ -418,7 +419,7 @@ TeamHub.mountVolunteers=async function(el, ctx){
       ${regs.length&&!byName?`<label class="f">Parent of<select data-k="ath"><option value="">—</option>${regs.map(a=>`<option>${esc(a)}</option>`).join('')}</select></label>`:`<label class="f">Parent of (optional)<input data-k="ath" placeholder="Athlete's name"></label>`}
       <div class="flex gap-2 mt-3"><button class="btn grn" data-k="go">${byName?'Add':'Sign me up'}</button><button class="btn" data-k="cancel">Cancel</button><span class="text-sm text-red-700" data-k="msg"></span></div>`);
     const g=k=>box.querySelector(`[data-k="${k}"]`); g('cancel').onclick=closeModal;
-    g('go').onclick=async()=>{ g('go').disabled=true; const {error}=await sb.rpc('volunteer_add',{p_duty:d.id,p_name:g('name').value.trim(),p_phone:g('phone').value.trim()||null,p_registration:null,p_athlete_name:g('ath').value.trim()||null,p_slot:slot?slot.id:null});
+    g('go').onclick=async()=>{ g('go').disabled=true; const {error}=await sb.rpc('volunteer_add',{p_duty:d.id,p_name:g('name').value.trim(),p_phone:g('phone').value.trim()||null,p_registration:null,p_athlete_name:g('ath').value.trim()||null,p_slot:slot?slot.id:null,p_self:!byName});
       if(error){ g('msg').textContent=clean(error); g('go').disabled=false; return; } closeModal(); toast(byName?'Added':'You\'re signed up — thank you!'); await load(); draw(); document.dispatchEvent(new CustomEvent('th:volunteers')); }; };
   el.onclick=async e=>{ const t=e.target, D=id=>duties.find(d=>d.id===id), S=id=>slots.find(s=>s.id===id); let r;
     if(r=t.closest('[data-gomeet]')){ meet=meets.find(m=>m.id===r.dataset.gomeet); if(ctx.onMeet) ctx.onMeet(meet.id); await load(); return draw(); }
@@ -450,7 +451,8 @@ TeamHub.mountVolunteers=async function(el, ctx){
 //          slots:{ left:[els], right:[els] }   elements to place in the Home columns (parent dashboard cards)
 //          homeEl: el                          use this element as the Home pane instead of the generated columns (coach dashboard)
 //          teams:[codes], onTeam(code)         a switcher when the person is on several teams
-//          showRegister, showWhoami, onSignOut, onTab(tab) }
+//          showRegister, showWhoami, onSignOut, onTab(tab),
+//          parentView: true                    the Parent Dashboard: Volunteers always shows the parent view, even for a coach / admin login }
 const PAGE_CSS=`<style id="thPageStyle">
 .thp .hero{position:relative;overflow:hidden;padding:0;background:#fff;border:1px solid var(--line,#e1e7ef);border-radius:12px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .thp .hero .banner{height:150px;background:var(--navy,#001C3B) center/cover no-repeat;background-image:repeating-linear-gradient(100deg,rgba(255,255,255,.07) 0 2px,transparent 2px 46px)}
@@ -508,12 +510,12 @@ TeamHub.mountTeamPage=async function(root, ctx){
     (slots.right||[]).slice().reverse().forEach(el=>{ if(el){ g('right').prepend(el); } });
     TeamHub.mountPosts(g('posts'),{sb,team,role:ctx.role});
     window.mountTeamSchedule(g('schedule'),{sb,teams:[team]});
-    if(g('volsum')) TeamHub.mountVolunteerSummary(g('volsum'),{sb,teams:[{code:team,role:ctx.role}],email:me,here:true});
+    if(g('volsum')) TeamHub.mountVolunteerSummary(g('volsum'),{sb,teams:[{code:team,role:ctx.parentView?'parent':ctx.role}],email:me,here:true});
     try{ const {data:cs}=await sb.rpc('team_page_coaches',{p_team:team}); const roleL=c=>c.team_admin?(c.admin_title||'Team admin'):c.role_type==='head_coach'?'Head Coach':c.role_type==='division_coach'?'Division Coach'+(c.division_or_age_group?' — '+c.division_or_age_group:''):c.role_type==='event_specialist'?'Event Coach':(c.admin_title||'Team staff');
       g('coaches').innerHTML=(cs||[]).length?cs.map(c=>`<div class="py-1 border-t first:border-t-0"><b>${esc(c.first_name||'')} ${esc(c.last_name||'')}</b> <span class="text-gray-500">· ${esc(roleL(c))}</span></div>`).join(''):'<span class="text-gray-500">No approved coaches listed yet.</span>'; }catch(e){ g('coaches').innerHTML=''; }
   }
   const login=el=>{ el.classList.remove('hidden'); if(!el.dataset.ready){ el.dataset.ready='1'; window.mountLoginWidget(sb,el,{hint:'Sign in with the email you registered with (parents) or your coach login.'}); } };
-  const sub=()=>({sb,team,role:ctx.role,email:me,uid:ctx.uid,name:ctx.name,phone:ctx.phone,athletes:ctx.athletes,page,extras,siteAdmin:ctx.siteAdmin});
+  const sub=()=>({sb,team,role:ctx.role,email:me,uid:ctx.uid,name:ctx.name,phone:ctx.phone,athletes:ctx.athletes,page,extras,siteAdmin:ctx.siteAdmin,parentView:!!ctx.parentView});
   const show=k=>{ if(!root.querySelector(`[data-tab="${k}"]`)||root.querySelector(`[data-tab="${k}"]`).classList.contains('hidden')) k='home'; tab=k;
     root.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===k)); root.querySelectorAll('[data-pane]').forEach(x=>x.classList.toggle('hidden',x.dataset.pane!==k));
     if(ctx.homeEl) ctx.homeEl.classList.toggle('hidden',k!=='home');
