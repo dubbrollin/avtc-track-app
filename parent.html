@@ -48,6 +48,8 @@
     <!-- New-message notice: stays at the top until the messages have been read -->
     <button type="button" id="msgAlert" class="hidden w-full text-left rounded-lg mb-3 font-semibold" style="background:#D2451E;color:#fff;padding:.7rem 1rem;border:0;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.18)"></button>
     <div id="lockBanner"></div>
+    <!-- League rule: every family volunteers at every meet. Reminder when the athlete is coming but nobody has signed up. -->
+    <div id="volNudge"></div>
     <div id="teamHub"></div>
     <div id="cols">
     <div class="card" id="athCard">
@@ -157,6 +159,7 @@ async function loadMeets(){
   meets=(data||[]).filter(m=>myTeams.some(c=>window.meetHasTeam(m,c))); // only meets at least one of my athletes' teams is competing at
   mountHub(myTeams);
 window.mountLockoutNotice($('lockBanner'),{sb,teams:myTeams,parent:true});
+window.TeamHub.mountVolunteerNudge($('volNudge'),{sb,email:me,regs:myRegs.filter(r=>r.status!=='rejected')});
   const {data:evc}=await sb.from('meet_events').select('meet_id'); const evCount={}; (evc||[]).forEach(x=>evCount[x.meet_id]=(evCount[x.meet_id]||0)+1);
   $('meet').innerHTML=meets.map(m=>`<option value="${m.id}">${m.name} — ${fmtDate(m.meet_date)}${evCount[m.id]?'':' (no events set up yet)'}</option>`).join('')||'<option value="">No meets posted yet</option>';
   const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
@@ -200,7 +203,7 @@ document.addEventListener('click',async e=>{
   b.disabled=true;
   const {error}=await sb.rpc('answer_attendance',{p_meet:mid,p_reg:rid,p_attending:yes,p_event1:yes?prev?.event_1||null:null,p_event2:yes?prev?.event_2||null:null,p_event3:yes?prev?.event_3||null:null,p_note:prev?.note||null});
   if(error){ b.disabled=false; alert(error.message.replace(/^.*?: /,'')); return; }
-  await renderSeason(); if($('meet').value===mid) await loadMeet();
+  await renderSeason(); if($('meet').value===mid) await loadMeet(); document.dispatchEvent(new CustomEvent('th:volunteers'));
 });
 // ---- Schedule: this season's meets for my athletes' team(s) — when, where they're going, who they're up against (opens Google Maps) ----
 // The parent's dashboard IS their team page: the hero, Home / Photos / Store / Volunteers tabs, team news and schedule, with
@@ -287,7 +290,7 @@ document.addEventListener('click',async e=>{
   b.disabled=true; msg.textContent='Sending…';
   const {error}=await sb.rpc('answer_attendance',{p_meet:m.id,p_reg:aId,p_attending:yes,p_event1:ev(1),p_event2:ev(2),p_event3:ev(3),p_note:box.querySelector('[data-note]').value||null});
   if(error){ msg.textContent=error.message.replace(/^.*?: /,''); b.disabled=false; return; }
-  await loadMeet(); renderSeason();
+  await loadMeet(); renderSeason(); document.dispatchEvent(new CustomEvent('th:volunteers'));
 });
 
 async function toggle(ev){

@@ -5,6 +5,7 @@
 //   window.TeamHub.mountPosts(el, ctx)        news on the team page
 //   window.TeamHub.editPage(ctx)              the team admin's "Edit team page" form
 //   window.TeamHub.mountVolunteerSummary(el, ctx)   the small "volunteering" box on the Coach and Parent dashboards
+//   window.TeamHub.mountVolunteerNudge(el, ctx)     parent reminder: athlete is coming to the next meet but nobody has volunteered
 // ctx = { sb, team, role ('admin'|'coach'|'parent'|null), email, page (team_pages row), extras (bool) }
 (function(){
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -418,7 +419,7 @@ TeamHub.mountVolunteers=async function(el, ctx){
       <div class="flex gap-2 mt-3"><button class="btn grn" data-k="go">${byName?'Add':'Sign me up'}</button><button class="btn" data-k="cancel">Cancel</button><span class="text-sm text-red-700" data-k="msg"></span></div>`);
     const g=k=>box.querySelector(`[data-k="${k}"]`); g('cancel').onclick=closeModal;
     g('go').onclick=async()=>{ g('go').disabled=true; const {error}=await sb.rpc('volunteer_add',{p_duty:d.id,p_name:g('name').value.trim(),p_phone:g('phone').value.trim()||null,p_registration:null,p_athlete_name:g('ath').value.trim()||null,p_slot:slot?slot.id:null});
-      if(error){ g('msg').textContent=clean(error); g('go').disabled=false; return; } closeModal(); toast(byName?'Added':'You\'re signed up — thank you!'); await load(); draw(); }; };
+      if(error){ g('msg').textContent=clean(error); g('go').disabled=false; return; } closeModal(); toast(byName?'Added':'You\'re signed up — thank you!'); await load(); draw(); document.dispatchEvent(new CustomEvent('th:volunteers')); }; };
   el.onclick=async e=>{ const t=e.target, D=id=>duties.find(d=>d.id===id), S=id=>slots.find(s=>s.id===id); let r;
     if(r=t.closest('[data-gomeet]')){ meet=meets.find(m=>m.id===r.dataset.gomeet); if(ctx.onMeet) ctx.onMeet(meet.id); await load(); return draw(); }
     if(t.closest('[data-standard]')){ const {data,error}=await sb.rpc('duties_add_standard',{p_meet:meet.id}); if(error) return toast(clean(error),true); toast(`${data} duties added`); await load(); return draw(); }
@@ -431,7 +432,7 @@ TeamHub.mountVolunteers=async function(el, ctx){
     if(r=t.closest('[data-release]')){ if(!confirm('Give this duty back? Anyone your team signed up for it comes off.')) return; const {error}=await sb.rpc('duty_claim',{p_duty:r.dataset.release,p_team:team,p_take:false}); if(error) return toast(clean(error),true); await load(); return draw(); }
     if(r=t.closest('[data-signup]')) return signup(D(r.dataset.signup),false,r.dataset.slot?S(r.dataset.slot):null);
     if(r=t.closest('[data-addp]')) return signup(D(r.dataset.addp),true,r.dataset.slot?S(r.dataset.slot):null);
-    if(r=t.closest('[data-rmvol]')){ const {error}=await sb.rpc('volunteer_remove',{p_id:r.dataset.rmvol}); if(error) return toast(clean(error),true); await load(); return draw(); } };
+    if(r=t.closest('[data-rmvol]')){ const {error}=await sb.rpc('volunteer_remove',{p_id:r.dataset.rmvol}); if(error) return toast(clean(error),true); await load(); draw(); document.dispatchEvent(new CustomEvent('th:volunteers')); return; } };
   el.addEventListener('change',async e=>{ if(e.target.matches('[data-meet]')){ meet=meets.find(m=>m.id===e.target.value); if(ctx.onMeet) ctx.onMeet(meet.id); await load(); draw(); }
     if(e.target.matches('[data-assign]')){ const d=duties.find(x=>x.id===e.target.dataset.assign), t=e.target.value||null; if(d.team_code&&t!==d.team_code&&myVols(d).length&&!confirm(`Move "${d.name}" to ${t?TEAM(t):'open'}? The ${myVols(d).length} people signed up come off it.`)){ e.target.value=d.team_code||''; return; }
       const {error}=await sb.rpc('duty_save',{p_id:d.id,p_meet:meet.id,p_name:d.name,p_category:d.category,p_slots:d.slots,p_team:t,p_time:d.time_note,p_notes:d.notes,p_host_only:d.host_only&&t===meet.host_team_code,p_sort:d.sort_order,p_gender:d.gender||null}); if(error){ toast(clean(error),true); } await load(); draw(); } });
@@ -549,5 +550,29 @@ TeamHub.mountVolunteerSummary=async function(el, ctx){
     return `<div class="note" style="margin-bottom:8px"><div class="flex flex-wrap items-center gap-2"><b>${esc(meetLabel(m))}</b><span style="flex:1"></span><a class="sbtn pri" style="text-decoration:none" href="${url}" ${ctx.here?`data-volgo="${m.id}"`:''}>${teams.some(t=>t.role==='parent')?'Volunteer →':mineT.some(t=>m.host_team_code===t.code)&&!duties.some(x=>x.meet_id===m.id)?'Set up duties →':'Duties →'}</a></div>${parts}</div>`; }).join('');
   // inside the team page, "Volunteer →" just switches to the Volunteers tab on that meet
   el.querySelectorAll('[data-volgo]').forEach(a=>a.onclick=e=>{ const page=a.closest('.thp'); const tabBtn=page&&page.querySelector('.tab[data-tab="volunteers"]'); if(!tabBtn) return; e.preventDefault(); page.__meet=a.dataset.volgo; tabBtn.click(); window.scrollTo({top:Math.max(0,page.offsetTop-10),behavior:'smooth'}); });
+};
+/* ============================ "you're coming — please volunteer" reminder ============================ */
+// mountVolunteerNudge(el, {sb, email, regs:[{id, first_name, team_code}]}) — league rule: every family helps at every meet.
+//   Shows a reminder on the parent's page when they said an athlete IS coming to the team's next meet but nobody from
+//   their login has signed up to volunteer at it. Goes away on its own once they sign up (or say the athlete isn't coming).
+TeamHub.mountVolunteerNudge=async function(el, ctx){
+  if(!el) return; css(); el.classList.add('th'); const sb=ctx.sb, me=(ctx.email||'').toLowerCase(), regs=(ctx.regs||[]).filter(r=>r&&r.id&&r.team_code);
+  const draw=async()=>{ el.innerHTML=''; if(!me||!regs.length) return;
+    const teams=[...new Set(regs.map(r=>r.team_code))]; let meets; try{ meets=await teamMeets(sb,teams); }catch(e){ return; }
+    const td=today(); const next=teams.map(t=>meets.find(m=>m.meet_date>=td&&window.meetHasTeam(m,t))).filter(Boolean); const ids=[...new Set(next.map(m=>m.id))]; if(!ids.length) return;
+    const [{data:att},{data:vols},{data:duties}]=await Promise.all([sb.from('meet_attendance').select('meet_id,registration_id,attending').in('meet_id',ids).in('registration_id',regs.map(r=>r.id)), sb.from('meet_volunteers').select('meet_id,email').in('meet_id',ids), sb.from('meet_duties').select('id,meet_id,team_code,slots').in('meet_id',ids)]);
+    const cnt={}; try{ for(const id of ids){ const {data:c}=await sb.rpc('duty_counts',{p_meet:id}); (c||[]).forEach(x=>cnt[x.duty_id]=x.taken); } }catch(e){}
+    const out=[]; for(const t of teams){ const m=next.find(x=>window.meetHasTeam(x,t)); if(!m) continue;
+      const kids=regs.filter(r=>r.team_code===t&&(att||[]).some(a=>a.meet_id===m.id&&a.registration_id===r.id&&a.attending)); if(!kids.length) continue;
+      if((vols||[]).some(v=>v.meet_id===m.id&&v.email&&v.email.toLowerCase()===me)) continue;
+      const ours=(duties||[]).filter(d=>d.meet_id===m.id&&d.team_code===t); const openSpots=ours.reduce((a,d)=>a+Math.max(0,d.slots-(cnt[d.id]||0)),0);
+      const names=kids.map(k=>k.first_name).filter(Boolean); const who=names.length?names.join(' and '):'your athlete';
+      out.push(`<div class="note" style="border-color:#D2451E;background:#fff4ef;margin-bottom:12px"><div class="flex flex-wrap items-center gap-2"><div style="flex:1;min-width:14rem"><b>🙋 Please volunteer at ${esc(meetLabel(m))}</b><div class="text-sm mt-1">You said <b>${esc(who)}</b> ${names.length>1?'are':'is'} coming, but nobody from your family has signed up to help yet. Every VYC family is asked to volunteer at each meet${m.host_team_code===t?' — and this one is our home meet':''}.
+        ${ours.length?(openSpots?`<b>${openSpots}</b> spot${openSpots===1?'':'s'} still open on ${esc(TEAM(t))}'s list.`:`${esc(TEAM(t))}'s list is full right now — check back in case a spot opens, or ask your coach where else you can help.`):`${esc(TEAM(t))}'s sign-up list for this meet isn't posted yet — check back here.`}</div></div>
+        ${ours.length&&openSpots?`<a class="sbtn" style="background:#D2451E;color:#fff;border-color:#D2451E;text-decoration:none" href="?tab=volunteers&meet=${m.id}" data-nudgego="${m.id}">Pick a spot →</a>`:''}</div></div>`); }
+    el.innerHTML=out.join('');
+    el.querySelectorAll('[data-nudgego]').forEach(a=>a.onclick=e=>{ const page=document.querySelector('.thp'); const tabBtn=page&&page.querySelector('.tab[data-tab="volunteers"]'); if(!tabBtn) return; e.preventDefault(); page.__meet=a.dataset.nudgego; tabBtn.click(); window.scrollTo({top:Math.max(0,page.offsetTop-10),behavior:'smooth'}); }); };
+  document.addEventListener('th:volunteers',()=>{ if(document.body.contains(el)) draw().catch(()=>{}); });
+  await draw();
 };
 })();
