@@ -123,10 +123,12 @@
             <button type="button" class="tatab" data-ta="payments">Payments</button>
             <button type="button" class="tatab" data-ta="signup">Parent meet sign-up</button>
             <button type="button" class="tatab" data-ta="messaging">Paid extras</button>
+            <button type="button" class="tatab" data-ta="volunteers">Meet volunteers</button>
           </div>
           <div id="taPayments" class="hidden"></div>
           <div id="taSignup" class="hidden"></div>
           <div id="taMessaging" class="hidden"></div>
+          <div id="taVolunteers" class="hidden"></div>
           <div id="feeBanner"></div>
           <div class="card">
             <div class="col-head"><h2 class="flex-1">Roster <span id="count" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
@@ -215,6 +217,7 @@
               <a href="coach.html?view=roster&tab=payments" class="btn bg-green-600 text-white inline-block">Payments →</a>
               <a href="coach.html?view=roster&tab=signup" class="btn bg-gray-800 text-white inline-block">Parent meet sign-up →</a>
               <a href="coach.html?view=roster&tab=messaging" class="btn bg-gray-800 text-white inline-block">Paid extras →</a>
+              <a href="coach.html?view=roster&tab=volunteers" class="btn bg-gray-800 text-white inline-block">Meet volunteers →</a>
             </div>
             <div id="taCoachNotice"></div>
             <p class="text-xs text-gray-500 mt-2">Uploading meet results and setting up meets happens on the <a class="underline" href="admin.html?tab=meetadmin">Meet Admin tab of the Admin page</a>.</p>
@@ -371,15 +374,17 @@ const wantRosterView=()=>new URLSearchParams(location.search).get('view')==='ros
 function setupTeamAdminTabs(){
   const q=new URLSearchParams(location.search); const stripeTeam=q.get('stripe'); let tab=q.get('tab')||'roster'; if(stripeTeam) tab='payments';
   if(q.has('tab')||stripeTeam) history.replaceState(null,'',location.pathname+'?view=roster');
-  const rosterBits=[...$('rosterView').firstElementChild.children].filter(x=>!['taTabs','taPayments','taSignup','taMessaging','coachesCard'].includes(x.id));
+  const rosterBits=[...$('rosterView').firstElementChild.children].filter(x=>!['taTabs','taPayments','taSignup','taMessaging','taVolunteers','coachesCard'].includes(x.id));
   const teams=(window.VYC_TEAMS||[]).map(t=>({code:t.code,name:t.name,active:t.active!==false}));
   const ctx=()=>({sb,team:myCoach.team_code,season:CFG.SEASON_YEAR,teams,canPickTeam:false});
   let stripeReturn=!!stripeTeam;
   const show=t=>{ document.querySelectorAll('.tatab').forEach(b=>b.classList.toggle('active',b.dataset.ta===t));
-    rosterBits.forEach(x=>x.classList.toggle('hidden',t!=='roster')); $('coachesCard').classList.toggle('hidden',t!=='coaches'); $('taPayments').classList.toggle('hidden',t!=='payments'); $('taSignup').classList.toggle('hidden',t!=='signup'); $('taMessaging').classList.toggle('hidden',t!=='messaging');
+    rosterBits.forEach(x=>x.classList.toggle('hidden',t!=='roster')); $('coachesCard').classList.toggle('hidden',t!=='coaches'); $('taPayments').classList.toggle('hidden',t!=='payments'); $('taSignup').classList.toggle('hidden',t!=='signup'); $('taMessaging').classList.toggle('hidden',t!=='messaging'); $('taVolunteers').classList.toggle('hidden',t!=='volunteers');
     if(t==='payments'){ const c=ctx(); c.stripeReturn=stripeReturn; stripeReturn=false; window.mountTeamPayments($('taPayments'),c); }
     if(t==='signup') window.mountParentSignup($('taSignup'),ctx());
-    if(t==='messaging') window.mountTeamMessaging($('taMessaging'),ctx()); };
+    if(t==='messaging') window.mountTeamMessaging($('taMessaging'),ctx());
+    if(t==='volunteers'){ $('taVolunteers').innerHTML='<div class="card"><div class="col-head"><h2>Meet volunteers</h2></div><p class="text-xs text-gray-500 mb-2">For meets you host: set up the duty list (start with the standard VYC list), keep the host-team jobs, and hand the field events to visiting teams or leave them open. For away meets: take open duties for your team. Parents sign themselves up on their dashboard.</p><div id="taVolMount"></div></div>';
+      window.TeamHub.mountVolunteers($('taVolMount'),{sb,team:myCoach.team_code,role:fullAccess?'admin':'coach',email:myCoach.email,uid:user&&user.id,name:[myCoach.first_name,myCoach.last_name].filter(Boolean).join(' '),phone:myCoach.phone||'',siteAdmin:!!myCoach.is_admin,meet:q.get('meet')||null}); } };
   document.querySelectorAll('.tatab').forEach(b=>b.onclick=()=>show(b.dataset.ta));
   (async()=>{ try{ await window.leagueReady; teams.splice(0,teams.length,...(window.VYC_TEAMS||[]).map(t=>({code:t.code,name:t.name,active:t.active!==false}))); }catch(e){} show(tab); })();
 }

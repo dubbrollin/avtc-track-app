@@ -300,6 +300,9 @@ TeamHub.mountVolunteers=async function(el, ctx){
     mgrTeam=role!=='parent'; };
   const canHost=()=>role!=='parent'&&(host||role==='admin'&&ctx.siteAdmin);
   const mine=d=>d.team_code===team, myVols=d=>vols.filter(v=>v.duty_id===d.id), taken=d=>counts[d.id]??myVols(d).length, full=d=>taken(d)>=d.slots;
+  const homeMeets=()=>meets.filter(m=>m.host_team_code===team&&m.meet_date>=td);
+  const hostStrip=()=>{ if(role==='parent') return ''; const H=homeMeets(); if(!H.length) return `<div class="note soft"><b>${esc(TEAM(team))} isn't hosting a meet this season</b> (per the league schedule), so there's no duty list to set up — just take open duties at the meets you visit.</div>`;
+    return `<div class="note" style="border-color:var(--act);background:var(--act-soft)"><b>You host ${H.length===1?'a meet':H.length+' meets'} this season.</b> As the host you set up the duty list — pick the meet: ${H.map(m=>`<button class="sbtn ${m.id===meet.id?'pri':''}" data-gomeet="${m.id}" style="margin:2px">${esc(fmtD(m.meet_date))}${m.week_no?' · Week '+m.week_no:''}${duties.length&&m.id===meet.id?'':''}</button>`).join('')}</div>`; };
   const meetPick=()=>`<div class="bar"><label class="text-sm font-semibold">Meet</label><select data-meet>${meets.map(m=>`<option value="${m.id}" ${m.id===meet.id?'selected':''}>${esc(meetLabel(m))}${m.meet_date<td?' (past)':''}</option>`).join('')}</select>
     ${host?'<span class="pill act">We host this meet</span>':meet.host_team_code?`<span class="pill">Host: ${esc(TEAM(meet.host_team_code))}</span>`:''}</div>
     <p class="text-xs text-gray-600 mb-2">${esc([meet.venue,meet.location].filter(Boolean).join(', ')||'')}${meet.meet_date<td?' · This meet is over.':''}</p>`;
@@ -317,11 +320,11 @@ TeamHub.mountVolunteers=async function(el, ctx){
       ${d.time_note||d.notes?`<div class="sub">${esc([d.time_note,d.notes].filter(Boolean).join(' · '))}</div>`:''}${people(d)}${act?`<div class="mt-2 flex flex-wrap items-center gap-2">${act}</div>`:''}</div>`; };
   const draw=()=>{ const groups=CAT_ORDER.filter(c=>duties.some(d=>d.category===c));
     const ours=duties.filter(mine), open=duties.filter(d=>!d.team_code&&!d.host_only);
-    let intro='';
-    if(canHost()) intro=`<div class="note soft"><b>You're the host.</b> List every job the meet needs, keep the host-team ones, and either hand the field events to a visiting team (pick the team on the duty) or leave them open for the visiting teams to take. Then everyone fills their own jobs.</div>
+    let intro=hostStrip();
+    if(canHost()) intro+=`<div class="note soft"><b>You're the host.</b> List every job the meet needs, keep the host-team ones, and either hand the field events to a visiting team (pick the team on the duty) or leave them open for the visiting teams to take. Then everyone fills their own jobs.</div>
       <div class="bar">${duties.length?'':'<button class="sbtn pri" data-standard>Add the standard VYC duty list</button>'}<button class="sbtn ${duties.length?'pri':''}" data-newduty>+ Add a duty</button>${duties.length?`<span class="text-sm text-gray-600">${duties.filter(d=>!d.team_code).length} open · ${duties.filter(full).length} of ${duties.length} filled</span>`:''}</div>`;
-    else if(mgrTeam) intro=`<div class="note soft"><b>Visiting team.</b> ${ours.length?`${esc(TEAM(team))} is covering <b>${ours.length}</b> dut${ours.length===1?'y':'ies'} at this meet.`:'Your team hasn\'t taken a duty yet.'} ${open.length?`<b>${open.length}</b> open dut${open.length===1?'y is':'ies are'} still up for grabs — take one, then add your people or let parents sign themselves up.`:''}</div>`;
-    else intro=ours.length?`<div class="note soft"><b>${esc(TEAM(team))} is covering:</b> ${ours.map(d=>esc(d.name)).join(', ')}. Tap <b>Sign me up</b> to help — thank you!</div>`:`<p class="text-sm text-gray-600 mb-2">${esc(TEAM(team))} doesn't have a duty at this meet yet. Check back once the coaches have picked one.</p>`;
+    else if(mgrTeam) intro+=`<div class="note soft"><b>Away meet — ${esc(TEAM(meet.host_team_code)||'the host team')} sets up this meet's duty list.</b> ${ours.length?`${esc(TEAM(team))} is covering <b>${ours.length}</b> dut${ours.length===1?'y':'ies'} at this meet.`:'Your team hasn\'t taken a duty yet.'} ${open.length?`<b>${open.length}</b> open dut${open.length===1?'y is':'ies are'} still up for grabs — take one, then add your people or let parents sign themselves up.`:''}</div>`;
+    else intro+=ours.length?`<div class="note soft"><b>${esc(TEAM(team))} is covering:</b> ${ours.map(d=>esc(d.name)).join(', ')}. Tap <b>Sign me up</b> to help — thank you!</div>`:`<p class="text-sm text-gray-600 mb-2">${esc(TEAM(team))} doesn't have a duty at this meet yet. Check back once the coaches have picked one.</p>`;
     el.innerHTML=meetPick()+intro+(duties.length?groups.map(c=>`<div class="cat">${CATS[c]}</div>${duties.filter(d=>d.category===c).sort((a,b)=>(mine(b)-mine(a))||a.sort_order-b.sort_order).map(dutyCard).join('')}`).join('')
       :`<p class="text-sm text-gray-500">${canHost()?'No duties yet — start with the standard list.':'The host team hasn\'t listed the duties for this meet yet.'}</p>`); };
   const dutyForm=d=>{ const box=modal(`<h3 class="font-bold text-lg mb-2">${d?'Edit duty':'Add a duty'}</h3><label class="f">Duty<input data-k="name" value="${esc(d?d.name:'')}" maxlength="60" placeholder="e.g. Long jump, Snack bar, Clerk"></label>
@@ -342,6 +345,7 @@ TeamHub.mountVolunteers=async function(el, ctx){
     g('go').onclick=async()=>{ g('go').disabled=true; const {error}=await sb.rpc('volunteer_add',{p_duty:d.id,p_name:g('name').value.trim(),p_phone:g('phone').value.trim()||null,p_registration:null,p_athlete_name:g('ath').value.trim()||null});
       if(error){ g('msg').textContent=clean(error); g('go').disabled=false; return; } closeModal(); toast(byName?'Added':'You\'re signed up — thank you!'); await load(); draw(); }; };
   el.onclick=async e=>{ const t=e.target, D=id=>duties.find(d=>d.id===id); let r;
+    if(r=t.closest('[data-gomeet]')){ meet=meets.find(m=>m.id===r.dataset.gomeet); if(ctx.onMeet) ctx.onMeet(meet.id); await load(); return draw(); }
     if(t.closest('[data-standard]')){ const {data,error}=await sb.rpc('duties_add_standard',{p_meet:meet.id}); if(error) return toast(clean(error),true); toast(`${data} duties added`); await load(); return draw(); }
     if(t.closest('[data-newduty]')) return dutyForm(null);
     if(r=t.closest('[data-edit]')) return dutyForm(D(r.dataset.edit));
@@ -458,11 +462,11 @@ TeamHub.mountVolunteerSummary=async function(el, ctx){
   el.innerHTML=next.map(m=>{ const mineT=teams.filter(t=>window.meetHasTeam(m,t.code)); const parts=mineT.map(t=>{ const host=m.host_team_code===t.code; const ours=duties.filter(x=>x.meet_id===m.id&&x.team_code===t.code); const open=duties.filter(x=>x.meet_id===m.id&&!x.team_code&&!x.host_only).length;
       const me=vols.filter(x=>x.meet_id===m.id&&x.email&&ctx.email&&x.email.toLowerCase()===ctx.email.toLowerCase()).map(x=>(duties.find(y=>y.id===x.duty_id)||{}).name).filter(Boolean);
       const filled=ours.reduce((a,x)=>a+Math.min(x.slots,cnt[x.id]||0),0), need=ours.reduce((a,x)=>a+x.slots,0);
-      const line=host?`<b>${esc(TEAM(t.code))} hosts.</b> ${duties.filter(x=>x.meet_id===m.id).length?`${filled} of ${need} host spots filled · ${open} dut${open===1?'y':'ies'} still open for visiting teams`:'Duties not set up yet'}`
+      const line=host?`<b>${esc(TEAM(t.code))} hosts.</b> ${duties.filter(x=>x.meet_id===m.id).length?`${filled} of ${need} host spots filled · ${open} dut${open===1?'y':'ies'} still open for visiting teams`:'Duty list not set up yet — as the host, start with the standard VYC list'}`
         :ours.length?`<b>${esc(TEAM(t.code))}</b> covers ${ours.map(x=>esc(x.name)).join(', ')} — ${filled} of ${need} spots filled`:`<b>${esc(TEAM(t.code))}</b> has no duty yet${open?` · ${open} open`:''}`;
       return `<div class="text-sm">${line}${me.length?`<div class="text-xs" style="color:var(--ok)">You're signed up: ${me.map(esc).join(', ')} ✓</div>`:''}</div>`; }).join('');
     const url=ctx.volUrl?ctx.volUrl(m,mineT[0].code):ctx.here?`?tab=volunteers&meet=${m.id}`:`team.html?team=${encodeURIComponent(mineT[0].code)}&tab=volunteers&meet=${m.id}`;
-    return `<div class="note" style="margin-bottom:8px"><div class="flex flex-wrap items-center gap-2"><b>${esc(meetLabel(m))}</b><span style="flex:1"></span><a class="sbtn pri" style="text-decoration:none" href="${url}" ${ctx.here?`data-volgo="${m.id}"`:''}>${teams.some(t=>t.role==='parent')?'Volunteer →':'Duties →'}</a></div>${parts}</div>`; }).join('');
+    return `<div class="note" style="margin-bottom:8px"><div class="flex flex-wrap items-center gap-2"><b>${esc(meetLabel(m))}</b><span style="flex:1"></span><a class="sbtn pri" style="text-decoration:none" href="${url}" ${ctx.here?`data-volgo="${m.id}"`:''}>${teams.some(t=>t.role==='parent')?'Volunteer →':mineT.some(t=>m.host_team_code===t.code)&&!duties.some(x=>x.meet_id===m.id)?'Set up duties →':'Duties →'}</a></div>${parts}</div>`; }).join('');
   // inside the team page, "Volunteer →" just switches to the Volunteers tab on that meet
   el.querySelectorAll('[data-volgo]').forEach(a=>a.onclick=e=>{ const page=a.closest('.thp'); const tabBtn=page&&page.querySelector('.tab[data-tab="volunteers"]'); if(!tabBtn) return; e.preventDefault(); page.__meet=a.dataset.volgo; tabBtn.click(); window.scrollTo({top:Math.max(0,page.offsetTop-10),behavior:'smooth'}); });
 };
