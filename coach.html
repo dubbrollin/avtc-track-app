@@ -231,7 +231,7 @@
 
           <div class="card" id="volCard">
             <div class="col-head"><h2 class="flex-1">Meet volunteers</h2></div>
-            <p class="text-xs text-gray-500 mb-2">The host team lists the jobs; visiting teams run the field events; parents sign up. Open the <b>Volunteers</b> tab above to set up or take duties.</p>
+            <p class="text-xs text-gray-500 mb-2">The host team lists the jobs; visiting teams run the field events; each team lays out its own sign-up list (by division, time shifts, or a head count); parents sign up. Open the <b>Volunteers</b> tab above to set up or take duties.</p>
             <div id="volSummary" class="text-sm"></div>
           </div>
 
@@ -383,7 +383,7 @@ function setupTeamAdminTabs(){
     if(t==='payments'){ const c=ctx(); c.stripeReturn=stripeReturn; stripeReturn=false; window.mountTeamPayments($('taPayments'),c); }
     if(t==='signup') window.mountParentSignup($('taSignup'),ctx());
     if(t==='messaging') window.mountTeamMessaging($('taMessaging'),ctx());
-    if(t==='volunteers'){ $('taVolunteers').innerHTML='<div class="card"><div class="col-head"><h2>Meet volunteers</h2></div><p class="text-xs text-gray-500 mb-2">For meets you host: set up the duty list (start with the standard VYC list), keep the host-team jobs, and hand the field events to visiting teams or leave them open. For away meets: take open duties for your team. Parents sign themselves up on their dashboard.</p><div id="taVolMount"></div></div>';
+    if(t==='volunteers'){ $('taVolunteers').innerHTML='<div class="card"><div class="col-head"><h2>Meet volunteers</h2></div><p class="text-xs text-gray-500 mb-2">For meets you host: set up the duty list (start with the standard VYC list), keep the host-team jobs, and hand the field events to visiting teams or leave them open. For away meets: take open duties for your team. On any duty your team covers, <b>Set up the sign-up list</b> lays it out the way your team likes — one head count, a crew per division, time shifts, or your own rows. Parents sign themselves up on their dashboard.</p><div id="taVolMount"></div></div>';
       window.TeamHub.mountVolunteers($('taVolMount'),{sb,team:myCoach.team_code,role:fullAccess?'admin':'coach',email:myCoach.email,uid:user&&user.id,name:[myCoach.first_name,myCoach.last_name].filter(Boolean).join(' '),phone:myCoach.phone||'',siteAdmin:!!myCoach.is_admin,meet:q.get('meet')||null}); } };
   document.querySelectorAll('.tatab').forEach(b=>b.onclick=()=>show(b.dataset.ta));
   (async()=>{ try{ await window.leagueReady; teams.splice(0,teams.length,...(window.VYC_TEAMS||[]).map(t=>({code:t.code,name:t.name,active:t.active!==false}))); }catch(e){} show(tab); })();

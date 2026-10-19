@@ -1,7 +1,7 @@
 // Team hub — the pieces of each team's own page (team.html) that are also used on the dashboards:
 //   window.TeamHub.mountGallery(el, ctx)      photo albums for the team's parents and coaches   (paid team extra)
 //   window.TeamHub.mountStore(el, ctx)        the team store: items, cart, orders, and the team's order desk (paid team extra)
-//   window.TeamHub.mountVolunteers(el, ctx)   meet-day duties: host sets them up, visiting teams take them, parents sign up (free)
+//   window.TeamHub.mountVolunteers(el, ctx)   meet-day duties: host sets them up, visiting teams take them, each team lays out its sign-up list (whole duty / by division / time shifts / own rows), parents sign up for a spot — parents see every meet stacked (free)
 //   window.TeamHub.mountPosts(el, ctx)        news on the team page
 //   window.TeamHub.editPage(ctx)              the team admin's "Edit team page" form
 //   window.TeamHub.mountVolunteerSummary(el, ctx)   the small "volunteering" box on the Coach and Parent dashboards
@@ -35,6 +35,8 @@ const CSS=`<style id="thStyle">
 .th .duty{border:1px solid var(--line,#e1e7ef);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#fff}.th .duty.mine{border-color:var(--act,#1764c8);box-shadow:0 0 0 3px var(--act-soft,#e6f0fc)}.th .duty.open{border-style:dashed}
 .th .duty .hd{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}.th .duty .nm{font-weight:700;font-size:1rem}.th .duty .sub{font-size:12px;color:#5b6878}.th .duty .people{font-size:.88rem;margin-top:4px}.th .duty .people span{display:inline-block;background:var(--soft,#f7f9fc);border:1px solid var(--line,#e1e7ef);border-radius:999px;padding:1px 9px;margin:2px 4px 2px 0}
 .th .meter{height:6px;border-radius:3px;background:#eef1f5;overflow:hidden;width:7rem;flex:none}.th .meter i{display:block;height:100%;background:var(--ok,#1e7f52)}
+.th .slot{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:6px 0;border-top:1px dashed var(--line,#e1e7ef);font-size:.9rem}.th .slot .sl{font-weight:600;min-width:8rem}.th .slot .people{margin-top:0;flex-basis:100%}
+.th details.meetbox{border:1px solid var(--line,#e1e7ef);border-radius:12px;background:#fff;padding:10px 12px;margin-bottom:10px}.th details.meetbox[open]{border-color:var(--act,#1764c8)}.th details.meetbox>summary{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;cursor:pointer;list-style:none}.th details.meetbox>summary::-webkit-details-marker{display:none}.th details.meetbox>summary .mt{font-weight:700;font-size:1rem}.th details.meetbox>summary::before{content:'▸';color:#5b6878}.th details.meetbox[open]>summary::before{content:'▾'}
 .th .cat{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#5b6878;margin:14px 0 6px}
 .th .cartbar{position:sticky;bottom:0;background:#fff;border:1px solid var(--act,#1764c8);border-radius:10px;padding:10px 12px;margin-top:12px;box-shadow:0 -2px 10px rgba(0,0,0,.08)}
 .th-modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:9998;padding:1rem}.th-modal>div{background:#fff;border-radius:12px;padding:16px;max-width:36rem;width:100%;max-height:92vh;overflow:auto}
@@ -289,84 +291,146 @@ const meetLabel=m=>`${fmtD(m.meet_date)} · ${m.week_no?'Week '+m.week_no+(m.hos
 TeamHub.mountVolunteers=async function(el, ctx){
   css(); el.classList.add('th'); const sb=ctx.sb, team=ctx.team, role=ctx.role;
   if(!role){ el.innerHTML='<p class="text-sm text-gray-600">Sign in to see the volunteer duties for your team\'s meets.</p>'; return 'none'; }
-  let meets=[], meet=null, duties=[], vols=[], counts={}, teamsAt=[], host=false, mgrTeam=false;
+  // Coaches work one meet at a time (a picker). Parents see EVERY meet their team is at, stacked, so nothing is missed.
+  const allMode=role==='parent';
+  let meets=[], meet=null, shown=[], duties=[], vols=[], slots=[], counts={}, scounts={}, host=false, mgrTeam=false;
   try{ meets=await teamMeets(sb,[team]); }catch(e){ el.innerHTML=`<p class="text-sm text-red-700">${esc(clean(e))}</p>`; return 'none'; }
   const td=today(); const upcoming=meets.filter(m=>m.meet_date>=td);
   meet=meets.find(m=>m.id===ctx.meet)||upcoming[0]||meets[meets.length-1]||null;
   if(!meet){ el.innerHTML='<p class="text-sm text-gray-600">No meets on the schedule for this team yet.</p>'; return 'none'; }
-  let deadline=null, passed=false, timer=null;
-  const load=async()=>{ host=meet.host_team_code===team; teamsAt=(meet.team_codes||[]).length?meet.team_codes:(window.VYC_TEAMS||[]).filter(t=>t.active!==false).map(t=>t.code);
-    deadline=window.attendanceDeadline?window.attendanceDeadline(meet.meet_date):null; passed=!!(deadline&&Date.now()>deadline.getTime());
-    if(passed){ try{ await sb.rpc('duties_settle',{p_meet:meet.id}); }catch(e){} }   // hands anything still open to a visiting team (once)
-    const [{data:d,error},{data:v},{data:c}]=await Promise.all([sb.from('meet_duties').select('*').eq('meet_id',meet.id).order('sort_order').order('name'), sb.from('meet_volunteers').select('*').eq('meet_id',meet.id).order('created_at'), sb.rpc('duty_counts',{p_meet:meet.id})]);
-    if(error) throw error; duties=d||[]; vols=v||[]; counts={}; (c||[]).forEach(x=>counts[x.duty_id]=x.taken);
+  let timer=null;
+  const isHost=m=>m.host_team_code===team, teamsAt=m=>(m.team_codes||[]).length?m.team_codes:(window.VYC_TEAMS||[]).filter(t=>t.active!==false).map(t=>t.code);
+  const deadlineOf=m=>window.attendanceDeadline?window.attendanceDeadline(m.meet_date):null, passedOf=m=>{ const dl=deadlineOf(m); return !!(dl&&Date.now()>dl.getTime()); };
+  const load=async()=>{ shown=allMode?(upcoming.length?upcoming:[meet]):[meet]; host=isHost(meet); const ids=shown.map(m=>m.id);
+    for(const m of shown){ if(passedOf(m)){ try{ await sb.rpc('duties_settle',{p_meet:m.id}); }catch(e){} } }   // hands anything still open to a visiting team (once)
+    const [{data:d,error},{data:v},{data:s}]=await Promise.all([sb.from('meet_duties').select('*').in('meet_id',ids).order('sort_order').order('name'), sb.from('meet_volunteers').select('*').in('meet_id',ids).order('created_at'), sb.from('duty_slots').select('*').in('meet_id',ids).order('sort_order')]);
+    if(error) throw error; duties=d||[]; vols=v||[]; slots=s||[]; counts={}; scounts={};
+    await Promise.all(ids.map(async id=>{ const [{data:c},{data:sc}]=await Promise.all([sb.rpc('duty_counts',{p_meet:id}),sb.rpc('duty_slot_counts',{p_meet:id})]); (c||[]).forEach(x=>counts[x.duty_id]=x.taken); (sc||[]).forEach(x=>scounts[x.slot_id]=x.taken); }));
     mgrTeam=role!=='parent'; };
   const canHost=()=>role!=='parent'&&(host||role==='admin'&&ctx.siteAdmin);
+  const meetOf=d=>meets.find(m=>m.id===d.meet_id)||meet;
   const mine=d=>d.team_code===team, myVols=d=>vols.filter(v=>v.duty_id===d.id), taken=d=>counts[d.id]??myVols(d).length, full=d=>taken(d)>=d.slots;
+  const slotsOf=d=>d.slot_mode&&d.slot_mode!=='all'?slots.filter(s=>s.duty_id===d.id):[], sVols=s=>vols.filter(v=>v.slot_id===s.id), sTaken=s=>scounts[s.id]??sVols(s).length, sFull=s=>sTaken(s)>=s.slots;
+  const isMe=v=>!!(v.email&&ctx.email&&v.email.toLowerCase()===ctx.email.toLowerCase());
+  const canSchedule=d=>mgrTeam&&!!d.team_code&&(mine(d)||canHost());
+  const MODE={division:'By division',shift:'Time shifts',custom:'Own list'};
   const dname=d=>esc(d.name)+(d.gender?` <span class="pill" style="background:${d.gender==='Boys'?'#dbeafe;color:#1e40af':'#fce7f3;color:#9d174d'}">${d.gender}</span>`:'');
-  const dlText=()=>deadline?window.fmtDeadline(deadline):'';
-  const dlBanner=()=>!deadline?'':passed?`<div class="note warn"><b>The deadline for picking duties has passed</b> (${esc(dlText())}). Anything that was still open has been assigned to a visiting team. ${canHost()?'You can still move duties around by hand.':'Ask the host team if something needs to change.'}</div>`
-    :`<div class="note warn"><b>Visiting teams: take your field event by ${esc(dlText())}.</b> First come, first served — one team per event. Anything still open at the deadline is assigned to a visiting team automatically.</div>`;
+  const dlText=m=>{ const dl=deadlineOf(m); return dl?window.fmtDeadline(dl):''; };
+  const dlBanner=()=>{ const dl=deadlineOf(meet); if(!dl) return ''; return passedOf(meet)?`<div class="note warn"><b>The deadline for picking duties has passed</b> (${esc(dlText(meet))}). Anything that was still open has been assigned to a visiting team. ${canHost()?'You can still move duties around by hand.':'Ask the host team if something needs to change.'}</div>`
+    :`<div class="note warn"><b>Visiting teams: take your field event by ${esc(dlText(meet))}.</b> First come, first served — one team per event. Anything still open at the deadline is assigned to a visiting team automatically.</div>`; };
   const openList=()=>{ if(role==='parent'||canHost()||!mgrTeam) return ''; const open=duties.filter(d=>!d.team_code&&!d.host_only); if(!open.length) return '';
-    if(passed) return ''; return `<div class="note" style="border-color:var(--ok);background:var(--ok-bg)"><b>Open duties at this meet — take one for ${esc(TEAM(team))}:</b>
+    if(passedOf(meet)) return ''; return `<div class="note" style="border-color:var(--ok);background:var(--ok-bg)"><b>Open duties at this meet — take one for ${esc(TEAM(team))}:</b>
       <div class="mt-2 flex flex-wrap gap-2">${open.map(d=>`<button class="sbtn grn" data-claim="${d.id}">${dname(d)} · ${d.slots} people</button>`).join('')}</div>
-      <div class="text-xs text-gray-600 mt-1">Once you take one it's yours and closed to the other teams. Then add your people below, or let your parents sign themselves up.</div></div>`; };
+      <div class="text-xs text-gray-600 mt-1">Once you take one it's yours and closed to the other teams. Then set up its sign-up list (by division, by time shift, or your own list) and add your people, or let parents sign themselves up.</div></div>`; };
   const homeMeets=()=>meets.filter(m=>m.host_team_code===team&&m.meet_date>=td);
   const hostStrip=()=>{ if(role==='parent') return ''; const H=homeMeets(); if(!H.length) return `<div class="note soft"><b>${esc(TEAM(team))} isn't hosting a meet this season</b> (per the league schedule), so there's no duty list to set up — just take open duties at the meets you visit.</div>`;
-    return `<div class="note" style="border-color:var(--act);background:var(--act-soft)"><b>You host ${H.length===1?'a meet':H.length+' meets'} this season.</b> As the host you set up the duty list — pick the meet: ${H.map(m=>`<button class="sbtn ${m.id===meet.id?'pri':''}" data-gomeet="${m.id}" style="margin:2px">${esc(fmtD(m.meet_date))}${m.week_no?' · Week '+m.week_no:''}${duties.length&&m.id===meet.id?'':''}</button>`).join('')}</div>`; };
+    return `<div class="note" style="border-color:var(--act);background:var(--act-soft)"><b>You host ${H.length===1?'a meet':H.length+' meets'} this season.</b> As the host you set up the duty list — pick the meet: ${H.map(m=>`<button class="sbtn ${m.id===meet.id?'pri':''}" data-gomeet="${m.id}" style="margin:2px">${esc(fmtD(m.meet_date))}${m.week_no?' · Week '+m.week_no:''}</button>`).join('')}</div>`; };
   const meetPick=()=>`<div class="bar"><label class="text-sm font-semibold">Meet</label><select data-meet>${meets.map(m=>`<option value="${m.id}" ${m.id===meet.id?'selected':''}>${esc(meetLabel(m))}${m.meet_date<td?' (past)':''}</option>`).join('')}</select>
     ${host?'<span class="pill act">We host this meet</span>':meet.host_team_code?`<span class="pill">Host: ${esc(TEAM(meet.host_team_code))}</span>`:''}</div>
     <p class="text-xs text-gray-600 mb-2">${esc([meet.venue,meet.location].filter(Boolean).join(', ')||'')}${meet.meet_date<td?' · This meet is over.':''}</p>`;
-  const people=d=>{ const L=myVols(d); const canRm=v=>v.email&&ctx.email&&v.email.toLowerCase()===ctx.email.toLowerCase()||(mgrTeam&&(mine(d)||canHost()));
-    return L.length?`<div class="people">${L.map(v=>`<span>${esc(v.name)}${v.athlete_name?` <i class="text-gray-500">(${esc(v.athlete_name)})</i>`:''}${v.phone&&mgrTeam?` <i class="text-gray-500">${esc(v.phone)}</i>`:''}${canRm(v)?` <button class="red" data-rmvol="${v.id}" title="Take off" style="border:0;background:none;cursor:pointer;font-weight:700">×</button>`:''}</span>`).join('')}</div>`:''; };
-  const meter=d=>`<span class="text-xs text-gray-600" style="white-space:nowrap">${taken(d)} of ${d.slots}</span><span class="meter"><i style="width:${Math.min(100,100*taken(d)/d.slots)}%"></i></span>`;
-  const dutyCard=d=>{ const me=ctx.email&&myVols(d).some(v=>v.email&&v.email.toLowerCase()===ctx.email.toLowerCase());
+  const person=(d,v)=>{ const canRm=isMe(v)||(mgrTeam&&(mine(d)||canHost()));
+    return `<span>${esc(v.name)}${v.athlete_name?` <i class="text-gray-500">(${esc(v.athlete_name)})</i>`:''}${v.phone&&mgrTeam?` <i class="text-gray-500">${esc(v.phone)}</i>`:''}${canRm?` <button class="red" data-rmvol="${v.id}" title="Take off" style="border:0;background:none;cursor:pointer;font-weight:700">×</button>`:''}</span>`; };
+  const people=(d,L)=>L.length?`<div class="people">${L.map(v=>person(d,v)).join('')}</div>`:'';
+  const meter=(t,n)=>`<span class="text-xs text-gray-600" style="white-space:nowrap">${t} of ${n}</span><span class="meter"><i style="width:${Math.min(100,100*t/n)}%"></i></span>`;
+  // the sign-up control for one duty (no slots) or one slot of it
+  const joinBtn=(d,s)=>{ const L=s?sVols(s):myVols(d), me=L.some(isMe), isFull=s?sFull(s):full(d); const key=s?`data-slot="${s.id}" data-signup="${d.id}"`:`data-signup="${d.id}"`;
+    if(role==='parent') return me?`<span class="pill ok">You're signed up ✓</span>`:isFull?'<span class="pill">Full — thank you!</span>':`<button class="sbtn grn" ${key}>Sign me up</button>`;
+    return isFull?'<span class="pill">Full</span>':`<button class="sbtn grn" ${s?`data-slot="${s.id}" data-addp="${d.id}"`:`data-addp="${d.id}"`}>+ Add a person</button>`; };
+  const slotRows=d=>slotsOf(d).map(s=>`<div class="slot"><span class="sl">${esc(s.label)}</span>${meter(sTaken(s),s.slots)}<span style="flex:1"></span>${d.team_code&&(mine(d)||canHost())?joinBtn(d,s):''}${people(d,sVols(s))}</div>`).join('');
+  const dutyCard=d=>{ const S=slotsOf(d), m=meetOf(d), hostHere=canHost(), pastDl=passedOf(m);
     const owner=d.team_code?(mine(d)?'<span class="pill act">Our team</span>':`<span class="pill">${esc(TEAM(d.team_code))}</span>`):'<span class="pill warn">Open — needs a team</span>';
     let act='';
-    if(canHost()) act+=`<select data-assign="${d.id}" title="Which team does this"><option value="">Open to visiting teams</option>${teamsAt.map(t=>`<option value="${t}" ${d.team_code===t?'selected':''}>${esc(TEAM(t))}${t===meet.host_team_code?' (host)':''}</option>`).join('')}</select> <button class="sbtn" data-edit="${d.id}">Edit</button> ${d.category==='field'&&!d.gender?`<button class="sbtn" data-split="${d.id}" title="Make a Boys duty and a Girls duty">Split boys / girls</button> `:''}<button class="sbtn red" data-del="${d.id}">Delete</button> `;
-    else if(mgrTeam&&!d.host_only&&!passed){ if(!d.team_code) act+=`<button class="sbtn pri" data-claim="${d.id}">Take this for ${esc(TEAM(team))}</button> `; else if(mine(d)&&!d.assigned_by_host) act+=`<button class="sbtn" data-release="${d.id}">Give it back</button> `; }
-    if(d.team_code&&(mine(d)||canHost())){ if(role==='parent'){ act+=me?`<span class="pill ok">You're signed up ✓</span>`:full(d)?'<span class="pill">Full — thank you!</span>':`<button class="sbtn grn" data-signup="${d.id}">Sign me up</button>`; }
-      else act+=full(d)?'<span class="pill">Full</span> ':`<button class="sbtn grn" data-addp="${d.id}">+ Add a person</button> `; }
-    return `<div class="duty ${mine(d)?'mine':''} ${!d.team_code?'open':''}" data-duty="${d.id}"><div class="hd"><span class="nm">${dname(d)}</span>${owner}${d.host_only?'<span class="pill">Host duty</span>':''}${d.auto_assigned?'<span class="pill warn">Assigned at the deadline</span>':d.assigned_by_host&&d.team_code?'<span class="pill">Assigned by host</span>':''}<span style="flex:1"></span>${meter(d)}</div>
-      ${d.time_note||d.notes?`<div class="sub">${esc([d.time_note,d.notes].filter(Boolean).join(' · '))}</div>`:''}${people(d)}${act?`<div class="mt-2 flex flex-wrap items-center gap-2">${act}</div>`:''}</div>`; };
-  const draw=()=>{ const groups=CAT_ORDER.filter(c=>duties.some(d=>d.category===c));
-    const ours=duties.filter(mine), open=duties.filter(d=>!d.team_code&&!d.host_only);
+    if(hostHere) act+=`<select data-assign="${d.id}" title="Which team does this"><option value="">Open to visiting teams</option>${teamsAt(m).map(t=>`<option value="${t}" ${d.team_code===t?'selected':''}>${esc(TEAM(t))}${t===m.host_team_code?' (host)':''}</option>`).join('')}</select> <button class="sbtn" data-edit="${d.id}">Edit</button> ${d.category==='field'&&!d.gender?`<button class="sbtn" data-split="${d.id}" title="Make a Boys duty and a Girls duty">Split boys / girls</button> `:''}<button class="sbtn red" data-del="${d.id}">Delete</button> `;
+    else if(mgrTeam&&!d.host_only&&!pastDl){ if(!d.team_code) act+=`<button class="sbtn pri" data-claim="${d.id}">Take this for ${esc(TEAM(team))}</button> `; else if(mine(d)&&!d.assigned_by_host) act+=`<button class="sbtn" data-release="${d.id}">Give it back</button> `; }
+    if(canSchedule(d)) act+=`<button class="sbtn" data-sched="${d.id}">${S.length?'Change the sign-up list':'Set up the sign-up list'}</button> `;
+    if(d.team_code&&(mine(d)||hostHere)&&!S.length) act+=joinBtn(d,null);
+    return `<div class="duty ${mine(d)?'mine':''} ${!d.team_code?'open':''}" data-duty="${d.id}"><div class="hd"><span class="nm">${dname(d)}</span>${owner}${d.host_only?'<span class="pill">Host duty</span>':''}${S.length?`<span class="pill">${MODE[d.slot_mode]||'List'}</span>`:''}${d.auto_assigned?'<span class="pill warn">Assigned at the deadline</span>':d.assigned_by_host&&d.team_code?'<span class="pill">Assigned by host</span>':''}<span style="flex:1"></span>${meter(taken(d),d.slots)}</div>
+      ${d.time_note||d.notes?`<div class="sub">${esc([d.time_note,d.notes].filter(Boolean).join(' · '))}</div>`:''}${S.length?slotRows(d):people(d,myVols(d))}${act?`<div class="mt-2 flex flex-wrap items-center gap-2">${act}</div>`:''}</div>`; };
+  const grouped=L=>CAT_ORDER.filter(c=>L.some(d=>d.category===c)).map(c=>`<div class="cat">${CATS[c]}</div>${L.filter(d=>d.category===c).sort((a,b)=>(mine(b)-mine(a))||a.sort_order-b.sort_order).map(dutyCard).join('')}`).join('');
+  // ---- coach / team admin: one meet, with the host tools ----
+  const drawOne=()=>{ const ours=duties.filter(mine), open=duties.filter(d=>!d.team_code&&!d.host_only);
     let intro=hostStrip()+dlBanner()+openList();
-    if(canHost()) intro+=`<div class="note soft"><b>You're the host.</b> List every job the meet needs, keep the host-team ones, and either hand the field events to a visiting team (pick the team on the duty) or leave them open for the visiting teams to take. Then everyone fills their own jobs.</div>
+    if(canHost()) intro+=`<div class="note soft"><b>You're the host.</b> List every job the meet needs, keep the host-team ones, and either hand the field events to a visiting team (pick the team on the duty) or leave them open for the visiting teams to take. Then everyone fills their own jobs — each team can lay out its sign-up list by division, by time shift, or however it likes (<b>Set up the sign-up list</b> on the duty).</div>
       <div class="bar">${duties.length?'':'<button class="sbtn pri" data-standard>Add the standard VYC duty list</button>'}<button class="sbtn ${duties.length?'pri':''}" data-newduty>+ Add a duty</button>${duties.length?`<span class="text-sm text-gray-600">${duties.filter(d=>!d.team_code).length} open · ${duties.filter(full).length} of ${duties.length} filled</span>`:''}</div>`;
-    else if(mgrTeam) intro+=`<div class="note soft"><b>Away meet — ${esc(TEAM(meet.host_team_code)||'the host team')} sets up this meet's duty list.</b> ${ours.length?`${esc(TEAM(team))} is covering <b>${ours.length}</b> dut${ours.length===1?'y':'ies'} at this meet.`:'Your team hasn\'t taken a duty yet.'} ${open.length?`<b>${open.length}</b> open dut${open.length===1?'y is':'ies are'} still up for grabs — take one, then add your people or let parents sign themselves up.`:''}</div>`;
-    else intro+=ours.length?`<div class="note soft"><b>${esc(TEAM(team))} is covering:</b> ${ours.map(d=>esc(d.name)).join(', ')}. Tap <b>Sign me up</b> to help — thank you!</div>`:`<p class="text-sm text-gray-600 mb-2">${esc(TEAM(team))} doesn't have a duty at this meet yet. Check back once the coaches have picked one.</p>`;
-    el.innerHTML=meetPick()+intro+(duties.length?groups.map(c=>`<div class="cat">${CATS[c]}</div>${duties.filter(d=>d.category===c).sort((a,b)=>(mine(b)-mine(a))||a.sort_order-b.sort_order).map(dutyCard).join('')}`).join('')
-      :`<p class="text-sm text-gray-500">${canHost()?'No duties yet — start with the standard list.':'The host team hasn\'t listed the duties for this meet yet.'}</p>`); };
+    else if(mgrTeam) intro+=`<div class="note soft"><b>Away meet — ${esc(TEAM(meet.host_team_code)||'the host team')} sets up this meet's duty list.</b> ${ours.length?`${esc(TEAM(team))} is covering <b>${ours.length}</b> dut${ours.length===1?'y':'ies'} at this meet — set up each one's sign-up list the way your team likes (by division, time shifts, or your own rows), then add your people or let parents sign themselves up.`:'Your team hasn\'t taken a duty yet.'} ${open.length?`<b>${open.length}</b> open dut${open.length===1?'y is':'ies are'} still up for grabs.`:''}</div>`;
+    el.innerHTML=meetPick()+intro+(duties.length?grouped(duties):`<p class="text-sm text-gray-500">${canHost()?'No duties yet — start with the standard list.':'The host team hasn\'t listed the duties for this meet yet.'}</p>`); };
+  // ---- parent: every meet, stacked. Home meet = the whole host list; away meet = what our team took. ----
+  const drawAll=()=>{ const openId=(meets.find(m=>m.id===ctx.meet)||upcoming[0]||{}).id;
+    el.innerHTML=`<p class="text-sm text-gray-600 mb-2">Every meet ${esc(TEAM(team))} is at this season. Tap a meet to see the sign-up list — at our <b>home meet</b> that's everything the meet needs; at an <b>away meet</b> it's the events our team is covering. Tap <b>Sign me up</b> on a spot — thank you!</p>`+
+      shown.map(m=>{ const D=duties.filter(d=>d.meet_id===m.id), ours=D.filter(mine), theirs=D.filter(d=>!mine(d)&&d.team_code), hostM=isHost(m); const spots=ours.reduce((a,d)=>a+d.slots,0), got=ours.reduce((a,d)=>a+Math.min(d.slots,taken(d)),0); const meCount=vols.filter(v=>v.meet_id===m.id&&isMe(v)).length;
+        let body; if(!D.length) body=`<p class="text-sm text-gray-500">${hostM?'Our coaches haven\'t set up the volunteer list for our home meet yet.':'The host team hasn\'t listed this meet\'s duties yet.'} Check back soon.</p>`;
+        else if(hostM) body=`<div class="note soft"><b>We host this meet</b> — here's everything we need help with. ${theirs.length?`<span class="text-gray-600">The visiting teams run: ${theirs.map(d=>esc(d.name)+(d.gender?' ('+d.gender+')':'')+' — '+esc(TEAM(d.team_code))).join(', ')}.</span>`:''}</div>`+grouped(ours);
+        else body=(ours.length?`<div class="note soft"><b>${esc(TEAM(team))} is covering:</b> ${ours.map(d=>esc(d.name)+(d.gender?' ('+d.gender+')':'')).join(', ')}${m.host_team_code?' at the '+esc(TEAM(m.host_team_code))+' meet':''}.</div>`+grouped(ours):`<p class="text-sm text-gray-500">${esc(TEAM(team))} doesn't have a duty at this meet yet. Check back once the coaches have picked one.</p>`);
+        return `<details class="meetbox" ${m.id===openId?'open':''} data-meetbox="${m.id}"><summary><span class="mt">${esc(meetLabel(m))}</span>${hostM?'<span class="pill act">Home meet</span>':m.host_team_code?`<span class="pill">@ ${esc(TEAM(m.host_team_code))}</span>`:''}<span style="flex:1"></span>${ours.length?`<span class="text-xs text-gray-600">${got} of ${spots} spots filled</span>`:''}${meCount?`<span class="pill ok">You: ${meCount} ✓</span>`:''}</summary>
+          <div class="text-xs text-gray-600 mb-2">${esc([m.venue,m.location].filter(Boolean).join(', ')||'')}${m.meet_date<td?' · This meet is over.':''}</div>${body}</details>`; }).join('');
+    if(ctx.meet){ const b=el.querySelector(`[data-meetbox="${ctx.meet}"]`); if(b) b.scrollIntoView({behavior:'smooth',block:'start'}); } };
+  const draw=()=>allMode?drawAll():drawOne();
   const dutyForm=d=>{ const box=modal(`<h3 class="font-bold text-lg mb-2">${d?'Edit duty':'Add a duty'}</h3><label class="f">Duty<input data-k="name" value="${esc(d?d.name:'')}" maxlength="60" placeholder="e.g. Long jump, Snack bar, Clerk"></label>
-    <div class="grid" style="grid-template-columns:1fr 1fr"><label class="f">Category<select data-k="cat">${CAT_ORDER.map(c=>`<option value="${c}" ${d&&d.category===c?'selected':''}>${CATS[c]}</option>`).join('')}</select></label><label class="f">People needed<input data-k="slots" type="number" min="1" max="50" value="${d?d.slots:2}"></label></div>
+    <div class="grid" style="grid-template-columns:1fr 1fr"><label class="f">Category<select data-k="cat">${CAT_ORDER.map(c=>`<option value="${c}" ${d&&d.category===c?'selected':''}>${CATS[c]}</option>`).join('')}</select></label><label class="f">People needed${d&&slotsOf(d).length?' <span class="text-gray-500 font-normal">(set by its sign-up list)</span>':''}<input data-k="slots" type="number" min="1" max="50" value="${d?d.slots:2}" ${d&&slotsOf(d).length?'disabled':''}></label></div>
     <label class="f">Boys / girls<select data-k="gender"><option value="" ${!d||!d.gender?'selected':''}>Both (one crew runs boys and girls)</option><option value="Boys" ${d&&d.gender==='Boys'?'selected':''}>Boys only</option><option value="Girls" ${d&&d.gender==='Girls'?'selected':''}>Girls only</option></select></label>
-    <label class="f">Which team<select data-k="team"><option value="">Open — a visiting team can take it</option>${teamsAt.map(t=>`<option value="${t}" ${d&&d.team_code===t?'selected':''}>${esc(TEAM(t))}${t===meet.host_team_code?' (host)':''}</option>`).join('')}</select></label>
+    <label class="f">Which team<select data-k="team"><option value="">Open — a visiting team can take it</option>${teamsAt(meet).map(t=>`<option value="${t}" ${d&&d.team_code===t?'selected':''}>${esc(TEAM(t))}${t===meet.host_team_code?' (host)':''}</option>`).join('')}</select></label>
     <label class="flex items-center gap-2 text-sm mt-2"><input type="checkbox" data-k="hostonly" ${d&&d.host_only?'checked':''}> Host-team duty (not offered to visiting teams)</label>
     <label class="f">When<input data-k="time" value="${esc(d?d.time_note||'':'')}" placeholder="e.g. 8:30 AM – done, or Shifts"></label><label class="f">Notes<input data-k="notes" value="${esc(d?d.notes||'':'')}" placeholder="What they'll do"></label>
     <div class="flex gap-2 mt-3"><button class="btn pri" data-k="save">Save</button><button class="btn" data-k="cancel">Cancel</button><span class="text-sm text-red-700" data-k="msg"></span></div>`);
     const g=k=>box.querySelector(`[data-k="${k}"]`); g('cancel').onclick=closeModal;
     g('save').onclick=async()=>{ g('save').disabled=true; const {error}=await sb.rpc('duty_save',{p_id:d?d.id:null,p_meet:meet.id,p_name:g('name').value.trim(),p_category:g('cat').value,p_slots:+g('slots').value||1,p_team:g('team').value||null,p_time:g('time').value.trim()||null,p_notes:g('notes').value.trim()||null,p_host_only:g('hostonly').checked,p_sort:null,p_gender:g('gender').value||null});
       if(error){ g('msg').textContent=clean(error); g('save').disabled=false; return; } closeModal(); await load(); draw(); }; };
-  const signup=async(d,byName)=>{ const regs=ctx.athletes||[];
-    const box=modal(`<h3 class="font-bold text-lg mb-1">${esc(d.name)}</h3><p class="text-xs text-gray-500">${esc(meetLabel(meet))}${d.time_note?' · '+esc(d.time_note):''}</p>
+  // ---- how a team wants its sign-up list: one list, by division, time shifts, or its own rows ----
+  const fmtT=h=>{ const H=Math.floor(h), M=Math.round((h-H)*60); const ap=H>=12?'PM':'AM'; return `${((H+11)%12)+1}${M?':'+String(M).padStart(2,'0'):':00'} ${ap}`; };
+  const scheduleForm=d=>{ const cur=slotsOf(d), hasPeople=myVols(d).length>0; const DIVS=(window.DIVISIONS||[]).map(x=>x.name);
+    const box=modal(`<h3 class="font-bold text-lg mb-1">${dname(d)} — sign-up list</h3><p class="text-xs text-gray-500 mb-2">${esc(meetLabel(meetOf(d)))}. Lay it out however your team runs this event.</p>
+      <label class="f">How do you want the list?<select data-k="mode"><option value="all" ${d.slot_mode==='all'?'selected':''}>One list — just a head count</option><option value="division" ${d.slot_mode==='division'?'selected':''}>By division — a crew per division, in running order</option><option value="shift" ${d.slot_mode==='shift'?'selected':''}>Time shifts — rotate every 1, 2 or 3 hours</option><option value="custom" ${d.slot_mode==='custom'?'selected':''}>My own list — type the rows</option></select></label>
+      <div data-k="opts"></div>
+      <div data-k="preview" class="mt-2"></div>
+      ${hasPeople?'<p class="text-xs mt-2" style="color:var(--warn)">People already signed up stay on a row that keeps the same name; anyone whose row goes away comes off the list.</p>':''}
+      <div class="flex gap-2 mt-3"><button class="btn pri" data-k="save">Save</button><button class="btn" data-k="cancel">Cancel</button><span class="text-sm text-red-700" data-k="msg"></span></div>`);
+    const g=k=>box.querySelector(`[data-k="${k}"]`); g('cancel').onclick=closeModal;
+    let rows=cur.map(s=>({label:s.label,slots:s.slots}));
+    const opts=()=>{ const mode=g('mode').value; let h='';
+      if(mode==='all') h=`<label class="f">People needed<input data-o="n" type="number" min="1" max="50" value="${d.slots||3}"></label>`;
+      else if(mode==='division') h=`<div class="text-sm font-semibold mt-2">Divisions, in the order they run</div><div class="flex flex-wrap gap-2 mt-1">${DIVS.map(x=>`<label class="text-sm" style="border:1px solid var(--line);border-radius:999px;padding:3px 10px"><input type="checkbox" data-o="div" value="${esc(x)}" checked> ${esc(x)}</label>`).join('')}</div>
+        <div class="grid mt-1" style="grid-template-columns:1fr 1fr"><label class="f">People per division<input data-o="n" type="number" min="1" max="50" value="3"></label>${d.gender?'':`<label class="f">Boys and girls<select data-o="bg"><option value="">One crew does both</option><option value="split">Separate crews for boys and girls</option></select></label>`}</div>`;
+      else if(mode==='shift') h=`<div class="grid mt-1" style="grid-template-columns:1fr 1fr"><label class="f">First shift starts<input data-o="start" type="time" value="08:00"></label><label class="f">Last shift ends<input data-o="end" type="time" value="14:00"></label><label class="f">Rotate every<select data-o="hrs"><option value="1">1 hour</option><option value="2" selected>2 hours</option><option value="3">3 hours</option></select></label><label class="f">People per shift<input data-o="n" type="number" min="1" max="50" value="3"></label></div>`;
+      else h=`<p class="text-xs text-gray-500 mt-2">Type each row — for example "Morning", "Afternoon", or "Gremlin boys" — and how many people it needs.</p>`;
+      g('opts').innerHTML=h; };
+    const build=()=>{ const mode=g('mode').value, n=+(box.querySelector('[data-o="n"]')||{}).value||3;
+      if(mode==='all') rows=[{label:'Everyone',slots:n}];
+      else if(mode==='division'){ const picked=[...box.querySelectorAll('[data-o="div"]:checked')].map(x=>x.value); const split=(box.querySelector('[data-o="bg"]')||{}).value==='split'; rows=[]; picked.forEach(dv=>{ if(split){ rows.push({label:dv+' Boys',slots:n}); rows.push({label:dv+' Girls',slots:n}); } else rows.push({label:dv,slots:n}); }); }
+      else if(mode==='shift'){ const st=box.querySelector('[data-o="start"]').value, en=box.querySelector('[data-o="end"]').value, hrs=+box.querySelector('[data-o="hrs"]').value||2; const toH=t=>{ const [a,b]=String(t||'').split(':').map(Number); return (a||0)+(b||0)/60; }; let s=toH(st), e=toH(en); if(e<=s) e=s+hrs; rows=[]; while(s<e&&rows.length<40){ const t=Math.min(e,s+hrs); rows.push({label:`${fmtT(s)} – ${fmtT(t)}`,slots:n}); s=t; } }
+      else if(!rows.length) rows=[{label:'',slots:3},{label:'',slots:3}];
+      preview(); };
+    const preview=()=>{ const mode=g('mode').value; if(mode==='all'){ g('preview').innerHTML=''; return; }
+      g('preview').innerHTML=`<div class="text-sm font-semibold">The list parents will see</div><table class="t mt-1"><thead><tr><th>Row</th><th style="width:7rem">People</th><th></th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td><input data-r="label" data-i="${i}" value="${esc(r.label)}" maxlength="60" style="width:100%"></td><td><input data-r="slots" data-i="${i}" type="number" min="1" max="50" value="${r.slots}" style="width:5rem"></td><td><button class="sbtn red" data-rm="${i}" title="Remove">×</button></td></tr>`).join('')}</tbody></table><button class="sbtn mt-2" data-k="addrow">+ Add a row</button>`;
+      g('preview').querySelectorAll('[data-r]').forEach(inp=>inp.oninput=()=>{ const r=rows[+inp.dataset.i]; if(inp.dataset.r==='slots') r.slots=+inp.value||1; else r.label=inp.value; });
+      g('preview').querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{ rows.splice(+b.dataset.rm,1); preview(); });
+      g('addrow').onclick=()=>{ rows.push({label:'',slots:3}); preview(); g('preview').querySelector(`[data-r="label"][data-i="${rows.length-1}"]`).focus(); }; };
+    opts(); if(d.slot_mode==='all'||d.slot_mode!==g('mode').value||!rows.length) build(); else preview();
+    g('mode').onchange=()=>{ opts(); if(g('mode').value===d.slot_mode&&cur.length) rows=cur.map(s=>({label:s.label,slots:s.slots})); else rows=[]; build(); };
+    g('opts').addEventListener('change',build); g('opts').addEventListener('input',e=>{ if(e.target.matches('[data-o="n"]')) build(); });
+    g('save').onclick=async()=>{ const mode=g('mode').value; const send=mode==='all'?[{label:'Everyone',slots:+(box.querySelector('[data-o="n"]')||{}).value||d.slots}]:rows.map(r=>({label:String(r.label||'').trim(),slots:+r.slots||1}));
+      if(mode!=='all'&&send.some(r=>!r.label)){ g('msg').textContent='Every row needs a name.'; return; } if(mode!=='all'&&!send.length){ g('msg').textContent='Add at least one row.'; return; }
+      g('save').disabled=true; const {error}=await sb.rpc('duty_schedule',{p_duty:d.id,p_mode:mode,p_rows:send}); if(error){ g('msg').textContent=clean(error); g('save').disabled=false; return; }
+      closeModal(); toast('Sign-up list saved'); await load(); draw(); }; };
+  const signup=async(d,byName,slot)=>{ const regs=ctx.athletes||[], m=meetOf(d);
+    const box=modal(`<h3 class="font-bold text-lg mb-1">${esc(d.name)}${slot?` · ${esc(slot.label)}`:''}</h3><p class="text-xs text-gray-500">${esc(meetLabel(m))}${d.time_note?' · '+esc(d.time_note):''}</p>
       <label class="f">${byName?'Volunteer\'s name':'Your name'}<input data-k="name" value="${esc(byName?'':(ctx.name||''))}"></label><label class="f">Phone (optional — so the coaches can reach you on meet day)<input data-k="phone" type="tel" value="${esc(byName?'':(ctx.phone||''))}"></label>
       ${regs.length&&!byName?`<label class="f">Parent of<select data-k="ath"><option value="">—</option>${regs.map(a=>`<option>${esc(a)}</option>`).join('')}</select></label>`:`<label class="f">Parent of (optional)<input data-k="ath" placeholder="Athlete's name"></label>`}
       <div class="flex gap-2 mt-3"><button class="btn grn" data-k="go">${byName?'Add':'Sign me up'}</button><button class="btn" data-k="cancel">Cancel</button><span class="text-sm text-red-700" data-k="msg"></span></div>`);
     const g=k=>box.querySelector(`[data-k="${k}"]`); g('cancel').onclick=closeModal;
-    g('go').onclick=async()=>{ g('go').disabled=true; const {error}=await sb.rpc('volunteer_add',{p_duty:d.id,p_name:g('name').value.trim(),p_phone:g('phone').value.trim()||null,p_registration:null,p_athlete_name:g('ath').value.trim()||null});
+    g('go').onclick=async()=>{ g('go').disabled=true; const {error}=await sb.rpc('volunteer_add',{p_duty:d.id,p_name:g('name').value.trim(),p_phone:g('phone').value.trim()||null,p_registration:null,p_athlete_name:g('ath').value.trim()||null,p_slot:slot?slot.id:null});
       if(error){ g('msg').textContent=clean(error); g('go').disabled=false; return; } closeModal(); toast(byName?'Added':'You\'re signed up — thank you!'); await load(); draw(); }; };
-  el.onclick=async e=>{ const t=e.target, D=id=>duties.find(d=>d.id===id); let r;
+  el.onclick=async e=>{ const t=e.target, D=id=>duties.find(d=>d.id===id), S=id=>slots.find(s=>s.id===id); let r;
     if(r=t.closest('[data-gomeet]')){ meet=meets.find(m=>m.id===r.dataset.gomeet); if(ctx.onMeet) ctx.onMeet(meet.id); await load(); return draw(); }
     if(t.closest('[data-standard]')){ const {data,error}=await sb.rpc('duties_add_standard',{p_meet:meet.id}); if(error) return toast(clean(error),true); toast(`${data} duties added`); await load(); return draw(); }
     if(t.closest('[data-newduty]')) return dutyForm(null);
     if(r=t.closest('[data-edit]')) return dutyForm(D(r.dataset.edit));
+    if(r=t.closest('[data-sched]')) return scheduleForm(D(r.dataset.sched));
     if(r=t.closest('[data-split]')){ const {error}=await sb.rpc('duty_split',{p_duty:r.dataset.split}); if(error) return toast(clean(error),true); toast('Split into Boys and Girls'); await load(); return draw(); }
     if(r=t.closest('[data-del]')){ const d=D(r.dataset.del); if(!confirm(`Remove "${d.name}"?`)) return; const {error}=await sb.rpc('duty_delete',{p_id:d.id}); if(error) return toast(clean(error),true); await load(); return draw(); }
-    if(r=t.closest('[data-claim]')){ const {error}=await sb.rpc('duty_claim',{p_duty:r.dataset.claim,p_team:team,p_take:true}); if(error) return toast(clean(error),true); toast(`${TEAM(team)} has it`); await load(); return draw(); }
+    if(r=t.closest('[data-claim]')){ const {error}=await sb.rpc('duty_claim',{p_duty:r.dataset.claim,p_team:team,p_take:true}); if(error) return toast(clean(error),true); toast(`${TEAM(team)} has it — now set up its sign-up list`); await load(); return draw(); }
     if(r=t.closest('[data-release]')){ if(!confirm('Give this duty back? Anyone your team signed up for it comes off.')) return; const {error}=await sb.rpc('duty_claim',{p_duty:r.dataset.release,p_team:team,p_take:false}); if(error) return toast(clean(error),true); await load(); return draw(); }
-    if(r=t.closest('[data-signup]')) return signup(D(r.dataset.signup),false);
-    if(r=t.closest('[data-addp]')) return signup(D(r.dataset.addp),true);
+    if(r=t.closest('[data-signup]')) return signup(D(r.dataset.signup),false,r.dataset.slot?S(r.dataset.slot):null);
+    if(r=t.closest('[data-addp]')) return signup(D(r.dataset.addp),true,r.dataset.slot?S(r.dataset.slot):null);
     if(r=t.closest('[data-rmvol]')){ const {error}=await sb.rpc('volunteer_remove',{p_id:r.dataset.rmvol}); if(error) return toast(clean(error),true); await load(); return draw(); } };
   el.addEventListener('change',async e=>{ if(e.target.matches('[data-meet]')){ meet=meets.find(m=>m.id===e.target.value); if(ctx.onMeet) ctx.onMeet(meet.id); await load(); draw(); }
     if(e.target.matches('[data-assign]')){ const d=duties.find(x=>x.id===e.target.dataset.assign), t=e.target.value||null; if(d.team_code&&t!==d.team_code&&myVols(d).length&&!confirm(`Move "${d.name}" to ${t?TEAM(t):'open'}? The ${myVols(d).length} people signed up come off it.`)){ e.target.value=d.team_code||''; return; }
