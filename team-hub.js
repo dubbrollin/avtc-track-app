@@ -358,6 +358,93 @@ TeamHub.mountVolunteers=async function(el, ctx){
   draw(); return 'on';
 };
 
+/* ============================ the team page itself ============================ */
+// mountTeamPage(root, ctx) — the hero (logo, name, tagline), the Home / Photos / Store / Volunteers tabs, and the Home content.
+//   Used by team.html (public page) and by the Parent and Coach dashboards, so a signed-in parent or coach lands on THEIR team page
+//   with their own things (athletes, messages, meet sign-ups, roster…) built into it.
+//   ctx: { sb, team, email, uid, role, siteAdmin, name, phone, athletes, tab, meet, album,
+//          slots:{ left:[els], right:[els] }   elements to place in the Home columns (parent dashboard cards)
+//          homeEl: el                          use this element as the Home pane instead of the generated columns (coach dashboard)
+//          teams:[codes], onTeam(code)         a switcher when the person is on several teams
+//          showRegister, showWhoami, onSignOut, onTab(tab) }
+const PAGE_CSS=`<style id="thPageStyle">
+.thp .hero{position:relative;overflow:hidden;padding:0;background:#fff;border:1px solid var(--line,#e1e7ef);border-radius:12px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.thp .hero .banner{height:150px;background:var(--navy,#001C3B) center/cover no-repeat;background-image:repeating-linear-gradient(100deg,rgba(255,255,255,.07) 0 2px,transparent 2px 46px)}
+.thp .hero .body{padding:0 16px 14px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-end;margin-top:-44px}
+.thp .hero .logo{width:92px;height:92px;border-radius:50%;background:#fff;border:4px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.2);object-fit:cover;flex:none;display:grid;place-items:center;font-family:var(--head);font-weight:700;font-size:1.5rem;color:var(--navy);overflow:hidden}
+.thp .hero .logo img{width:100%;height:100%;object-fit:cover}
+.thp .hero h1{font-size:1.6rem;line-height:1.1;margin-top:6px;font-family:var(--head);font-weight:700;text-transform:uppercase;color:var(--navy);letter-spacing:.03em}
+.thp .hero .btns{display:flex;flex-wrap:wrap;gap:8px}.thp .hero .btns a,.thp .hero .btns button{padding:.55rem .9rem;border-radius:.5rem;font-weight:600;text-decoration:none;border:1px solid transparent;cursor:pointer;font-size:.9rem}
+.thp .sw{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}.thp .sw button{border:1px solid var(--line,#e1e7ef);background:#fff;border-radius:999px;padding:4px 12px;font-size:.85rem;font-weight:600;cursor:pointer}.thp .sw button.on{background:var(--act,#1764c8);color:#fff;border-color:var(--act,#1764c8)}
+.thp .tabs{display:flex;flex-wrap:wrap;gap:4px;background:#fff;border:1px solid var(--line,#e1e7ef);border-radius:10px;padding:5px;margin-bottom:12px}
+.thp .tab{border:0;border-radius:7px;padding:9px 14px;font-weight:600;font-size:.92rem;background:transparent;color:var(--muted,#5b6878);cursor:pointer}.thp .tab.active{background:var(--act,#1764c8);color:#fff}
+.thp .two{display:grid;gap:12px;grid-template-columns:minmax(0,1fr);align-items:start}@media(min-width:900px){ .thp .two{grid-template-columns:minmax(0,3fr) minmax(0,2fr)} }
+.thp .pcard{background:#fff;border:1px solid var(--line,#e1e7ef);border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}.thp .pcard h2{font-family:var(--head);font-weight:700;text-transform:uppercase;color:var(--navy);letter-spacing:.03em;margin-bottom:6px}
+.thp .pre{white-space:pre-wrap}.thp .schedScroll{max-height:380px;overflow-y:auto;padding-right:4px}.thp .hidden{display:none!important}
+</style>`;
+TeamHub.mountTeamPage=async function(root, ctx){
+  css(); if(!document.getElementById('thPageStyle')) document.head.insertAdjacentHTML('beforeend',PAGE_CSS);
+  root.classList.add('thp','th'); const sb=ctx.sb, team=ctx.team; if(window.leagueReady) await window.leagueReady;
+  const t=(window.VYC_TEAMS||[]).find(x=>x.code===team); if(!t){ root.innerHTML='<p class="text-sm text-red-700">Team not found.</p>'; return null; }
+  root.innerHTML='<p class="text-sm text-gray-500 p-2">Loading team page…</p>';
+  const [{data:p},{data:lt},{data:ex}]=await Promise.all([
+    sb.from('team_pages').select('*').eq('team_code',team).maybeSingle(),
+    sb.from('league_teams').select('code,name,conference,home_venue,home_address').eq('code',team).maybeSingle(),
+    sb.rpc('team_has_extras',{t:team})]);
+  const page=p||{team_code:team}, extras=!!ex, mgr=ctx.role==='admin', me=ctx.email||null;
+  let tab=ctx.tab||'home';
+  const link=(href,txt)=>`<a class="underline" style="color:var(--act)" target="_blank" rel="noopener" href="${esc(href)}">${esc(txt)}</a>`;
+  const contact=[page.contact_name&&`<div><b>${esc(page.contact_name)}</b></div>`, page.contact_email&&`<div><a class="underline" style="color:var(--act)" href="mailto:${esc(page.contact_email)}">${esc(page.contact_email)}</a></div>`, page.contact_phone&&`<div><a class="underline" style="color:var(--act)" href="tel:${esc(page.contact_phone)}">${esc(page.contact_phone)}</a></div>`,
+    page.website&&`<div>${link(/^https?:/.test(page.website)?page.website:'https://'+page.website,'Website')}</div>`,
+    page.instagram&&`<div>${link('https://instagram.com/'+page.instagram.replace(/^@|^https?:\/\/(www\.)?instagram\.com\//,''),'Instagram')}</div>`,
+    page.facebook&&`<div>${link(/^https?:/.test(page.facebook)?page.facebook:'https://facebook.com/'+page.facebook,'Facebook')}</div>`].filter(Boolean).join('');
+  const hv=lt&&(lt.home_venue||lt.home_address);
+  const homeField=hv?`<div><b>${esc(lt.home_venue||'')}</b></div>${lt.home_address?`<div>${link('https://www.google.com/maps/search/?api=1&query='+encodeURIComponent([lt.home_venue,lt.home_address].filter(Boolean).join(', ')),lt.home_address)}</div>`:''}`:'<span class="text-gray-500">The league hasn\'t listed this team\'s home field yet.</span>';
+  const roleWord=ctx.role==='admin'?'team admin':ctx.role==='coach'?'coach':ctx.role==='parent'?'parent':null;
+  const sw=(ctx.teams||[]).length>1?`<div class="sw">${ctx.teams.map(c=>`<button data-sw="${esc(c)}" class="${c===team?'on':''}">${esc(TEAM(c))}</button>`).join('')}</div>`:'';
+  root.innerHTML=`${sw}<div class="hero"><div class="banner" ${page.banner_path?`style="background-image:url('${esc(publicUrl(sb,page.banner_path))}')"`:''}></div>
+    <div class="body"><div class="logo">${page.logo_path?`<img src="${esc(publicUrl(sb,page.logo_path))}" alt="">`:esc(team)}</div>
+      <div style="flex:1;min-width:14rem"><div class="text-xs text-gray-500">${t.conference?esc(t.conference)+'ern Conference · ':''}Valley Youth Conference${roleWord?` · <b>your team</b> (${roleWord})`:''}</div><h1>${esc(t.name)}</h1><p class="text-gray-700">${esc(page.tagline||'')}</p></div>
+      <div class="btns">${ctx.showRegister!==false&&!me?'<a href="index.html" style="background:var(--act);color:#fff">Register with this team</a>':''}${mgr?'<button type="button" data-th="edit" style="background:#eef1f5">Edit team page</button>':''}</div></div></div>
+    ${ctx.showWhoami&&me?`<p class="text-xs text-gray-500 mb-2">Signed in as ${esc(me)}${roleWord?'':' · not on this team'} · <button type="button" class="underline" data-th="signout">Sign out</button></p>`:''}
+    <div class="tabs"><button class="tab" data-tab="home">Home</button><button class="tab ${extras||mgr?'':'hidden'}" data-tab="photos">Photos</button><button class="tab ${(extras||mgr)&&(mgr||page.store_open)?'':'hidden'}" data-tab="store">Store</button><button class="tab" data-tab="volunteers">Volunteers</button></div>
+    <div data-pane="home"></div>
+    <div data-pane="photos" class="hidden"><div class="pcard"><h2>Photos</h2><div data-th="galleryLogin" class="hidden max-w-md"></div><div data-th="gallery"></div></div></div>
+    <div data-pane="store" class="hidden"><div class="pcard"><h2>Team store</h2><div data-th="store"></div><div data-th="storeLogin" class="hidden max-w-md mt-3"></div></div></div>
+    <div data-pane="volunteers" class="hidden"><div class="pcard"><h2>Meet-day volunteers</h2><p class="text-xs text-gray-500 mb-2">Every VYC meet runs on volunteers. The host team lists the jobs; the visiting teams run the field events; parents pick a spot.</p><div data-th="volLogin" class="hidden max-w-md"></div><div data-th="volunteers"></div></div></div>`;
+  const g=k=>root.querySelector(`[data-th="${k}"]`), pane=k=>root.querySelector(`[data-pane="${k}"]`);
+  // Home: either the caller's own element (coach dashboard) or two columns with the team's info and the caller's cards slotted in
+  const home=pane('home'); const slots=ctx.slots||{};
+  if(ctx.homeEl){ home.remove(); }
+  else{
+    const card=(title,inner,extra)=>`<div class="pcard ${extra||''}"><h2>${title}</h2>${inner}</div>`;
+    home.innerHTML=`<div class="two"><div data-th="left">${card('Team news','<div data-th="posts"><p class="text-sm text-gray-500">Loading…</p></div>')}${page.about?card('About the team',`<div class="text-sm pre">${esc(page.about)}</div>`):''}${page.practice_info?card('Practice',`<div class="text-sm pre">${esc(page.practice_info)}</div>`):''}</div>
+      <div data-th="right">${card('Our schedule','<div data-th="schedule" class="text-sm schedScroll"><p class="text-sm text-gray-500">Loading…</p></div>')}${me&&ctx.role?card('Volunteering','<div data-th="volsum" class="text-sm"></div>'):''}${card('Coaches','<div data-th="coaches" class="text-sm"></div>')}${card('Contact',`<div class="text-sm">${contact||'<span class="text-gray-500">Not posted yet.</span>'}</div>`)}${card('Home field',`<div class="text-sm">${homeField}</div>`)}</div></div>`;
+    (slots.left||[]).slice().reverse().forEach(el=>{ if(el){ g('left').prepend(el); } });
+    (slots.right||[]).slice().reverse().forEach(el=>{ if(el){ g('right').prepend(el); } });
+    TeamHub.mountPosts(g('posts'),{sb,team,role:ctx.role});
+    window.mountTeamSchedule(g('schedule'),{sb,teams:[team]});
+    if(g('volsum')) TeamHub.mountVolunteerSummary(g('volsum'),{sb,teams:[{code:team,role:ctx.role}],email:me,here:true});
+    try{ const {data:cs}=await sb.rpc('team_page_coaches',{p_team:team}); const roleL=c=>c.team_admin?(c.admin_title||'Team admin'):c.role_type==='head_coach'?'Head Coach':c.role_type==='division_coach'?'Division Coach'+(c.division_or_age_group?' — '+c.division_or_age_group:''):c.role_type==='event_specialist'?'Event Coach':(c.admin_title||'Team staff');
+      g('coaches').innerHTML=(cs||[]).length?cs.map(c=>`<div class="py-1 border-t first:border-t-0"><b>${esc(c.first_name||'')} ${esc(c.last_name||'')}</b> <span class="text-gray-500">· ${esc(roleL(c))}</span></div>`).join(''):'<span class="text-gray-500">No approved coaches listed yet.</span>'; }catch(e){ g('coaches').innerHTML=''; }
+  }
+  const login=el=>{ el.classList.remove('hidden'); if(!el.dataset.ready){ el.dataset.ready='1'; window.mountLoginWidget(sb,el,{hint:'Sign in with the email you registered with (parents) or your coach login.'}); } };
+  const sub=()=>({sb,team,role:ctx.role,email:me,uid:ctx.uid,name:ctx.name,phone:ctx.phone,athletes:ctx.athletes,page,extras,siteAdmin:ctx.siteAdmin});
+  const show=k=>{ if(!root.querySelector(`[data-tab="${k}"]`)||root.querySelector(`[data-tab="${k}"]`).classList.contains('hidden')) k='home'; tab=k;
+    root.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===k)); root.querySelectorAll('[data-pane]').forEach(x=>x.classList.toggle('hidden',x.dataset.pane!==k));
+    if(ctx.homeEl) ctx.homeEl.classList.toggle('hidden',k!=='home');
+    if(ctx.onTab) ctx.onTab(k);
+    if(k==='photos'){ if(!me){ g('gallery').innerHTML=''; if(extras) login(g('galleryLogin')); } else { g('galleryLogin').classList.add('hidden'); TeamHub.mountGallery(g('gallery'),Object.assign(sub(),{album:ctx.album||null})); } }
+    if(k==='store'){ TeamHub.mountStore(g('store'),sub()); if(!me&&extras&&page.store_open) login(g('storeLogin')); else g('storeLogin').classList.add('hidden'); }
+    if(k==='volunteers'){ if(!me){ g('volunteers').innerHTML=''; login(g('volLogin')); } else { g('volLogin').classList.add('hidden'); TeamHub.mountVolunteers(g('volunteers'),Object.assign(sub(),{meet:root.__meet||ctx.meet||null,onMeet:ctx.onMeet})); } } };
+  root.querySelectorAll('.tab').forEach(b=>b.onclick=()=>show(b.dataset.tab));
+  root.querySelectorAll('[data-sw]').forEach(b=>b.onclick=()=>{ if(ctx.onTeam) ctx.onTeam(b.dataset.sw); });
+  if(g('edit')) g('edit').onclick=()=>TeamHub.editPage({sb,team,page,extras,onSaved:()=>location.reload()});
+  if(g('signout')) g('signout').onclick=()=>{ if(ctx.onSignOut) ctx.onSignOut(); else { if(window.clearRoleFlags) window.clearRoleFlags(); sb.auth.signOut().then(()=>location.reload()); } };
+  show(tab);
+  return {page,extras,show};
+};
+
 /* ============================ dashboard summary box ============================ */
 // mountVolunteerSummary(el, {sb, teams:[{code, role}], email}) — the next meets, what the team is covering, and where I stand.
 TeamHub.mountVolunteerSummary=async function(el, ctx){
@@ -374,7 +461,9 @@ TeamHub.mountVolunteerSummary=async function(el, ctx){
       const line=host?`<b>${esc(TEAM(t.code))} hosts.</b> ${duties.filter(x=>x.meet_id===m.id).length?`${filled} of ${need} host spots filled · ${open} dut${open===1?'y':'ies'} still open for visiting teams`:'Duties not set up yet'}`
         :ours.length?`<b>${esc(TEAM(t.code))}</b> covers ${ours.map(x=>esc(x.name)).join(', ')} — ${filled} of ${need} spots filled`:`<b>${esc(TEAM(t.code))}</b> has no duty yet${open?` · ${open} open`:''}`;
       return `<div class="text-sm">${line}${me.length?`<div class="text-xs" style="color:var(--ok)">You're signed up: ${me.map(esc).join(', ')} ✓</div>`:''}</div>`; }).join('');
-    const url=`team.html?team=${encodeURIComponent(mineT[0].code)}&tab=volunteers&meet=${m.id}`;
-    return `<div class="note" style="margin-bottom:8px"><div class="flex flex-wrap items-center gap-2"><b>${esc(meetLabel(m))}</b><span style="flex:1"></span><a class="sbtn pri" style="text-decoration:none" href="${url}">${teams.some(t=>t.role==='parent')?'Volunteer →':'Duties →'}</a></div>${parts}</div>`; }).join('');
+    const url=ctx.volUrl?ctx.volUrl(m,mineT[0].code):ctx.here?`?tab=volunteers&meet=${m.id}`:`team.html?team=${encodeURIComponent(mineT[0].code)}&tab=volunteers&meet=${m.id}`;
+    return `<div class="note" style="margin-bottom:8px"><div class="flex flex-wrap items-center gap-2"><b>${esc(meetLabel(m))}</b><span style="flex:1"></span><a class="sbtn pri" style="text-decoration:none" href="${url}" ${ctx.here?`data-volgo="${m.id}"`:''}>${teams.some(t=>t.role==='parent')?'Volunteer →':'Duties →'}</a></div>${parts}</div>`; }).join('');
+  // inside the team page, "Volunteer →" just switches to the Volunteers tab on that meet
+  el.querySelectorAll('[data-volgo]').forEach(a=>a.onclick=e=>{ const page=a.closest('.thp'); const tabBtn=page&&page.querySelector('.tab[data-tab="volunteers"]'); if(!tabBtn) return; e.preventDefault(); page.__meet=a.dataset.volgo; tabBtn.click(); window.scrollTo({top:Math.max(0,page.offsetTop-10),behavior:'smooth'}); });
 };
 })();

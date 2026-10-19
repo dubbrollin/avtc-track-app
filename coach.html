@@ -182,6 +182,8 @@
 
       <!-- DASHBOARD -->
       <div id="dashView">
+        <div id="teamHub" class="max-w-6xl mx-auto"></div>
+        <div id="dashHome">
         <!-- New-message notice: stays at the top until the messages (at the bottom of the dashboard) have been read -->
         <div class="max-w-6xl mx-auto"><button type="button" id="msgAlert" class="hidden w-full text-left rounded-lg mb-3 font-semibold" style="background:#D2451E;color:#fff;padding:.7rem 1rem;border:0;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.18)"></button></div>
         <div id="lockBanner" class="max-w-6xl mx-auto"></div>
@@ -219,13 +221,14 @@
           </div>
 
           <div class="card" id="teamPageCard">
-            <div class="col-head"><h2 class="flex-1">Team page &amp; volunteers</h2></div>
-            <p class="text-xs text-gray-500 mb-2">Your team's own page — about the team, practice info, news, photos, the team store — and the volunteer duties for each meet (the host team lists them, visiting teams run the field events, parents sign up).</p>
-            <div class="flex flex-wrap gap-2 mb-2">
-              <a id="teamPageLink" href="team.html" class="btn bg-blue-600 text-white inline-block">Open team page →</a>
-              <button type="button" id="teamPageEdit" class="btn bg-gray-200 hidden">Edit team page</button>
-              <a id="teamVolLink" href="team.html?tab=volunteers" class="btn bg-gray-800 text-white inline-block">Meet volunteers →</a>
-            </div>
+            <div class="col-head"><h2 class="flex-1">Team news</h2></div>
+            <p class="text-xs text-gray-500 mb-2">Posted on the team page — practice changes, meet reminders, fundraisers. Parents see it the moment they sign in.</p>
+            <div id="teamNews"></div>
+          </div>
+
+          <div class="card" id="volCard">
+            <div class="col-head"><h2 class="flex-1">Meet volunteers</h2></div>
+            <p class="text-xs text-gray-500 mb-2">The host team lists the jobs; visiting teams run the field events; parents sign up. Open the <b>Volunteers</b> tab above to set up or take duties.</p>
             <div id="volSummary" class="text-sm"></div>
           </div>
 
@@ -251,6 +254,7 @@
           <div class="col-head"><h2 class="flex-1">Messages <span id="msgBadge" style="display:none;background:#D2451E;color:#fff;border-radius:999px;padding:1px 8px;font-size:12px;font-weight:700;letter-spacing:0;vertical-align:middle"></span> <span class="text-gray-500 font-normal text-xs normal-case tracking-normal">with your team's parents and coaches</span></h2></div>
           <div id="msgMount"></div>
         </div></div>
+        </div><!-- /dashHome -->
       </div>
     </div>
   </div>
@@ -400,11 +404,14 @@ async function load(){
   loadComing();
   window.mountTeamSchedule($('teamSched'),{sb,teams:[myCoach&&myCoach.team_code]});
   window.mountLockoutNotice($('lockBanner'),{sb,teams:[myCoach&&myCoach.team_code]});
-  // Team page & volunteers card: links to the team's own page, plus what's covered at the next meets
-  if(myCoach&&myCoach.team_code){ const tc=encodeURIComponent(myCoach.team_code); $('teamPageLink').href='team.html?team='+tc; $('teamVolLink').href='team.html?team='+tc+'&tab=volunteers';
-    $('teamPageEdit').classList.toggle('hidden',!fullAccess);
-    $('teamPageEdit').onclick=async()=>{ const [{data:p},{data:ex}]=await Promise.all([sb.from('team_pages').select('*').eq('team_code',myCoach.team_code).maybeSingle(), sb.rpc('team_has_extras',{t:myCoach.team_code})]); window.TeamHub.editPage({sb,team:myCoach.team_code,role:'admin',page:p||{team_code:myCoach.team_code},extras:!!ex,onSaved:()=>{}}); };
-    window.TeamHub.mountVolunteerSummary($('volSummary'),{sb,teams:[{code:myCoach.team_code,role:fullAccess?'admin':'coach'}],email:myCoach.email}); }
+  // The dashboard wears the team page: hero + Home / Photos / Store / Volunteers tabs; Home = this dashboard.
+  if(myCoach&&myCoach.team_code&&!$('dashView').classList.contains('hidden')){ const q=new URLSearchParams(location.search), role=fullAccess?'admin':'coach';
+    window.TeamHub.mountTeamPage($('teamHub'),{sb,team:myCoach.team_code,email:myCoach.email,uid:user&&user.id,role,siteAdmin:!!myCoach.is_admin,name:[myCoach.first_name,myCoach.last_name].filter(Boolean).join(' '),phone:myCoach.phone||'',athletes:[],
+      homeEl:$('dashHome'),tab:q.get('tab'),meet:q.get('meet'),showRegister:false,
+      onTab:t=>{ const u=new URL(location.href); if(t==='home'){ u.searchParams.delete('tab'); u.searchParams.delete('meet'); } else u.searchParams.set('tab',t); history.replaceState(null,'',u); },
+      onMeet:id=>{ const u=new URL(location.href); u.searchParams.set('meet',id); history.replaceState(null,'',u); }});
+    window.TeamHub.mountPosts($('teamNews'),{sb,team:myCoach.team_code,role});
+    window.TeamHub.mountVolunteerSummary($('volSummary'),{sb,teams:[{code:myCoach.team_code,role}],email:myCoach.email,volUrl:m=>`coach.html?tab=volunteers&meet=${m.id}`}); }
   const pending=rows.filter(r=>r.dob_check_status==='pending');
   if(fullAccess && pending.length) runChecks(pending);
 
