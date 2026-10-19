@@ -294,12 +294,23 @@ TeamHub.mountVolunteers=async function(el, ctx){
   const td=today(); const upcoming=meets.filter(m=>m.meet_date>=td);
   meet=meets.find(m=>m.id===ctx.meet)||upcoming[0]||meets[meets.length-1]||null;
   if(!meet){ el.innerHTML='<p class="text-sm text-gray-600">No meets on the schedule for this team yet.</p>'; return 'none'; }
+  let deadline=null, passed=false, timer=null;
   const load=async()=>{ host=meet.host_team_code===team; teamsAt=(meet.team_codes||[]).length?meet.team_codes:(window.VYC_TEAMS||[]).filter(t=>t.active!==false).map(t=>t.code);
+    deadline=window.attendanceDeadline?window.attendanceDeadline(meet.meet_date):null; passed=!!(deadline&&Date.now()>deadline.getTime());
+    if(passed){ try{ await sb.rpc('duties_settle',{p_meet:meet.id}); }catch(e){} }   // hands anything still open to a visiting team (once)
     const [{data:d,error},{data:v},{data:c}]=await Promise.all([sb.from('meet_duties').select('*').eq('meet_id',meet.id).order('sort_order').order('name'), sb.from('meet_volunteers').select('*').eq('meet_id',meet.id).order('created_at'), sb.rpc('duty_counts',{p_meet:meet.id})]);
     if(error) throw error; duties=d||[]; vols=v||[]; counts={}; (c||[]).forEach(x=>counts[x.duty_id]=x.taken);
     mgrTeam=role!=='parent'; };
   const canHost=()=>role!=='parent'&&(host||role==='admin'&&ctx.siteAdmin);
   const mine=d=>d.team_code===team, myVols=d=>vols.filter(v=>v.duty_id===d.id), taken=d=>counts[d.id]??myVols(d).length, full=d=>taken(d)>=d.slots;
+  const dname=d=>esc(d.name)+(d.gender?` <span class="pill" style="background:${d.gender==='Boys'?'#dbeafe;color:#1e40af':'#fce7f3;color:#9d174d'}">${d.gender}</span>`:'');
+  const dlText=()=>deadline?window.fmtDeadline(deadline):'';
+  const dlBanner=()=>!deadline?'':passed?`<div class="note warn"><b>The deadline for picking duties has passed</b> (${esc(dlText())}). Anything that was still open has been assigned to a visiting team. ${canHost()?'You can still move duties around by hand.':'Ask the host team if something needs to change.'}</div>`
+    :`<div class="note warn"><b>Visiting teams: take your field event by ${esc(dlText())}.</b> First come, first served — one team per event. Anything still open at the deadline is assigned to a visiting team automatically.</div>`;
+  const openList=()=>{ if(role==='parent'||canHost()||!mgrTeam) return ''; const open=duties.filter(d=>!d.team_code&&!d.host_only); if(!open.length) return '';
+    if(passed) return ''; return `<div class="note" style="border-color:var(--ok);background:var(--ok-bg)"><b>Open duties at this meet — take one for ${esc(TEAM(team))}:</b>
+      <div class="mt-2 flex flex-wrap gap-2">${open.map(d=>`<button class="sbtn grn" data-claim="${d.id}">${dname(d)} · ${d.slots} people</button>`).join('')}</div>
+      <div class="text-xs text-gray-600 mt-1">Once you take one it's yours and closed to the other teams. Then add your people below, or let your parents sign themselves up.</div></div>`; };
   const homeMeets=()=>meets.filter(m=>m.host_team_code===team&&m.meet_date>=td);
   const hostStrip=()=>{ if(role==='parent') return ''; const H=homeMeets(); if(!H.length) return `<div class="note soft"><b>${esc(TEAM(team))} isn't hosting a meet this season</b> (per the league schedule), so there's no duty list to set up — just take open duties at the meets you visit.</div>`;
     return `<div class="note" style="border-color:var(--act);background:var(--act-soft)"><b>You host ${H.length===1?'a meet':H.length+' meets'} this season.</b> As the host you set up the duty list — pick the meet: ${H.map(m=>`<button class="sbtn ${m.id===meet.id?'pri':''}" data-gomeet="${m.id}" style="margin:2px">${esc(fmtD(m.meet_date))}${m.week_no?' · Week '+m.week_no:''}${duties.length&&m.id===meet.id?'':''}</button>`).join('')}</div>`; };
@@ -312,15 +323,15 @@ TeamHub.mountVolunteers=async function(el, ctx){
   const dutyCard=d=>{ const me=ctx.email&&myVols(d).some(v=>v.email&&v.email.toLowerCase()===ctx.email.toLowerCase());
     const owner=d.team_code?(mine(d)?'<span class="pill act">Our team</span>':`<span class="pill">${esc(TEAM(d.team_code))}</span>`):'<span class="pill warn">Open — needs a team</span>';
     let act='';
-    if(canHost()) act+=`<select data-assign="${d.id}" title="Which team does this"><option value="">Open to visiting teams</option>${teamsAt.map(t=>`<option value="${t}" ${d.team_code===t?'selected':''}>${esc(TEAM(t))}${t===meet.host_team_code?' (host)':''}</option>`).join('')}</select> <button class="sbtn" data-edit="${d.id}">Edit</button> <button class="sbtn red" data-del="${d.id}">Delete</button> `;
-    else if(mgrTeam&&!d.host_only){ if(!d.team_code) act+=`<button class="sbtn pri" data-claim="${d.id}">Take this for ${esc(TEAM(team))}</button> `; else if(mine(d)&&!d.assigned_by_host) act+=`<button class="sbtn" data-release="${d.id}">Give it back</button> `; }
+    if(canHost()) act+=`<select data-assign="${d.id}" title="Which team does this"><option value="">Open to visiting teams</option>${teamsAt.map(t=>`<option value="${t}" ${d.team_code===t?'selected':''}>${esc(TEAM(t))}${t===meet.host_team_code?' (host)':''}</option>`).join('')}</select> <button class="sbtn" data-edit="${d.id}">Edit</button> ${d.category==='field'&&!d.gender?`<button class="sbtn" data-split="${d.id}" title="Make a Boys duty and a Girls duty">Split boys / girls</button> `:''}<button class="sbtn red" data-del="${d.id}">Delete</button> `;
+    else if(mgrTeam&&!d.host_only&&!passed){ if(!d.team_code) act+=`<button class="sbtn pri" data-claim="${d.id}">Take this for ${esc(TEAM(team))}</button> `; else if(mine(d)&&!d.assigned_by_host) act+=`<button class="sbtn" data-release="${d.id}">Give it back</button> `; }
     if(d.team_code&&(mine(d)||canHost())){ if(role==='parent'){ act+=me?`<span class="pill ok">You're signed up ✓</span>`:full(d)?'<span class="pill">Full — thank you!</span>':`<button class="sbtn grn" data-signup="${d.id}">Sign me up</button>`; }
       else act+=full(d)?'<span class="pill">Full</span> ':`<button class="sbtn grn" data-addp="${d.id}">+ Add a person</button> `; }
-    return `<div class="duty ${mine(d)?'mine':''} ${!d.team_code?'open':''}" data-duty="${d.id}"><div class="hd"><span class="nm">${esc(d.name)}</span>${owner}${d.host_only?'<span class="pill">Host duty</span>':''}${d.assigned_by_host&&d.team_code?'<span class="pill">Assigned by host</span>':''}<span style="flex:1"></span>${meter(d)}</div>
+    return `<div class="duty ${mine(d)?'mine':''} ${!d.team_code?'open':''}" data-duty="${d.id}"><div class="hd"><span class="nm">${dname(d)}</span>${owner}${d.host_only?'<span class="pill">Host duty</span>':''}${d.auto_assigned?'<span class="pill warn">Assigned at the deadline</span>':d.assigned_by_host&&d.team_code?'<span class="pill">Assigned by host</span>':''}<span style="flex:1"></span>${meter(d)}</div>
       ${d.time_note||d.notes?`<div class="sub">${esc([d.time_note,d.notes].filter(Boolean).join(' · '))}</div>`:''}${people(d)}${act?`<div class="mt-2 flex flex-wrap items-center gap-2">${act}</div>`:''}</div>`; };
   const draw=()=>{ const groups=CAT_ORDER.filter(c=>duties.some(d=>d.category===c));
     const ours=duties.filter(mine), open=duties.filter(d=>!d.team_code&&!d.host_only);
-    let intro=hostStrip();
+    let intro=hostStrip()+dlBanner()+openList();
     if(canHost()) intro+=`<div class="note soft"><b>You're the host.</b> List every job the meet needs, keep the host-team ones, and either hand the field events to a visiting team (pick the team on the duty) or leave them open for the visiting teams to take. Then everyone fills their own jobs.</div>
       <div class="bar">${duties.length?'':'<button class="sbtn pri" data-standard>Add the standard VYC duty list</button>'}<button class="sbtn ${duties.length?'pri':''}" data-newduty>+ Add a duty</button>${duties.length?`<span class="text-sm text-gray-600">${duties.filter(d=>!d.team_code).length} open · ${duties.filter(full).length} of ${duties.length} filled</span>`:''}</div>`;
     else if(mgrTeam) intro+=`<div class="note soft"><b>Away meet — ${esc(TEAM(meet.host_team_code)||'the host team')} sets up this meet's duty list.</b> ${ours.length?`${esc(TEAM(team))} is covering <b>${ours.length}</b> dut${ours.length===1?'y':'ies'} at this meet.`:'Your team hasn\'t taken a duty yet.'} ${open.length?`<b>${open.length}</b> open dut${open.length===1?'y is':'ies are'} still up for grabs — take one, then add your people or let parents sign themselves up.`:''}</div>`;
@@ -329,12 +340,13 @@ TeamHub.mountVolunteers=async function(el, ctx){
       :`<p class="text-sm text-gray-500">${canHost()?'No duties yet — start with the standard list.':'The host team hasn\'t listed the duties for this meet yet.'}</p>`); };
   const dutyForm=d=>{ const box=modal(`<h3 class="font-bold text-lg mb-2">${d?'Edit duty':'Add a duty'}</h3><label class="f">Duty<input data-k="name" value="${esc(d?d.name:'')}" maxlength="60" placeholder="e.g. Long jump, Snack bar, Clerk"></label>
     <div class="grid" style="grid-template-columns:1fr 1fr"><label class="f">Category<select data-k="cat">${CAT_ORDER.map(c=>`<option value="${c}" ${d&&d.category===c?'selected':''}>${CATS[c]}</option>`).join('')}</select></label><label class="f">People needed<input data-k="slots" type="number" min="1" max="50" value="${d?d.slots:2}"></label></div>
+    <label class="f">Boys / girls<select data-k="gender"><option value="" ${!d||!d.gender?'selected':''}>Both (one crew runs boys and girls)</option><option value="Boys" ${d&&d.gender==='Boys'?'selected':''}>Boys only</option><option value="Girls" ${d&&d.gender==='Girls'?'selected':''}>Girls only</option></select></label>
     <label class="f">Which team<select data-k="team"><option value="">Open — a visiting team can take it</option>${teamsAt.map(t=>`<option value="${t}" ${d&&d.team_code===t?'selected':''}>${esc(TEAM(t))}${t===meet.host_team_code?' (host)':''}</option>`).join('')}</select></label>
     <label class="flex items-center gap-2 text-sm mt-2"><input type="checkbox" data-k="hostonly" ${d&&d.host_only?'checked':''}> Host-team duty (not offered to visiting teams)</label>
     <label class="f">When<input data-k="time" value="${esc(d?d.time_note||'':'')}" placeholder="e.g. 8:30 AM – done, or Shifts"></label><label class="f">Notes<input data-k="notes" value="${esc(d?d.notes||'':'')}" placeholder="What they'll do"></label>
     <div class="flex gap-2 mt-3"><button class="btn pri" data-k="save">Save</button><button class="btn" data-k="cancel">Cancel</button><span class="text-sm text-red-700" data-k="msg"></span></div>`);
     const g=k=>box.querySelector(`[data-k="${k}"]`); g('cancel').onclick=closeModal;
-    g('save').onclick=async()=>{ g('save').disabled=true; const {error}=await sb.rpc('duty_save',{p_id:d?d.id:null,p_meet:meet.id,p_name:g('name').value.trim(),p_category:g('cat').value,p_slots:+g('slots').value||1,p_team:g('team').value||null,p_time:g('time').value.trim()||null,p_notes:g('notes').value.trim()||null,p_host_only:g('hostonly').checked,p_sort:null});
+    g('save').onclick=async()=>{ g('save').disabled=true; const {error}=await sb.rpc('duty_save',{p_id:d?d.id:null,p_meet:meet.id,p_name:g('name').value.trim(),p_category:g('cat').value,p_slots:+g('slots').value||1,p_team:g('team').value||null,p_time:g('time').value.trim()||null,p_notes:g('notes').value.trim()||null,p_host_only:g('hostonly').checked,p_sort:null,p_gender:g('gender').value||null});
       if(error){ g('msg').textContent=clean(error); g('save').disabled=false; return; } closeModal(); await load(); draw(); }; };
   const signup=async(d,byName)=>{ const regs=ctx.athletes||[];
     const box=modal(`<h3 class="font-bold text-lg mb-1">${esc(d.name)}</h3><p class="text-xs text-gray-500">${esc(meetLabel(meet))}${d.time_note?' · '+esc(d.time_note):''}</p>
@@ -349,6 +361,7 @@ TeamHub.mountVolunteers=async function(el, ctx){
     if(t.closest('[data-standard]')){ const {data,error}=await sb.rpc('duties_add_standard',{p_meet:meet.id}); if(error) return toast(clean(error),true); toast(`${data} duties added`); await load(); return draw(); }
     if(t.closest('[data-newduty]')) return dutyForm(null);
     if(r=t.closest('[data-edit]')) return dutyForm(D(r.dataset.edit));
+    if(r=t.closest('[data-split]')){ const {error}=await sb.rpc('duty_split',{p_duty:r.dataset.split}); if(error) return toast(clean(error),true); toast('Split into Boys and Girls'); await load(); return draw(); }
     if(r=t.closest('[data-del]')){ const d=D(r.dataset.del); if(!confirm(`Remove "${d.name}"?`)) return; const {error}=await sb.rpc('duty_delete',{p_id:d.id}); if(error) return toast(clean(error),true); await load(); return draw(); }
     if(r=t.closest('[data-claim]')){ const {error}=await sb.rpc('duty_claim',{p_duty:r.dataset.claim,p_team:team,p_take:true}); if(error) return toast(clean(error),true); toast(`${TEAM(team)} has it`); await load(); return draw(); }
     if(r=t.closest('[data-release]')){ if(!confirm('Give this duty back? Anyone your team signed up for it comes off.')) return; const {error}=await sb.rpc('duty_claim',{p_duty:r.dataset.release,p_team:team,p_take:false}); if(error) return toast(clean(error),true); await load(); return draw(); }
@@ -357,7 +370,9 @@ TeamHub.mountVolunteers=async function(el, ctx){
     if(r=t.closest('[data-rmvol]')){ const {error}=await sb.rpc('volunteer_remove',{p_id:r.dataset.rmvol}); if(error) return toast(clean(error),true); await load(); return draw(); } };
   el.addEventListener('change',async e=>{ if(e.target.matches('[data-meet]')){ meet=meets.find(m=>m.id===e.target.value); if(ctx.onMeet) ctx.onMeet(meet.id); await load(); draw(); }
     if(e.target.matches('[data-assign]')){ const d=duties.find(x=>x.id===e.target.dataset.assign), t=e.target.value||null; if(d.team_code&&t!==d.team_code&&myVols(d).length&&!confirm(`Move "${d.name}" to ${t?TEAM(t):'open'}? The ${myVols(d).length} people signed up come off it.`)){ e.target.value=d.team_code||''; return; }
-      const {error}=await sb.rpc('duty_save',{p_id:d.id,p_meet:meet.id,p_name:d.name,p_category:d.category,p_slots:d.slots,p_team:t,p_time:d.time_note,p_notes:d.notes,p_host_only:d.host_only&&t===meet.host_team_code,p_sort:d.sort_order}); if(error){ toast(clean(error),true); } await load(); draw(); } });
+      const {error}=await sb.rpc('duty_save',{p_id:d.id,p_meet:meet.id,p_name:d.name,p_category:d.category,p_slots:d.slots,p_team:t,p_time:d.time_note,p_notes:d.notes,p_host_only:d.host_only&&t===meet.host_team_code,p_sort:d.sort_order,p_gender:d.gender||null}); if(error){ toast(clean(error),true); } await load(); draw(); } });
+  // keep the board fresh while it's open (another team may take a duty)
+  timer=setInterval(async()=>{ if(!document.body.contains(el)){ clearInterval(timer); return; } if(document.hidden||document.getElementById('thModal')) return; try{ await load(); draw(); }catch(e){} },60000);
   try{ await load(); }catch(e){ el.innerHTML=`<p class="text-sm text-red-700">Couldn't load the duties: ${esc(clean(e))}</p>`; return 'none'; }
   draw(); return 'on';
 };
@@ -457,14 +472,15 @@ TeamHub.mountVolunteerSummary=async function(el, ctx){
   let meets; try{ meets=await teamMeets(sb,teams.map(t=>t.code)); }catch(e){ el.innerHTML=''; return; }
   const td=today(); const next=meets.filter(m=>m.meet_date>=td).slice(0,3); if(!next.length){ el.innerHTML='<p class="text-sm text-gray-500">No upcoming meets yet.</p>'; return; }
   const ids=next.map(m=>m.id);
-  const [{data:d},{data:v}]=await Promise.all([sb.from('meet_duties').select('id,meet_id,name,slots,team_code,host_only').in('meet_id',ids), sb.from('meet_volunteers').select('id,duty_id,meet_id,team_code,name,email').in('meet_id',ids)]);
+  const [{data:d},{data:v}]=await Promise.all([sb.from('meet_duties').select('id,meet_id,name,slots,team_code,host_only,gender').in('meet_id',ids), sb.from('meet_volunteers').select('id,duty_id,meet_id,team_code,name,email').in('meet_id',ids)]);
   const duties=d||[], vols=v||[]; const cnt={}; try{ for(const id of ids){ const {data:c}=await sb.rpc('duty_counts',{p_meet:id}); (c||[]).forEach(x=>cnt[x.duty_id]=x.taken); } }catch(e){}
   el.innerHTML=next.map(m=>{ const mineT=teams.filter(t=>window.meetHasTeam(m,t.code)); const parts=mineT.map(t=>{ const host=m.host_team_code===t.code; const ours=duties.filter(x=>x.meet_id===m.id&&x.team_code===t.code); const open=duties.filter(x=>x.meet_id===m.id&&!x.team_code&&!x.host_only).length;
       const me=vols.filter(x=>x.meet_id===m.id&&x.email&&ctx.email&&x.email.toLowerCase()===ctx.email.toLowerCase()).map(x=>(duties.find(y=>y.id===x.duty_id)||{}).name).filter(Boolean);
       const filled=ours.reduce((a,x)=>a+Math.min(x.slots,cnt[x.id]||0),0), need=ours.reduce((a,x)=>a+x.slots,0);
       const line=host?`<b>${esc(TEAM(t.code))} hosts.</b> ${duties.filter(x=>x.meet_id===m.id).length?`${filled} of ${need} host spots filled · ${open} dut${open===1?'y':'ies'} still open for visiting teams`:'Duty list not set up yet — as the host, start with the standard VYC list'}`
-        :ours.length?`<b>${esc(TEAM(t.code))}</b> covers ${ours.map(x=>esc(x.name)).join(', ')} — ${filled} of ${need} spots filled`:`<b>${esc(TEAM(t.code))}</b> has no duty yet${open?` · ${open} open`:''}`;
-      return `<div class="text-sm">${line}${me.length?`<div class="text-xs" style="color:var(--ok)">You're signed up: ${me.map(esc).join(', ')} ✓</div>`:''}</div>`; }).join('');
+        :ours.length?`<b>${esc(TEAM(t.code))}</b> covers ${ours.map(x=>esc(x.name)+(x.gender?' ('+x.gender+')':'')).join(', ')} — ${filled} of ${need} spots filled`:`<b>${esc(TEAM(t.code))}</b> has no duty yet${open?` · ${open} open`:''}`;
+      const dl=window.attendanceDeadline?window.attendanceDeadline(m.meet_date):null; const dlLine=dl&&t.role!=='parent'&&!host&&!ours.length&&open?`<div class="text-xs" style="color:var(--warn)">Pick by ${esc(window.fmtDeadline(dl))} or one is assigned to you.</div>`:'';
+      return `<div class="text-sm">${line}${dlLine}${me.length?`<div class="text-xs" style="color:var(--ok)">You're signed up: ${me.map(esc).join(', ')} ✓</div>`:''}</div>`; }).join('');
     const url=ctx.volUrl?ctx.volUrl(m,mineT[0].code):ctx.here?`?tab=volunteers&meet=${m.id}`:`team.html?team=${encodeURIComponent(mineT[0].code)}&tab=volunteers&meet=${m.id}`;
     return `<div class="note" style="margin-bottom:8px"><div class="flex flex-wrap items-center gap-2"><b>${esc(meetLabel(m))}</b><span style="flex:1"></span><a class="sbtn pri" style="text-decoration:none" href="${url}" ${ctx.here?`data-volgo="${m.id}"`:''}>${teams.some(t=>t.role==='parent')?'Volunteer →':mineT.some(t=>m.host_team_code===t.code)&&!duties.some(x=>x.meet_id===m.id)?'Set up duties →':'Duties →'}</a></div>${parts}</div>`; }).join('');
   // inside the team page, "Volunteer →" just switches to the Volunteers tab on that meet
