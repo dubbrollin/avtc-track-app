@@ -14,7 +14,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="config.js"></script>
-<script src="shared.js"></script><script src="messenger.js"></script><script src="team-admin-panels.js"></script>
+<script src="shared.js"></script><script src="messenger.js"></script><script src="team-admin-panels.js"></script><script src="team-hub.js"></script>
 <script src="events.js"></script>
 <script src="pdf.js"></script>
 <style>
@@ -69,6 +69,7 @@
     <a href="meets-admin.html?view=timer">Timer</a>
     <a href="parent.html">Parent Dashboard</a>
     <a href="schedule.html">Schedule</a>
+    <a href="team.html">Teams</a>
     <a href="results.html">Results</a>
   </nav>
 </div></header>
@@ -215,6 +216,17 @@
             </div>
             <div id="taCoachNotice"></div>
             <p class="text-xs text-gray-500 mt-2">Uploading meet results and setting up meets happens on the <a class="underline" href="admin.html?tab=meetadmin">Meet Admin tab of the Admin page</a>.</p>
+          </div>
+
+          <div class="card" id="teamPageCard">
+            <div class="col-head"><h2 class="flex-1">Team page &amp; volunteers</h2></div>
+            <p class="text-xs text-gray-500 mb-2">Your team's own page — about the team, practice info, news, photos, the team store — and the volunteer duties for each meet (the host team lists them, visiting teams run the field events, parents sign up).</p>
+            <div class="flex flex-wrap gap-2 mb-2">
+              <a id="teamPageLink" href="team.html" class="btn bg-blue-600 text-white inline-block">Open team page →</a>
+              <button type="button" id="teamPageEdit" class="btn bg-gray-200 hidden">Edit team page</button>
+              <a id="teamVolLink" href="team.html?tab=volunteers" class="btn bg-gray-800 text-white inline-block">Meet volunteers →</a>
+            </div>
+            <div id="volSummary" class="text-sm"></div>
           </div>
 
           <div class="card">
@@ -388,6 +400,11 @@ async function load(){
   loadComing();
   window.mountTeamSchedule($('teamSched'),{sb,teams:[myCoach&&myCoach.team_code]});
   window.mountLockoutNotice($('lockBanner'),{sb,teams:[myCoach&&myCoach.team_code]});
+  // Team page & volunteers card: links to the team's own page, plus what's covered at the next meets
+  if(myCoach&&myCoach.team_code){ const tc=encodeURIComponent(myCoach.team_code); $('teamPageLink').href='team.html?team='+tc; $('teamVolLink').href='team.html?team='+tc+'&tab=volunteers';
+    $('teamPageEdit').classList.toggle('hidden',!fullAccess);
+    $('teamPageEdit').onclick=async()=>{ const [{data:p},{data:ex}]=await Promise.all([sb.from('team_pages').select('*').eq('team_code',myCoach.team_code).maybeSingle(), sb.rpc('team_has_extras',{t:myCoach.team_code})]); window.TeamHub.editPage({sb,team:myCoach.team_code,role:'admin',page:p||{team_code:myCoach.team_code},extras:!!ex,onSaved:()=>{}}); };
+    window.TeamHub.mountVolunteerSummary($('volSummary'),{sb,teams:[{code:myCoach.team_code,role:fullAccess?'admin':'coach'}],email:myCoach.email}); }
   const pending=rows.filter(r=>r.dob_check_status==='pending');
   if(fullAccess && pending.length) runChecks(pending);
 

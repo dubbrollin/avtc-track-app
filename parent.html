@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="theme.css?v=b1">
 <script src="theme.js?v=b2"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="config.js"></script><script src="shared.js"></script><script src="events.js"></script><script src="payments.js"></script><script src="messenger.js"></script>
+<script src="config.js"></script><script src="shared.js"></script><script src="events.js"></script><script src="payments.js"></script><script src="messenger.js"></script><script src="team-hub.js"></script>
 <style>
 .btn{padding:.6rem 1rem;border-radius:.5rem;font-weight:600}
 .card{background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
@@ -33,6 +33,7 @@
     <a href="meets-admin.html?view=timer">Timer</a>
     <a href="parent.html">Parent Dashboard</a>
     <a href="schedule.html">Schedule</a>
+    <a href="team.html">Teams</a>
     <a href="results.html">Results</a>
   </nav>
 </div></header>
@@ -68,6 +69,13 @@
     <div class="card" id="schedCard">
       <h2 class="font-bold mb-2">Our schedule</h2>
       <div id="schedule"><p class="text-sm text-gray-500">Loading…</p></div>
+    </div>
+
+    <div class="card" id="teamPageCard">
+      <h2 class="font-bold mb-1">Team page &amp; volunteering</h2>
+      <p class="text-xs text-gray-500 mb-2">Your team's own page has the practice info, news, coaches, photos and the team store. Meets run on parent volunteers — the host team lists the jobs, and visiting teams run the field events. Pick a spot below.</p>
+      <div id="teamPageLinks" class="flex flex-wrap gap-2 mb-2"></div>
+      <div id="volSummary" class="text-sm"></div>
     </div>
 
     <div class="card" id="resCard">
@@ -165,6 +173,9 @@ async function loadMeets(){
   const myTeams=[...new Set(myRegs.filter(r=>r.status!=='rejected').map(r=>r.team_code))];
   meets=(data||[]).filter(m=>myTeams.some(c=>window.meetHasTeam(m,c))); // only meets at least one of my athletes' teams is competing at
   renderSchedule(myTeams);
+  // Team page & volunteering card
+  $('teamPageLinks').innerHTML=myTeams.map(c=>`<a class="btn bg-blue-600 text-white text-sm" href="team.html?team=${encodeURIComponent(c)}">${esc(((window.VYC_TEAMS||[]).find(t=>t.code===c)||{}).name||c)} team page →</a>`).join('')||'<span class="text-sm text-gray-500">Your team page will show here once an athlete is registered.</span>';
+  window.TeamHub.mountVolunteerSummary($('volSummary'),{sb,teams:myTeams.map(c=>({code:c,role:'parent'})),email:me});
 window.mountLockoutNotice($('lockBanner'),{sb,teams:myTeams,parent:true});
   const {data:evc}=await sb.from('meet_events').select('meet_id'); const evCount={}; (evc||[]).forEach(x=>evCount[x.meet_id]=(evCount[x.meet_id]||0)+1);
   $('meet').innerHTML=meets.map(m=>`<option value="${m.id}">${m.name} — ${fmtDate(m.meet_date)}${evCount[m.id]?'':' (no events set up yet)'}</option>`).join('')||'<option value="">No meets posted yet</option>';

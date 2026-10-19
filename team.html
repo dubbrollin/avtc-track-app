@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#001C3B"><link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="VYC Track"><meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Team Page</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css?v=b1">
+<script src="theme.js?v=b2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script><script src="shared.js"></script><script src="team-hub.js"></script>
+<style>
+  .card{background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .btn{padding:.55rem .9rem;border-radius:.5rem;font-weight:600;display:inline-block;text-decoration:none}
+  .pill{font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px}
+  .hero{position:relative;overflow:hidden;padding:0}
+  .hero .banner{height:160px;background:var(--navy,#001C3B) center/cover no-repeat;background-image:repeating-linear-gradient(100deg,rgba(255,255,255,.07) 0 2px,transparent 2px 46px)}
+  .hero .body{padding:0 16px 16px;display:flex;flex-wrap:wrap;gap:12px 16px;align-items:flex-end;margin-top:-44px}
+  .hero .logo{width:96px;height:96px;border-radius:50%;background:#fff;border:4px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.2);object-fit:cover;flex:none;display:grid;place-items:center;font-family:var(--head);font-weight:700;font-size:1.6rem;color:var(--navy)}
+  .hero h1{font-size:1.7rem;line-height:1.1;margin-top:6px}
+  .tabs{display:flex;flex-wrap:wrap;gap:4px;background:#fff;border:1px solid var(--line,#e1e7ef);border-radius:10px;padding:5px;margin-bottom:12px}
+  .tab{border:0;border-radius:7px;padding:9px 14px;font-weight:600;font-size:.92rem;background:transparent;color:var(--muted,#5b6878);cursor:pointer}
+  .tab.active{background:var(--act,#1764c8);color:#fff}
+  .two{display:grid;gap:12px;grid-template-columns:minmax(0,1fr)}
+  @media(min-width:900px){ .two{grid-template-columns:minmax(0,3fr) minmax(0,2fr)} }
+  .pre{white-space:pre-wrap}
+  .dir{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(14rem,1fr))}
+  .dir a{display:flex;gap:10px;align-items:center;background:#fff;border:1px solid var(--line,#e1e7ef);border-radius:10px;padding:10px 12px;text-decoration:none;color:inherit}
+  .dir a:hover{border-color:var(--act,#1764c8);box-shadow:0 0 0 3px var(--act-soft,#e6f0fc)}
+  .dir .lg{width:44px;height:44px;border-radius:50%;background:var(--act-soft,#e6f0fc);display:grid;place-items:center;font-weight:800;color:var(--act,#1764c8);font-size:.8rem;object-fit:cover;flex:none}
+  .schedScroll{max-height:380px;overflow-y:auto;padding-right:4px}
+  .hidden{display:none!important}
+</style>
+</head>
+<body class="text-gray-900">
+<header class="topnav"><div class="topnav-inner">
+  <a class="brand" href="home.html">VYC <b>Track &amp; Field</b></a>
+  <nav>
+    <a href="home.html">Home</a>
+    <a href="index.html">Register</a>
+    <a href="coach.html">Coach Dashboard</a>
+    <a href="meets-admin.html?view=timer">Timer</a>
+    <a href="parent.html">Parent Dashboard</a>
+    <a href="schedule.html">Schedule</a>
+    <a href="team.html">Teams</a>
+    <a href="results.html">Results</a>
+  </nav>
+</div></header>
+
+<div class="max-w-5xl mx-auto p-3">
+  <!-- team directory (no ?team=) -->
+  <div id="directory" class="hidden">
+    <div class="card text-center"><h1 class="text-2xl font-bold">Team Pages</h1><p class="text-gray-600 mt-1">Every VYC team has its own page: about the team, practice info, coaches, news, the season schedule, photos, the team store and meet-day volunteering.</p></div>
+    <div class="card"><h2 class="font-bold mb-2">Eastern Conference</h2><div class="dir" id="dirEast"></div></div>
+    <div class="card"><h2 class="font-bold mb-2">Western Conference</h2><div class="dir" id="dirWest"></div></div>
+  </div>
+
+  <!-- one team's page -->
+  <div id="page" class="hidden">
+    <div class="card hero">
+      <div class="banner" id="banner"></div>
+      <div class="body">
+        <div class="logo" id="logo"></div>
+        <div style="flex:1;min-width:14rem">
+          <div class="text-xs text-gray-500" id="conf"></div>
+          <h1 id="teamName"></h1>
+          <p class="text-gray-700" id="tagline"></p>
+        </div>
+        <div class="flex flex-wrap gap-2" id="heroBtns">
+          <a class="btn bg-blue-600 text-white" href="index.html">Register with this team</a>
+          <button type="button" class="btn bg-gray-200 hidden" id="editBtn">Edit team page</button>
+        </div>
+      </div>
+    </div>
+    <p class="text-xs text-gray-500 mb-2" id="whoami"></p>
+
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-tab="home">Home</button>
+      <button class="tab" data-tab="photos">Photos</button>
+      <button class="tab" data-tab="store">Store</button>
+      <button class="tab" data-tab="volunteers">Volunteers</button>
+    </div>
+
+    <div data-pane="home">
+      <div class="two">
+        <div>
+          <div class="card" id="aboutCard"><h2 class="font-bold mb-1">About the team</h2><div class="text-sm pre" id="about"></div></div>
+          <div class="card" id="practiceCard"><h2 class="font-bold mb-1">Practice</h2><div class="text-sm pre" id="practice"></div></div>
+          <div class="card"><h2 class="font-bold mb-2">Team news</h2><div id="posts"><p class="text-sm text-gray-500">Loading…</p></div></div>
+        </div>
+        <div>
+          <div class="card"><h2 class="font-bold mb-1">Our schedule</h2><div id="schedule" class="text-sm schedScroll"><p class="text-sm text-gray-500">Loading…</p></div></div>
+          <div class="card"><h2 class="font-bold mb-1">Coaches</h2><div id="coaches" class="text-sm"></div></div>
+          <div class="card" id="contactCard"><h2 class="font-bold mb-1">Contact</h2><div id="contact" class="text-sm"></div></div>
+          <div class="card"><h2 class="font-bold mb-1">Home field</h2><div id="home" class="text-sm"></div></div>
+        </div>
+      </div>
+    </div>
+    <div data-pane="photos" class="hidden"><div class="card"><h2 class="font-bold mb-2">Photos</h2><div id="galleryLogin" class="hidden max-w-md"></div><div id="gallery"></div></div></div>
+    <div data-pane="store" class="hidden"><div class="card"><h2 class="font-bold mb-2">Team store</h2><div id="store"></div><div id="storeLogin" class="hidden max-w-md mt-3"></div></div></div>
+    <div data-pane="volunteers" class="hidden"><div class="card"><h2 class="font-bold mb-2">Meet-day volunteers</h2><p class="text-xs text-gray-500 mb-2">Every VYC meet runs on volunteers. The host team lists the jobs; the visiting teams run the field events; parents pick a spot. Sign in with the email you registered with.</p><div id="volLogin" class="hidden max-w-md"></div><div id="volunteers"></div></div></div>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const CFG=window.APP_CONFIG;
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let sb=supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } });
+const q=new URLSearchParams(location.search);
+const TEAM_CODE=window.normTeamCode(q.get('team')||'');
+let page=null, role=null, extras=false, me=null, uid=null, myName='', myPhone='', myAthletes=[], siteAdmin=false, tab=q.get('tab')||'home';
+const mounted={};
+
+async function directory(){
+  $('directory').classList.remove('hidden'); document.title='Team Pages';
+  await window.leagueReady;
+  let pages={}; try{ const {data}=await sb.from('team_pages').select('team_code,logo_path,tagline'); (data||[]).forEach(p=>pages[p.team_code]=p); }catch(e){}
+  const tile=t=>{ const p=pages[t.code]||{}; const lg=p.logo_path?`<img class="lg" src="${esc(TeamHub.publicUrl(sb,p.logo_path))}" alt="">`:`<span class="lg">${esc(t.code)}</span>`;
+    return `<a href="team.html?team=${encodeURIComponent(t.code)}">${lg}<span><b>${esc(t.name)}</b>${p.tagline?`<span class="block text-xs text-gray-500">${esc(p.tagline)}</span>`:''}</span></a>`; };
+  const act=window.VYC_TEAMS.filter(t=>t.active!==false);
+  $('dirEast').innerHTML=act.filter(t=>t.conference==='East').map(tile).join(''); $('dirWest').innerHTML=act.filter(t=>t.conference==='West').map(tile).join('');
+}
+
+async function loadPage(){
+  await window.leagueReady;
+  const t=window.VYC_TEAMS.find(x=>x.code===TEAM_CODE);
+  if(!t){ $('directory').classList.remove('hidden'); directory(); return; }
+  $('page').classList.remove('hidden'); document.title=t.name;
+  const [{data:p},{data:lt},{data:ex}]=await Promise.all([
+    sb.from('team_pages').select('*').eq('team_code',TEAM_CODE).maybeSingle(),
+    sb.from('league_teams').select('code,name,conference,home_venue,home_address').eq('code',TEAM_CODE).maybeSingle(),
+    sb.rpc('team_has_extras',{t:TEAM_CODE})]);
+  page=p||{team_code:TEAM_CODE}; extras=!!ex;
+  $('teamName').textContent=t.name; $('conf').textContent=(t.conference?t.conference+'ern Conference · ':'')+'Valley Youth Conference';
+  $('tagline').textContent=page.tagline||'';
+  if(page.banner_path) $('banner').style.backgroundImage=`url('${TeamHub.publicUrl(sb,page.banner_path)}')`;
+  if(page.logo_path){ $('logo').innerHTML=`<img src="${esc(TeamHub.publicUrl(sb,page.logo_path))}" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`; } else $('logo').textContent=TEAM_CODE;
+  $('about').textContent=page.about||''; $('aboutCard').classList.toggle('hidden',!page.about);
+  $('practice').textContent=page.practice_info||''; $('practiceCard').classList.toggle('hidden',!page.practice_info);
+  const c=[page.contact_name&&`<div><b>${esc(page.contact_name)}</b></div>`, page.contact_email&&`<div><a class="underline" style="color:var(--act)" href="mailto:${esc(page.contact_email)}">${esc(page.contact_email)}</a></div>`, page.contact_phone&&`<div><a class="underline" style="color:var(--act)" href="tel:${esc(page.contact_phone)}">${esc(page.contact_phone)}</a></div>`,
+    page.website&&`<div><a class="underline" style="color:var(--act)" target="_blank" rel="noopener" href="${esc(/^https?:/.test(page.website)?page.website:'https://'+page.website)}">Website</a></div>`,
+    page.instagram&&`<div><a class="underline" style="color:var(--act)" target="_blank" rel="noopener" href="https://instagram.com/${esc(page.instagram.replace(/^@|^https?:\/\/(www\.)?instagram\.com\//,''))}">Instagram ${esc(page.instagram.startsWith('@')||!/instagram/.test(page.instagram)?page.instagram:'')}</a></div>`,
+    page.facebook&&`<div><a class="underline" style="color:var(--act)" target="_blank" rel="noopener" href="${esc(/^https?:/.test(page.facebook)?page.facebook:'https://facebook.com/'+page.facebook)}">Facebook</a></div>`].filter(Boolean);
+  $('contact').innerHTML=c.join('')||'<span class="text-gray-500">Not posted yet.</span>';
+  const hv=lt&&(lt.home_venue||lt.home_address); $('home').innerHTML=hv?`<div><b>${esc(lt.home_venue||'')}</b></div>${lt.home_address?`<div><a class="underline" style="color:var(--act)" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([lt.home_venue,lt.home_address].filter(Boolean).join(', '))}">${esc(lt.home_address)}</a></div>`:''}`:'<span class="text-gray-500">The league hasn\'t listed this team\'s home field yet.</span>';
+  window.mountTeamSchedule($('schedule'),{sb,teams:[TEAM_CODE]});
+  try{ const {data:cs}=await sb.rpc('team_page_coaches',{p_team:TEAM_CODE}); const roleL=c=>c.team_admin?(c.admin_title||'Team admin'):c.role_type==='head_coach'?'Head Coach':c.role_type==='division_coach'?'Division Coach'+(c.division_or_age_group?' — '+c.division_or_age_group:''):c.role_type==='event_specialist'?'Event Coach':(c.admin_title||'Team staff');
+    $('coaches').innerHTML=(cs||[]).length?cs.map(c=>`<div class="py-1 border-t first:border-t-0"><b>${esc(c.first_name)} ${esc(c.last_name)}</b> <span class="text-gray-500">· ${esc(roleL(c))}</span></div>`).join(''):'<span class="text-gray-500">No approved coaches listed yet.</span>'; }catch(e){ $('coaches').innerHTML=''; }
+  showTab(tab); paintTabs(); mountPosts();
+}
+function paintTabs(){ const mgr=role==='admin'; const showPaid=extras||mgr;
+  document.querySelector('[data-tab="photos"]').classList.toggle('hidden',!showPaid); document.querySelector('[data-tab="store"]').classList.toggle('hidden',!showPaid||(!mgr&&!page.store_open));
+  $('editBtn').classList.toggle('hidden',!mgr);
+  $('whoami').innerHTML=me?`Signed in as ${esc(me)}${role?` · ${role==='admin'?'team admin':role==='coach'?'coach':'parent'} of ${esc(TeamHub.TEAM(TEAM_CODE))}`:' · not on this team'} · <button type="button" class="underline" id="signOut">Sign out</button>`:'';
+  const so=$('signOut'); if(so) so.onclick=()=>{ if(window.clearRoleFlags) window.clearRoleFlags(); sb.auth.signOut().then(()=>location.reload()); };
+  if(!document.querySelector(`[data-tab="${tab}"]`)||document.querySelector(`[data-tab="${tab}"]`).classList.contains('hidden')) showTab('home'); }
+function showTab(t){ tab=t; document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===t)); document.querySelectorAll('[data-pane]').forEach(p=>p.classList.toggle('hidden',p.dataset.pane!==t));
+  const u=new URL(location.href); if(t==='home') u.searchParams.delete('tab'); else u.searchParams.set('tab',t); history.replaceState(null,'',u);
+  if(t==='photos') mountGallery(); if(t==='store') mountStore(); if(t==='volunteers') mountVolunteers(); }
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
+const ctx=()=>({sb,team:TEAM_CODE,role,email:me,uid,name:myName,phone:myPhone,athletes:myAthletes,page,extras,siteAdmin});
+function mountPosts(){ TeamHub.mountPosts($('posts'),ctx()); }
+function login(el){ el.classList.remove('hidden'); if(!el.dataset.ready){ el.dataset.ready='1'; window.mountLoginWidget(sb,el,{hint:'Sign in with the email you registered with (parents) or your coach login.'}); } }
+function mountGallery(){ if(!me){ $('gallery').innerHTML=''; if(extras) login($('galleryLogin')); else $('gallery').innerHTML=''; return; } $('galleryLogin').classList.add('hidden'); TeamHub.mountGallery($('gallery'),Object.assign(ctx(),{album:q.get('album')||null})); }
+function mountStore(){ TeamHub.mountStore($('store'),ctx()); if(!me&&extras&&page.store_open) login($('storeLogin')); else $('storeLogin').classList.add('hidden'); }
+function mountVolunteers(){ if(!me){ $('volunteers').innerHTML=''; login($('volLogin')); return; } $('volLogin').classList.add('hidden'); TeamHub.mountVolunteers($('volunteers'),Object.assign(ctx(),{meet:q.get('meet')||null,onMeet:id=>{ const u=new URL(location.href); u.searchParams.set('meet',id); history.replaceState(null,'',u); }})); }
+$('editBtn').onclick=()=>TeamHub.editPage(Object.assign(ctx(),{onSaved:()=>location.reload()}));
+
+async function onAuth(session){
+  me=session.user.email; uid=session.user.id;
+  sb=supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // same rebuild as the dashboards: the first client can wedge after an OAuth redirect
+  const [{data:r},{data:c},{data:regs}]=await Promise.all([sb.rpc('team_member_role',{t:TEAM_CODE}), sb.from('coaches').select('first_name,last_name,phone,is_admin').eq('email',me).maybeSingle(), sb.from('registrations').select('first_name,last_name,parent1_name,parent_name,phone,team_code').eq('email',me)]);
+  role=r||null; siteAdmin=!!(c&&c.is_admin);
+  const mine=(regs||[]).filter(x=>x.team_code===TEAM_CODE); myAthletes=[...new Set(mine.map(x=>x.first_name+' '+x.last_name))];
+  myName=c?[c.first_name,c.last_name].filter(Boolean).join(' '):(mine[0]&&(mine[0].parent1_name||mine[0].parent_name))||''; myPhone=(c&&c.phone)||(mine[0]&&mine[0].phone)||'';
+  paintTabs(); mountPosts(); if(tab==='photos') mountGallery(); if(tab==='store') mountStore(); if(tab==='volunteers') mountVolunteers();
+}
+sb.auth.onAuthStateChange((_e,session)=>{ if(!session||window.__authDone===session.user.id) return; window.__authDone=session.user.id; onAuth(session); });
+if(TEAM_CODE) loadPage(); else directory();
+</script>
+</body>
+</html>
