@@ -364,11 +364,12 @@ async function resultsPanel(m){
   p.innerHTML=`<div id="live-${m.id}"></div><div class="border rounded p-3 bg-purple-50">
     <p class="text-sm mb-2"><b>${count||0}</b> results stored for this meet. <a class="underline" href="results.html?meet=${m.id}" target="_blank">View</a></p>
     <p class="text-sm font-semibold">Upload the results file</p>
-    <p class="text-xs text-green-800 bg-green-50 border border-green-200 rounded p-2 mb-1"><b>No live connection?</b> You can also export the results from Meet Manager and upload the file here after every few events — as often as you like. Each upload replaces the events in the file (nothing gets doubled), and parents see them on <a class="underline" href="results.html?meet=${m.id}" target="_blank">this meet's results page</a> within 30 seconds. Upload the final file once more at the end of the meet.</p>
+    <p class="text-xs text-green-800 bg-green-50 border border-green-200 rounded p-2 mb-1"><b>No live connection?</b> You can also export the results from Meet Manager and upload the file here after every few events — as often as you like. Each upload replaces the events in the file (nothing gets doubled), and parents see them on <a class="underline" href="results.html?meet=${m.id}" target="_blank">this meet's results page</a> within 30 seconds. Upload the final file once more at the end of the meet.<br><b>Found a mistake after the results went up?</b> Fix it in Meet Manager, export again and upload the new file — the newest upload is what's posted. If the new file changes results that are already posted, you'll be shown exactly what's different and asked to confirm first.</p>
     <p class="text-xs text-gray-600 mb-1">Either the semicolon-delimited Meet Manager export, or your Team Manager's own "TCL01-01.tcl" results file (auto-detected). The semicolon-delimited file keeps every team in the meet, so the results page can show the whole conference. (The .tcl format only ever contains your own team.)</p>
     <input type="file" id="rf-${m.id}" accept=".txt,.csv,.sd3,.tcl,text/plain" class="text-sm">
     <label class="text-xs ml-2"><input type="checkbox" id="rall-${m.id}" checked> keep all teams (semicolon format)</label>
     <div id="rprev-${m.id}" class="text-sm mt-2"></div>
+    <div id="rhist-${m.id}" class="text-xs mt-2"></div>
     <hr class="my-3">
     <p class="text-sm font-semibold">Add one result by hand</p>
     <div class="grid grid-cols-2 gap-1 mt-1 text-sm">
@@ -385,6 +386,7 @@ async function resultsPanel(m){
   const {data:regs0,error:rerr}=await sb.rpc('results_athletes'); const regs=regs0||[];
   if(rerr) $('rprev-'+m.id).innerHTML='<span class="text-red-600">Could not load the athlete list: '+rerr.message+'</span>';
   window.mountLiveConnect($('live-'+m.id),{sb,meet:m,getRegs:()=>regs});
+  uploadHistory(m);
   const sa=$('ra-'+m.id); regs.forEach(r=>sa.add(new Option(`${r.last_name}, ${r.first_name} (${r.division} ${r.gender})`,r.id)));
   sa.onchange=()=>{ const r=regs.find(x=>x.id===sa.value); const se=$('re-'+m.id); se.innerHTML='<option value="">Event…</option>';
     if(r) eventsFor(r.division,r.gender).filter(e=>!e.relay).forEach(e=>se.add(new Option(e.name,e.code))); };
@@ -419,13 +421,95 @@ async function resultsPanel(m){
         +(parsed.unmatched.length?`<br><span class="text-orange-700">Not matched to a registered athlete (still saved, but won't link to their record): ${parsed.unmatched.join(', ')}</span>`:'');
     }
     pv.innerHTML=summary+`<br><button id="rgo-${m.id}" class="btn bg-purple-600 text-white text-sm mt-2">Save these results</button>`;
-    $('rgo-'+m.id).onclick=async()=>{
-      // Replaces the events in this file (safe to upload the same meet again and again during the meet — live results).
-      const allTeams=!isTeamFile && $('rall-'+m.id).checked;
+    const allTeams=!isTeamFile && $('rall-'+m.id).checked, fileName=ev.target.files[0].name;
+    // Replaces the events in this file (safe to upload the same meet again and again during the meet — live results).
+    const save=async(d,confirmed)=>{
+      pv.innerHTML='Saving…';
       const {data:n,error}=await sb.rpc('replace_meet_results',{p_meet:m.id,p_rows:rows,p_all_teams:allTeams});
-      pv.innerHTML=error?`<span class="text-red-600">${/replace_meet_results/.test(error.message)?'Live upload is not switched on in the database yet — run supabase/2026-10-14-live-results.sql once, then upload again.':error.message}</span>`:`Saved ${n??rows.length} results — they're live on the Results page now.`; if(!error) setTimeout(()=>resultsPanel(m),1500);
+      if(error){ pv.innerHTML=`<span class="text-red-600">${/replace_meet_results/.test(error.message)?'Live upload is not switched on in the database yet — run supabase/2026-10-14-live-results.sql once, then upload again.':error.message}</span>`; return; }
+      const v=await logUpload(m,{file_name:fileName,all_teams:allTeams,rows_in_file:rows.length,added:d.added.length,changed:d.changed.length,removed:d.removed.length,unchanged:d.unchanged.length,confirmed_changes:!!confirmed,changes:changesForLog(d)});
+      const what=d.changed.length||d.removed.length?` ${d.changed.length} changed, ${d.removed.length} removed, ${d.added.length} new.`:(d.added.length&&d.unchanged.length?` ${d.added.length} new, ${d.unchanged.length} already posted and unchanged.`:'');
+      pv.innerHTML=`Saved ${n??rows.length} results${v?` (upload #${v} for this meet)`:''} — they're live on the Results page now.${what}`;
+      setTimeout(()=>resultsPanel(m),2500);
+    };
+    $('rgo-'+m.id).onclick=async()=>{
+      $('rgo-'+m.id).disabled=true; $('rgo-'+m.id).textContent='Checking against what\'s posted…';
+      let d; try{ d=diffUpload(await postedResults(m.id),rows,allTeams); }
+      catch(e){ pv.innerHTML=`<span class="text-red-600">Could not check what's already posted (${e.message}). Nothing was saved — try again.</span>`; return; }
+      if(!d.changed.length && !d.removed.length) return save(d,false);   // nothing already posted is altered — no need to ask
+      // The new file disagrees with results that are already up: show exactly what differs and ask before replacing.
+      const plural=(n,one,many)=>`${n} ${n===1?one:many}`;
+      pv.innerHTML=`<div class="border-2 border-yellow-400 bg-yellow-50 rounded p-3 text-sm">
+        <p class="font-semibold">⚠️ Heads up — this file changes results that are already posted.</p>
+        <p class="mt-1">${plural(d.changed.length,'posted result has','posted results have')} a different mark or place in this file, ${plural(d.removed.length,'posted result is','posted results are')} not in this file at all (${d.removed.length===1?'it':'they'} would be removed), and ${plural(d.added.length,'result is','results are')} new. The other ${d.unchanged.length} match what's posted.</p>
+        ${describeChanges(d)}
+        <p class="mt-2 font-semibold">Are you sure you want to replace what's posted with this upload?</p>
+        <div class="flex flex-wrap gap-2 mt-2"><button id="ryes-${m.id}" class="btn bg-purple-600 text-white text-sm">Yes, replace them with this file</button><button id="rno-${m.id}" class="btn bg-white border text-sm">No, keep what's posted</button></div></div>`;
+      $('ryes-'+m.id).onclick=()=>save(d,true);
+      $('rno-'+m.id).onclick=()=>{ pv.innerHTML='Nothing was changed — the posted results were kept.'; ev.target.value=''; };
     };
   };
+}
+
+// ---- Re-uploads: compare a results file with what's already posted, and keep a history of uploads ----
+// Everything already posted for this meet (explicit columns — the results table is public, never select '*'). Paged: big meets have 5,000+ rows.
+async function postedResults(meetId){
+  const all=[];
+  for(let f=0;;f+=1000){
+    const {data,error}=await sb.from('results').select('id,athlete_name,gender,division,team_code,event_code,event_name,is_relay,relay_runners,round,mark,place,heat,source').eq('meet_id',meetId).order('id').range(f,f+999);
+    if(error) throw error; all.push(...(data||[])); if(!data||data.length<1000) break;
+  }
+  return all;
+}
+// Only the events in the file count (that's all an upload replaces); with a one-team file only that team's rows in those events.
+// Hand-typed results are never touched by an upload, so they're left out of the comparison too.
+function diffUpload(posted, rows, allTeams){
+  const gk=r=>[r.event_code,r.is_relay?1:0,r.division||'',r.gender,r.round||'F'].join('|')+(allTeams?'':'|'+(r.team_code||''));
+  const ak=r=>gk(r)+'|'+String(r.athlete_name||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  const affected=new Set(rows.map(gk));
+  const old=posted.filter(r=>r.source!=='manual'&&affected.has(gk(r)));
+  const byOld={}; old.forEach(r=>(byOld[ak(r)]??=[]).push(r));
+  const added=[], changed=[], unchanged=[];
+  rows.forEach(r=>{
+    const o=(byOld[ak(r)]||[]).shift(); if(!o){ added.push(r); return; }
+    const same=String(o.mark??'').trim()===String(r.mark??'').trim() && (o.place??null)===(r.place??null) && (!o.is_relay||String(o.relay_runners||'')===String(r.relay_runners||''));
+    if(same) unchanged.push(r); else changed.push({from:o,to:r});
+  });
+  const removed=Object.values(byOld).flat();   // posted in these events, but not in the new file
+  return {added,changed,removed,unchanged};
+}
+const escH=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ordinal=n=>{ if(!n) return ''; const s=['th','st','nd','rd'], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); };
+const evLabel=r=>`${r.division||''} ${r.gender==='Boy'?'Boys':r.gender==='Girl'?'Girls':(r.gender||'')} ${r.event_name||r.event_code}${(r.round||'F')==='P'?' (prelims)':''}`.replace(/\s+/g,' ').trim();
+const markLabel=r=>`${r.mark??''}${r.place?` (${ordinal(r.place)})`:''}`;
+function describeChanges(d){
+  const lines=[
+    ...d.changed.map(c=>`<li><b>${escH(evLabel(c.to))}</b> — ${escH(c.to.athlete_name)}: <s class="text-gray-500">${escH(markLabel(c.from))}</s> → <b>${escH(markLabel(c.to))}</b></li>`),
+    ...d.removed.map(r=>`<li><b>${escH(evLabel(r))}</b> — ${escH(r.athlete_name)}: ${escH(markLabel(r))} <span class="text-red-700">(not in this file — will be removed)</span></li>`)
+  ];
+  const MAX=40;
+  return `<ul class="list-disc ml-5 mt-1 max-h-56 overflow-y-auto">${lines.slice(0,MAX).join('')}</ul>${lines.length>MAX?`<p class="text-gray-600">…and ${lines.length-MAX} more.</p>`:''}`;
+}
+function changesForLog(d){
+  return [...d.changed.map(c=>({event:evLabel(c.to),athlete:c.to.athlete_name,from:markLabel(c.from),to:markLabel(c.to)})),
+          ...d.removed.map(r=>({event:evLabel(r),athlete:r.athlete_name,from:markLabel(r),to:null}))].slice(0,200);
+}
+// Upload history lives in results_uploads (supabase/2026-10-22-results-upload-history.sql). If that table isn't there yet,
+// both of these quietly do nothing — uploads still work.
+async function logUpload(m,row){
+  try{
+    const {error}=await sb.from('results_uploads').insert({meet_id:m.id,...row}); if(error) return null;
+    const {count}=await sb.from('results_uploads').select('id',{count:'exact',head:true}).eq('meet_id',m.id); return count||null;
+  }catch(e){ return null; }
+}
+async function uploadHistory(m){
+  const box=$('rhist-'+m.id); if(!box) return;
+  const {data,error}=await sb.from('results_uploads').select('id,uploaded_at,uploaded_by,file_name,rows_in_file,added,changed,removed,unchanged,confirmed_changes,all_teams').eq('meet_id',m.id).order('uploaded_at',{ascending:false}).limit(50);
+  if(error||!data||!data.length){ box.innerHTML=''; return; }
+  const n=data.length;
+  box.innerHTML=`<details><summary class="cursor-pointer font-semibold">Upload history — ${n} upload${n===1?'':'s'} for this meet (the newest is what's posted)</summary>
+    <ul class="mt-1">${data.map((u,i)=>`<li class="border-t py-1"><b>#${n-i}</b> ${escH(new Date(u.uploaded_at).toLocaleString([], {dateStyle:'medium',timeStyle:'short'}))} — ${escH(u.uploaded_by||'')}${u.file_name?` — ${escH(u.file_name)}`:''}${u.all_teams?'':' (one team only)'}<br>
+      <span class="text-gray-600">${u.rows_in_file} results in the file · ${u.added} new · ${u.changed} changed · ${u.removed} removed · ${u.unchanged} unchanged${(u.changed||u.removed)&&u.confirmed_changes?' · <span class="text-yellow-800">changes confirmed by the uploader</span>':''}</span></li>`).join('')}</ul></details>`;
 }
 
 // Hy-Tek Meet Manager: D records (individual entries) + Q records (relays, up to 8 names per team letter)
