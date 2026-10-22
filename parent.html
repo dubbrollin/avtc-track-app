@@ -124,19 +124,20 @@ async function loadMyAthletes(){
         <div class="text-xs text-gray-500">Submitted ${fmtDate(r.created_at)}</div>
       </div>
       <span class="pill ${pillCls[r.status]||'bg-gray-200'}">${({submitted:'Awaiting team review',reviewed:'Team reviewed — awaiting certification',verified:'Certified',rejected:'Rejected'})[r.status]||r.status}${r.is_late?' · late registration':''}</span>
-      ${r.status!=='rejected'?`<div class="w-full rounded-lg bg-gray-50 border p-2 mt-1" data-fee="${r.id}"></div>`:''}
+      ${r.status!=='rejected'?`<div class="w-full rounded-lg bg-gray-50 border p-2 mt-1" data-fee="${r.id}"></div><div class="w-full hidden" data-bests="${r.id}"></div>`:''}
     </div>`).join('');
   // Team fee for each athlete (card through the team's Stripe, or Zelle / Cash App / Venmo / check)
   myRegs.filter(r=>r.status!=='rejected').forEach(r=>{ const el=document.querySelector(`[data-fee="${r.id}"]`); if(el) window.renderFeeCard(el,{sb,regId:r.id,email:me,compact:true}); });
 }
 
 async function loadMyResults(){
-  const ids=myRegs.filter(r=>r.status==='verified').map(r=>r.id);
+  const ids=myRegs.filter(r=>r.status!=='rejected').map(r=>r.id);
   if(!ids.length){ $('myResults').innerHTML='<p class="text-sm text-gray-500">No results yet.</p>'; return; }
   const {data,error}=await sb.from('results').select('*, meets(name,meet_date)').in('registration_id',ids).order('created_at',{ascending:false});
   if(error){ $('myResults').innerHTML='<p class="text-sm text-red-700">Could not load results: '+error.message+'</p>'; return; }
   const rows=data||[];
   let stds=[]; try{ const {data:sd}=await sb.from('qualifying_standards').select('*'); stds=sd||[]; }catch(e){}
+  renderBests(rows, stds);
   if(!rows.length){ $('myResults').innerHTML='<p class="text-sm text-gray-500">No results posted yet for your athlete(s). A coach adds these after a meet on the Meet Admin page.</p>'; return; }
   const byMeet={};
   rows.forEach(r=>{ const key=r.meets?.name||'Meet'; (byMeet[key] ??= {date:r.meets?.meet_date, rows:[]}).rows.push(r); });
@@ -151,6 +152,36 @@ async function loadMyResults(){
         <td class="py-1 text-right text-xs text-gray-500">${r.place?`${r.place}${['st','nd','rd'][r.place-1]||'th'}`:''}</td>
       </tr>`).join('')}</table>
     </div>`).join('');
+}
+
+// ---- Season bests on the athlete card: every event the athlete has competed in this season with their best mark,
+// where they set it, and how many times they've run it. Reads the posted results, so it refreshes on its own after
+// each meet's results are uploaded. Hidden until the athlete's first result (the team-fee box has the card till then). ----
+function renderBests(rows, stds){
+  const day=d=>d?new Date(String(d).slice(0,10)+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'';
+  myRegs.filter(r=>r.status!=='rejected').forEach(reg=>{
+    const el=document.querySelector(`[data-bests="${reg.id}"]`); if(!el) return;
+    const mine=rows.filter(x=>x.registration_id===reg.id&&x.mark_value!=null&&+x.mark_value>0);
+    if(!mine.length){ el.classList.add('hidden'); el.innerHTML=''; return; }
+    const byEv={};
+    mine.forEach(x=>{ const k=(x.is_relay?'relay:':'')+x.event_code; (byEv[k] ??= {name:x.event_name+(x.is_relay?' (relay)':''), rows:[]}).rows.push(x); });
+    const meetsRun=new Set(mine.map(x=>x.meet_id)).size, lastDate=mine.map(x=>x.meets?.meet_date||'').sort().pop();
+    const evs=Object.values(byEv).map(g=>{
+      const time=g.rows[0].is_time, cmp=(a,b)=>time?+a.mark_value-+b.mark_value:+b.mark_value-+a.mark_value;
+      const sorted=[...g.rows].sort((a,b)=>cmp(a,b)||new Date(b.meets?.meet_date||0)-new Date(a.meets?.meet_date||0));
+      const best=sorted[0]; const first=[...g.rows].sort((a,b)=>new Date(a.meets?.meet_date||0)-new Date(b.meets?.meet_date||0))[0];
+      return {g, best, first, improved: g.rows.length>1&&first.id!==best.id&&cmp(best,first)<0, isNew: best.meets?.meet_date===lastDate&&g.rows.length>1};
+    }).sort((a,b)=>(a.best.is_relay?1:0)-(b.best.is_relay?1:0)||(a.best.is_time?0:1)-(b.best.is_time?0:1)||(+a.best.event_code||0)-(+b.best.event_code||0)||a.g.name.localeCompare(b.g.name));
+    el.classList.remove('hidden');
+    el.innerHTML=`<div class="rounded-lg border p-2" style="background:#f8fafc">
+      <div class="flex flex-wrap items-baseline gap-x-2"><span class="font-bold text-sm">Season bests</span><span class="text-xs text-gray-500">${evs.length} event${evs.length>1?'s':''} · ${meetsRun} meet${meetsRun>1?'s':''} · updates after each meet's results are posted</span></div>
+      <table class="w-full text-sm mt-1"><tr class="text-xs text-gray-500"><th class="text-left font-semibold">Event</th><th class="text-right font-semibold">Best</th><th class="text-right font-semibold hidden sm:table-cell">Where</th><th class="text-right font-semibold">Runs</th></tr>
+      ${evs.map(({g,best,first,improved,isNew})=>{ const s=STD.find(stds||[],best), q=s&&STD.met(best,s);
+        return `<tr class="border-t"><td class="py-1">${esc(g.name)}${isNew?' <span style="display:inline-block;font-size:10px;font-weight:800;border-radius:4px;padding:0 5px;background:#dbeafe;color:#1e40af">NEW BEST</span>':''}</td>
+          <td class="py-1 text-right font-mono whitespace-nowrap"><b>${esc(best.mark)}</b>${best.wind?` <span class="text-xs text-gray-400">w${esc(best.wind)}</span>`:''}${q?' <span title="Met the qualifying standard ('+STD.fmt(s,best)+')" style="display:inline-block;font-size:10px;font-weight:800;border-radius:4px;padding:0 5px;background:#dcfce7;color:#166534">Q</span>':''}${improved?`<span class="block text-xs text-gray-500 font-sans">was ${esc(first.mark)}</span>`:''}</td>
+          <td class="py-1 text-right text-xs text-gray-500 hidden sm:table-cell">${esc(best.meets?.name||'')}${best.meets?.meet_date?' · '+esc(day(best.meets.meet_date)):''}</td>
+          <td class="py-1 text-right text-xs text-gray-500">${g.rows.length}</td></tr>`; }).join('')}</table></div>`;
+  });
 }
 
 async function loadMeets(){
