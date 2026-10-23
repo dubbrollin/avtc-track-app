@@ -77,5 +77,6 @@
     bar.querySelector('[data-demo-switch]').onclick=function(){ leave(location.pathname.split('/').pop()||'home.html'); };   // back to this page's sign-in screen, where the look-around buttons are
     document.body.insertBefore(bar, document.body.firstChild);
   }catch(e){} }
+  window.drawDemoBanner=draw;   // the sign-in widget calls this right after a look-around sign-in, so the banner shows without a reload
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',draw); else draw();
 })();

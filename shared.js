@@ -179,7 +179,8 @@ window.mountLoginWidget = function(sb, container, opts){
     try { localStorage.setItem('vyc_demo_role', d.key); } catch (e) {}   // the banner on every page reads this
     // This page may not be one that role uses (a parent on the Timer page, say): send them to that role's own page.
     const here = (location.pathname.split('/').pop() || 'home.html').toLowerCase();
-    if (!d.pages.includes(here)) location.href = d.home;
+    if (!d.pages.includes(here)) { location.href = d.home; return; }
+    if (window.drawDemoBanner) window.drawDemoBanner(); else location.reload();
   });
 };
 // Any sign-out (page buttons or the banner) ends the look-around view too.
