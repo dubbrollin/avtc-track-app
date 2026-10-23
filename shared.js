@@ -98,6 +98,16 @@ window.hytekRoster = function(rows, cfg){
 // ---- shared login widget: email+password sign-in/sign-up, plus "Continue with Google" ----
 // Replaces the old magic-link (OTP) flow everywhere. Mount into any container element;
 // calls opts.onAuth(session) once signed in (also fires automatically after a Google redirect).
+// ---- "Look around" without an account (2026-10-23): four demo logins on the sample team (AVTC). The database refuses every
+// insert / update / delete from a look-around login (trigger zz_demo_readonly), so they are view-only everywhere. The login
+// details come from the database (RPC look_around_login) so they can be changed without touching the pages.
+window.DEMO_LOGINS = [
+  { key:'coach',     label:'a coach',      home:'coach.html',                  pages:['coach.html','entries.html','team.html','messages.html'] },
+  { key:'teamadmin', label:'a team admin', home:'coach.html?view=roster',      pages:['coach.html','admin.html','entries.html','meets-admin.html','team.html','messages.html'] },
+  { key:'parent',    label:'a parent',     home:'parent.html',                 pages:['parent.html','entries.html','team.html','pay.html'] },
+  { key:'timer',     label:'a timer',      home:'meets-admin.html?view=timer', pages:['meets-admin.html'] } ];
+window.isDemoEmail = e => /@lookaround\.demo$/i.test(e || '');
+
 window.mountLoginWidget = function(sb, container, opts){
   opts = opts || {};
   const hint = opts.hint || "Sign in with your email and password.";
@@ -114,6 +124,11 @@ window.mountLoginWidget = function(sb, container, opts){
       <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.6l6.7-6.7C35.9 2.5 30.4 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.8 6.1C12.2 13.1 17.6 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.6c-.5 3-2.2 5.5-4.7 7.2l7.3 5.7C43.8 37.9 46.5 31.8 46.5 24.5z"/><path fill="#FBBC05" d="M10.4 19.3C9.8 21 9.5 22.9 9.5 24.9s.3 3.9.9 5.6l-7.8 6.1C1 32.9 0 29 0 24.9s1-8 2.6-11.7l7.8 6.1z"/><path fill="#34A853" d="M24 49c6.4 0 11.8-2.1 15.7-5.7l-7.3-5.7c-2 1.4-4.6 2.2-8.4 2.2-6.4 0-11.8-3.6-13.7-8.8l-7.8 6.1C6.5 43.6 14.6 49 24 49z"/></svg>
       Continue with Google
     </button>
+    <div class="mt-3 pt-3 border-t">
+      <p class="text-sm font-semibold">Just reviewing? Look around without an account</p>
+      <p class="text-xs text-gray-500 mb-2">One tap opens the app the way a real user sees it, with a sample team's data. Everything is view-only; changes are turned off until you sign in with your own account.</p>
+      <div class="flex flex-wrap gap-2">${(window.DEMO_LOGINS||[]).map(d=>`<button type="button" class="btn bg-white border text-sm" data-demo="${d.key}">👀 As ${d.label}</button>`).join('')}</div>
+    </div>
     <p id="authMsg" class="text-sm mt-2"></p>`;
   const g = sel => container.querySelector(sel);
   const emailEl = g('#authEmail'), passEl = g('#authPass'), msgEl = g('#authMsg');
@@ -154,7 +169,21 @@ window.mountLoginWidget = function(sb, container, opts){
     const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.href.split('#')[0] } });
     if (error) setMsg(error.message);
   };
+  container.querySelectorAll('[data-demo]').forEach(b => b.onclick = async () => {
+    const d = (window.DEMO_LOGINS || []).find(x => x.key === b.dataset.demo); if (!d) return;
+    setMsg('Opening the look-around view…', true);
+    try {
+      const { data: login, error: e1 } = await sb.rpc('look_around_login', { p_role: d.key }); if (e1) throw e1;
+      const { error } = await sb.auth.signInWithPassword(login); if (error) throw error;
+    } catch (e) { return setMsg("The look-around view isn't available right now: " + (e.message || e)); }
+    try { localStorage.setItem('vyc_demo_role', d.key); } catch (e) {}   // the banner on every page reads this
+    // This page may not be one that role uses (a parent on the Timer page, say): send them to that role's own page.
+    const here = (location.pathname.split('/').pop() || 'home.html').toLowerCase();
+    if (!d.pages.includes(here)) location.href = d.home;
+  });
 };
+// Any sign-out (page buttons or the banner) ends the look-around view too.
+window.endLookAround = async function(sb){ try { localStorage.removeItem('vyc_demo_role'); } catch (e) {} if (window.clearRoleFlags) window.clearRoleFlags(); try { if (sb) await sb.auth.signOut(); } catch (e) {} };
 
 // ---- Live team list & season year (edited on the Site Admin page). The teams above are the fallback; this replaces them in place. ----
 window.leagueReady = (async function(){
@@ -207,7 +236,7 @@ document.addEventListener('DOMContentLoaded',function(){ try{
   if(flag('vyc_admin')) addAfter(null,'admin.html','Site Admin');
 }catch(e){} });
 window.setRoleFlags=function(c){ try{ localStorage.setItem('vyc_admin',(c&&(c.is_admin||c.team_admin))?'1':'0'); localStorage.setItem('vyc_team_admin',(c&&(c.is_admin||c.team_admin))?'1':'0'); localStorage.setItem('vyc_timer',(c&&c.role_type==='timer')?'1':'0'); localStorage.setItem('vyc_coach',(c&&c.role_type!=='timer')?'1':'0'); }catch(e){} };
-window.clearRoleFlags=function(){ try{ ['vyc_admin','vyc_team_admin','vyc_timer','vyc_coach'].forEach(k=>localStorage.removeItem(k)); }catch(e){} };
+window.clearRoleFlags=function(){ try{ ['vyc_admin','vyc_team_admin','vyc_timer','vyc_coach','vyc_demo_role'].forEach(k=>localStorage.removeItem(k)); }catch(e){} };
 
 // ---- "Our schedule" box on the Coach and Parent dashboards (like a team's season calendar on Athletic.net):
 // only the meets the team is at this season — date, where they're going (or home meet), who they're up against, the school

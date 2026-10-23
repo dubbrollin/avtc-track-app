@@ -55,3 +55,27 @@
   });
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',draw); else draw();
 })();
+
+// "Look around" banner (2026-10-23): while a reviewer is in the look-around view (flag vyc_demo_role, set by the sign-in
+// widget in shared.js and cleared by every sign-out), each page says so at the top and offers a way out or a switch of view.
+(function(){
+  function draw(){ try{
+    var k=localStorage.getItem('vyc_demo_role'); if(!k||document.getElementById('demoBanner')) return;
+    var role={coach:'coach',teamadmin:'team admin',parent:'parent',timer:'timer'}[k]||'reviewer';
+    var bar=document.createElement('div'); bar.id='demoBanner';
+    bar.style.cssText='position:sticky;top:0;z-index:60;background:#fef3c7;color:#78350f;border-bottom:1px solid #f59e0b;padding:8px 16px;font:600 14px/1.4 Archivo,system-ui,sans-serif;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;justify-content:center;text-align:center';
+    var btn='style="text-decoration:underline;font:inherit;background:none;border:0;color:inherit;cursor:pointer;padding:0"';
+    bar.innerHTML='<span>👀 You are looking around as a demo <b></b> on the sample team (AVTC). Everything is view-only; changes are turned off.</span>'+
+      '<span><button type="button" data-demo-switch '+btn+'>Switch view</button> · <button type="button" data-demo-exit '+btn+'>Exit look-around</button></span>';
+    bar.querySelector('b').textContent=role;
+    var leave=function(to){
+      var done=function(){ location.href=to; };
+      try{ var sb=(window.supabase&&window.APP_CONFIG)?window.supabase.createClient(window.APP_CONFIG.SUPABASE_URL,window.APP_CONFIG.SUPABASE_ANON_KEY):null;
+        if(window.endLookAround){ window.endLookAround(sb).then(done,done); return; } }catch(e){}
+      try{ localStorage.removeItem('vyc_demo_role'); }catch(e){} done(); };
+    bar.querySelector('[data-demo-exit]').onclick=function(){ leave('home.html'); };
+    bar.querySelector('[data-demo-switch]').onclick=function(){ leave(location.pathname.split('/').pop()||'home.html'); };   // back to this page's sign-in screen, where the look-around buttons are
+    document.body.insertBefore(bar, document.body.firstChild);
+  }catch(e){} }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',draw); else draw();
+})();
