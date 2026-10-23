@@ -286,13 +286,17 @@ window.mountLiveConnect=function(host, ctx){
     await loadMdbReader();
     const reader=new window.MDBReader(window.MDBBuffer.from(await f.arrayBuffer()));
     const tb=window.readMeetManagerTables(reader);
-    if(!tb.events.length||!(tb.entries.length||tb.relays.length)) throw Object.assign(new Error('This file doesn\'t look like a Meet Manager meet database (no events or entries in it). Click the red button again and pick the meet\'s .mdb file.'),{wrongFile:true});
+    // Only a file with no Event table at all is the wrong file. A meet whose roster hasn't been imported yet has events
+    // but no entries — that is a normal state before a race (entries arrive with File › Import), so stay connected and say so.
+    if(!tb.events.length) throw Object.assign(new Error('This file doesn\'t look like a Meet Manager meet database (no events in it). Click the red button again and pick the meet\'s .mdb file.'),{wrongFile:true});
+    const noEntries=!(tb.entries.length||tb.relays.length);
     const map=loadMap(id);
     const {rows,needMap,unmatched}=window.buildRowsFromMeetManager(tb,{regs:getRegs(),eventMap:map,fieldUnit});
     lastSeen.db=f.lastModified+':'+f.size;
     showMap(tb, map, needMap);
     const n=await post(rows,'database');
-    status(`<span class="text-green-800 font-semibold">● Connected to ${esc(f.name)}</span> — ${rows.length} results read, last checked ${new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit',second:'2-digit'})}. ${n?`${n} event(s) updated.`:'No changes.'}${needMap.length?` <b class="text-orange-700">${needMap.length} event type(s) need a name below before they can go live.</b>`:''}${unmatched.length?` <span class="text-gray-500">(${unmatched.length} athletes not matched to a registration — still posted.)</span>`:''}`);
+    const entryNote=noEntries?` <b class="text-orange-700">${tb.events.length} event(s) found but no athletes or entries yet — import the roster in Meet Manager (File › Import) and this page picks it up on its own.</b>`:'';
+    status(`<span class="text-green-800 font-semibold">● Connected to ${esc(f.name)}</span> — ${rows.length} results read, last checked ${new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit',second:'2-digit'})}. ${n?`${n} event(s) updated.`:'No changes.'}${entryNote}${needMap.length?` <b class="text-orange-700">${needMap.length} event type(s) need a name below before they can go live.</b>`:''}${unmatched.length?` <span class="text-gray-500">(${unmatched.length} athletes not matched to a registration — still posted.)</span>`:''}`);
   }
   // Event-type picker: shows every kind of event in the database with our guess; the timer fixes or fills in any that are wrong.
   function showMap(tb, map, needMap){
