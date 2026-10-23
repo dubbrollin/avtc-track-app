@@ -35,6 +35,7 @@ drop policy if exists "uploaders log uploads" on public.results_uploads;
 create policy "uploaders log uploads" on public.results_uploads for insert to authenticated
   with check (public.can_upload_results() and uploaded_by = lower(coalesce(auth.jwt()->>'email','')));
 revoke all on public.results_uploads from anon;
+revoke all on public.results_uploads from authenticated;   -- Supabase's defaults hand out update/delete too; history is add-only
 grant select, insert on public.results_uploads to authenticated;
 
 commit;
