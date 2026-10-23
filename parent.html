@@ -147,7 +147,7 @@ async function loadMyResults(){
       <div class="font-bold text-sm">${esc(name)} <span class="text-gray-500 font-normal">${fmtDate(g.date)}</span></div>
       <table class="w-full text-sm mt-1">${g.rows.map(r=>`<tr class="border-t">
         <td class="py-1">${esc(r.athlete_name)}</td>
-        <td class="py-1">${esc(r.event_name)}</td>
+        <td class="py-1">${esc(r.event_name)}${r.raced_gender?`<div class="text-xs text-gray-500">ran in the ${r.raced_gender==='Mixed'?'mixed':r.raced_gender==='Boy'?'boys':'girls'} race${r.raced_place?`, ${r.raced_place}${['st','nd','rd'][r.raced_place-1]||'th'} overall`:''}</div>`:''}</td>
         <td class="py-1 text-right font-mono">${esc(r.mark)}${r.wind?` <span class="text-xs text-gray-400">w${esc(r.wind)}</span>`:''}${(()=>{ const s=STD.find(stds,r); return s&&STD.met(r,s)?' <span title="Met the qualifying standard ('+STD.fmt(s,r)+')" style="display:inline-block;font-size:10px;font-weight:800;border-radius:4px;padding:0 5px;background:#dcfce7;color:#166534">Q</span>':''; })()}</td>
         <td class="py-1 text-right text-xs text-gray-500">${r.place?`${r.place}${['st','nd','rd'][r.place-1]||'th'}`:''}</td>
       </tr>`).join('')}</table>

@@ -125,7 +125,11 @@ let myIds=new Set(), myNames=[]; // the signed-in parent's own athletes (highlig
 DIVISIONS.forEach(d=>{ $('div').add(new Option(d.name,d.name)); $('mvDiv').add(new Option(d.name,d.name)); });
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 // Results are public, so the page only asks for the columns that are open to everyone (no select('*')).
-const RES_COLS='id,created_at,meet_id,registration_id,athlete_name,gender,division,event_code,event_name,is_relay,relay_runners,round,mark,mark_value,is_time,place,wind,team_code,heat,overall_place';
+const RES_COLS='id,created_at,meet_id,registration_id,athlete_name,gender,division,event_code,event_name,is_relay,relay_runners,round,mark,mark_value,is_time,place,wind,team_code,heat,overall_place,raced_gender,raced_division,raced_place,raced_heat';
+// A result from a race that mixed divisions / boys and girls is filed under the athlete's own division + gender; this says how it was actually run.
+const racedNote=r=>{ if(!r.raced_gender) return ''; const o=n=>n+(['th','st','nd','rd'][(n%100-20)%10]||['th','st','nd','rd'][n%100]||'th');
+  const race=`${r.raced_gender==='Mixed'?'mixed':r.raced_gender==='Boy'?'boys':r.raced_gender==='Girl'?'girls':r.raced_gender}${r.raced_division?' '+r.raced_division:' all-divisions'} race`;
+  return `ran in the ${race}${r.raced_heat?`, heat ${r.raced_heat}`:''}${r.raced_place?`, ${o(r.raced_place)} overall`:''}`; };
 const MEET_COLS='id,name,meet_date,location,status,is_championship,season_year';
 const PARAMS=new URLSearchParams(location.search);
 const MEET_ID=PARAMS.get('meet')||PARAMS.get('live'); // ?live= is the older link on the timers' upload screen — same meet page
@@ -325,12 +329,12 @@ function heatBlocks(rows,meet){
       return heats.map(h=>{
         const hr=rr.filter(r=>(r.heat||0)===h).sort((a,b)=>((a.place>0?a.place:9999)-(b.place>0?b.place:9999))||String(a.athlete_name).localeCompare(String(b.athlete_name)));
         hr.forEach(r=>{ r.q=isQ(r,std); });
-        const title=`${rd==='P'?'Prelims':'Finals'}${h?` — Heat ${h}${nHeats>1?' of '+nHeats:''}`:''}`;
+        const title=`${rd==='P'?'Prelims':'Finals'}${h?` — Heat ${h}${nHeats>1?' of '+nHeats:''}`:hr.some(r=>r.raced_gender)?' — placed by time from a mixed race':''}`;
         pdfGroups.push({division:f.division,gender:f.gender,event:`${f.event_name} — ${title}`,rows:hr,ref:refText({...f,std,rec,lrecs})});
         return `<div class="heatblk"><div class="heathead">${title}</div><table class="w-full text-sm">${hr.map(r=>{
           const badges=[]; r.q=isQ(r,std); if(r.q) badges.push('<span class="bdg bq" title="Met the qualifying standard">Q</span>');
           if(meet&&meet.is_championship&&rec&&r.mark_value!=null&&better(r.is_time,r.mark_value,rec.mark_value)) badges.push('<span class="bdg bcr" title="New conference record — conference records can only be broken at conference championship meets">CR</span>');
-          return `<tr class="border-t${isMine(r)?' mine':''}"><td class="py-1 w-8 text-gray-500">${r.place>0?r.place:''}</td><td class="py-1">${r.athlete_name}${r.team_code?` <span class="text-xs text-gray-400">${r.team_code}</span>`:''}${r.relay_runners?`<div class="text-xs text-gray-500">${r.relay_runners}</div>`:''}</td><td class="py-1 font-mono text-right font-semibold">${r.mark}${r.wind?` <span class="text-xs text-gray-400">w${r.wind}</span>`:''} ${badges.join(' ')}</td></tr>`; }).join('')}</table></div>`;
+          return `<tr class="border-t${isMine(r)?' mine':''}"><td class="py-1 w-8 text-gray-500">${r.place>0?r.place:''}</td><td class="py-1">${r.athlete_name}${r.team_code?` <span class="text-xs text-gray-400">${r.team_code}</span>`:''}${r.relay_runners?`<div class="text-xs text-gray-500">${r.relay_runners}</div>`:''}${r.raced_gender?`<div class="text-xs text-gray-500">${racedNote(r)}</div>`:''}</td><td class="py-1 font-mono text-right font-semibold">${r.mark}${r.wind?` <span class="text-xs text-gray-400">w${r.wind}</span>`:''} ${badges.join(' ')}</td></tr>`; }).join('')}</table></div>`;
       }).join('');
     }).join('');
     return `<div class="bg-white rounded-xl shadow p-3 mb-3"><div class="font-bold">${label}</div>${ref?`<div class="text-xs text-gray-500 mt-0.5">${ref}</div>`:''}${body}</div>`;

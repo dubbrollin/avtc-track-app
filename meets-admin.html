@@ -456,7 +456,7 @@ async function resultsPanel(m){
 async function postedResults(meetId){
   const all=[];
   for(let f=0;;f+=1000){
-    const {data,error}=await sb.from('results').select('id,athlete_name,gender,division,team_code,event_code,event_name,is_relay,relay_runners,round,mark,place,heat,source').eq('meet_id',meetId).order('id').range(f,f+999);
+    const {data,error}=await sb.from('results').select('id,athlete_name,gender,division,team_code,event_code,event_name,is_relay,relay_runners,round,mark,place,heat,source,raced_gender,raced_division,raced_place').eq('meet_id',meetId).order('id').range(f,f+999);
     if(error) throw error; all.push(...(data||[])); if(!data||data.length<1000) break;
   }
   return all;
@@ -464,7 +464,10 @@ async function postedResults(meetId){
 // Only the events in the file count (that's all an upload replaces); with a one-team file only that team's rows in those events.
 // Hand-typed results are never touched by an upload, so they're left out of the comparison too.
 function diffUpload(posted, rows, allTeams){
-  const gk=r=>[r.event_code,r.is_relay?1:0,r.division||'',r.gender,r.round||'F'].join('|')+(allTeams?'':'|'+(r.team_code||''));
+  // Posted rows from a mixed race were re-filed under the athlete's division + gender; compare by how they were uploaded.
+  const asRun=r=>r.raced_gender?{...r,gender:r.raced_gender,division:r.raced_division||null,place:r.raced_place}:r;
+  posted=posted.map(asRun);
+  const gk=r=>[r.event_code,r.is_relay?1:0,(r.division==='ALL'?'':r.division)||'',r.gender,r.round||'F'].join('|')+(allTeams?'':'|'+(r.team_code||''));
   const ak=r=>gk(r)+'|'+String(r.athlete_name||'').toLowerCase().replace(/[^a-z0-9]/g,'');
   const affected=new Set(rows.map(gk));
   const old=posted.filter(r=>r.source!=='manual'&&affected.has(gk(r)));
