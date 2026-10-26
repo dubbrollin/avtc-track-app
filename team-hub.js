@@ -478,6 +478,8 @@ TeamHub.mountTeamPage=async function(root, ctx){
     sb.from('league_teams').select('code,name,conference,home_venue,home_address').eq('code',team).maybeSingle(),
     sb.rpc('team_has_extras',{t:team})]);
   const page=p||{team_code:team}, extras=!!ex, mgr=ctx.role==='admin', me=ctx.email||null;
+  // Every team has a public page (hero + name) that anyone can open. Its content (news, about, coaches, contact, photos, store) and all team communication is the paid team extra; without it the page stays blank and coaches/parents keep only the league workflow: their dashboard cards and meet volunteering.
+  const locked=!extras&&!mgr;
   let tab=ctx.tab||'home';
   const link=(href,txt)=>`<a class="underline" style="color:var(--act)" target="_blank" rel="noopener" href="${esc(href)}">${esc(txt)}</a>`;
   const contact=[page.contact_name&&`<div><b>${esc(page.contact_name)}</b></div>`, page.contact_email&&`<div><a class="underline" style="color:var(--act)" href="mailto:${esc(page.contact_email)}">${esc(page.contact_email)}</a></div>`, page.contact_phone&&`<div><a class="underline" style="color:var(--act)" href="tel:${esc(page.contact_phone)}">${esc(page.contact_phone)}</a></div>`,
@@ -488,10 +490,10 @@ TeamHub.mountTeamPage=async function(root, ctx){
   const homeField=hv?`<div><b>${esc(lt.home_venue||'')}</b></div>${lt.home_address?`<div>${link('https://www.google.com/maps/search/?api=1&query='+encodeURIComponent([lt.home_venue,lt.home_address].filter(Boolean).join(', ')),lt.home_address)}</div>`:''}`:'<span class="text-gray-500">The league hasn\'t listed this team\'s home field yet.</span>';
   const roleWord=ctx.role==='admin'?'team admin':ctx.role==='coach'?'coach':ctx.role==='parent'?'parent':null;
   const sw=(ctx.teams||[]).length>1?`<div class="sw">${ctx.teams.map(c=>`<button data-sw="${esc(c)}" class="${c===team?'on':''}">${esc(TEAM(c))}</button>`).join('')}</div>`:'';
-  root.innerHTML=`${sw}<div class="hero"><div class="banner" ${page.banner_path?`style="background-image:url('${esc(publicUrl(sb,page.banner_path))}')"`:''}></div>
+  root.innerHTML=`${sw}${mgr&&!extras?`<div class="note warn" style="margin-bottom:10px"><span class="pill warn">Paid team extra</span> The team page isn't switched on for ${esc(t.name)}, so coaches and parents don't see it. You see it so you can set it up. The league site admin switches it on (Site Admin → Paid Extras).</div>`:''}${`<div class="hero"><div class="banner" ${page.banner_path?`style="background-image:url('${esc(publicUrl(sb,page.banner_path))}')"`:''}></div>
     <div class="body"><div class="logo">${page.logo_path?`<img src="${esc(publicUrl(sb,page.logo_path))}" alt="">`:esc(team)}</div>
       <div style="flex:1;min-width:14rem"><div class="text-xs text-gray-500">${t.conference?esc(t.conference)+'ern Conference · ':''}Valley Youth Conference${roleWord?` · <b>your team</b> (${roleWord})`:''}</div><h1>${esc(t.name)}</h1><p class="text-gray-700">${esc(page.tagline||'')}</p></div>
-      <div class="btns">${ctx.showRegister!==false&&!me?'<a href="index.html" style="background:var(--act);color:#fff">Register with this team</a>':''}${mgr?'<button type="button" data-th="edit" style="background:#eef1f5">Edit team page</button>':''}</div></div></div>
+      <div class="btns">${ctx.showRegister!==false&&!me?'<a href="index.html" style="background:var(--act);color:#fff">Register with this team</a>':''}${mgr?'<button type="button" data-th="edit" style="background:#eef1f5">Edit team page</button>':''}</div></div></div>`}
     ${ctx.showWhoami&&me?`<p class="text-xs text-gray-500 mb-2">Signed in as ${esc(me)}${roleWord?'':' · not on this team'} · <button type="button" class="underline" data-th="signout">Sign out</button></p>`:''}
     <div class="tabs"><button class="tab" data-tab="home">Home</button><button class="tab ${extras||mgr?'':'hidden'}" data-tab="photos">Photos</button><button class="tab ${(extras||mgr)&&(mgr||page.store_open)?'':'hidden'}" data-tab="store">Store</button><button class="tab" data-tab="volunteers">Volunteers</button></div>
     <div data-pane="home"></div>
@@ -504,14 +506,14 @@ TeamHub.mountTeamPage=async function(root, ctx){
   if(ctx.homeEl){ home.remove(); }
   else{
     const card=(title,inner,extra)=>`<div class="pcard ${extra||''}"><h2>${title}</h2>${inner}</div>`;
-    home.innerHTML=`<div class="two"><div data-th="left">${card('Team news','<div data-th="posts"><p class="text-sm text-gray-500">Loading…</p></div>')}${page.about?card('About the team',`<div class="text-sm pre">${esc(page.about)}</div>`):''}${page.practice_info?card('Practice',`<div class="text-sm pre">${esc(page.practice_info)}</div>`):''}</div>
-      <div data-th="right">${card('Our schedule','<div data-th="schedule" class="text-sm schedScroll"><p class="text-sm text-gray-500">Loading…</p></div>')}${me&&ctx.role?card('Volunteering','<div data-th="volsum" class="text-sm"></div>'):''}${card('Coaches','<div data-th="coaches" class="text-sm"></div>')}${card('Contact',`<div class="text-sm">${contact||'<span class="text-gray-500">Not posted yet.</span>'}</div>`)}${card('Home field',`<div class="text-sm">${homeField}</div>`)}</div></div>`;
+    home.innerHTML=`<div class="two"><div data-th="left">${locked&&!(ctx.slots&&(ctx.slots.left||ctx.slots.right))?card('Team page','<p class="text-sm text-gray-500">This team has not set up its team page yet.</p>'):''}${locked?'':card('Team news','<div data-th="posts"><p class="text-sm text-gray-500">Loading…</p></div>')}${!locked&&page.about?card('About the team',`<div class="text-sm pre">${esc(page.about)}</div>`):''}${!locked&&page.practice_info?card('Practice',`<div class="text-sm pre">${esc(page.practice_info)}</div>`):''}</div>
+      <div data-th="right">${locked?'':card('Our schedule','<div data-th="schedule" class="text-sm schedScroll"><p class="text-sm text-gray-500">Loading…</p></div>')}${me&&ctx.role?card('Volunteering','<div data-th="volsum" class="text-sm"></div>'):''}${locked?'':card('Coaches','<div data-th="coaches" class="text-sm"></div>')+card('Contact',`<div class="text-sm">${contact||'<span class="text-gray-500">Not posted yet.</span>'}</div>`)+card('Home field',`<div class="text-sm">${homeField}</div>`)}</div></div>`;
     (slots.left||[]).slice().reverse().forEach(el=>{ if(el){ g('left').prepend(el); } });
     (slots.right||[]).slice().reverse().forEach(el=>{ if(el){ g('right').prepend(el); } });
-    TeamHub.mountPosts(g('posts'),{sb,team,role:ctx.role});
-    window.mountTeamSchedule(g('schedule'),{sb,teams:[team]});
+    if(g('posts')) TeamHub.mountPosts(g('posts'),{sb,team,role:ctx.role});
+    if(g('schedule')) window.mountTeamSchedule(g('schedule'),{sb,teams:[team]});
     if(g('volsum')) TeamHub.mountVolunteerSummary(g('volsum'),{sb,teams:[{code:team,role:ctx.parentView?'parent':ctx.role}],email:me,here:true});
-    try{ const {data:cs}=await sb.rpc('team_page_coaches',{p_team:team}); const roleL=c=>c.team_admin?(c.admin_title||'Team admin'):c.role_type==='head_coach'?'Head Coach':c.role_type==='division_coach'?'Division Coach'+(c.division_or_age_group?' — '+c.division_or_age_group:''):c.role_type==='event_specialist'?'Event Coach':(c.admin_title||'Team staff');
+    if(g('coaches')) try{ const {data:cs}=await sb.rpc('team_page_coaches',{p_team:team}); const roleL=c=>c.team_admin?(c.admin_title||'Team admin'):c.role_type==='head_coach'?'Head Coach':c.role_type==='division_coach'?'Division Coach'+(c.division_or_age_group?' — '+c.division_or_age_group:''):c.role_type==='event_specialist'?'Event Coach':(c.admin_title||'Team staff');
       g('coaches').innerHTML=(cs||[]).length?cs.map(c=>`<div class="py-1 border-t first:border-t-0"><b>${esc(c.first_name||'')} ${esc(c.last_name||'')}</b> <span class="text-gray-500">· ${esc(roleL(c))}</span></div>`).join(''):'<span class="text-gray-500">No approved coaches listed yet.</span>'; }catch(e){ g('coaches').innerHTML=''; }
   }
   const login=el=>{ el.classList.remove('hidden'); if(!el.dataset.ready){ el.dataset.ready='1'; window.mountLoginWidget(sb,el,{hint:'Sign in with the email you registered with (parents) or your coach login.'}); } };

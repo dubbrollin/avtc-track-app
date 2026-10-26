@@ -411,11 +411,11 @@ async function load(){
   window.mountLockoutNotice($('lockBanner'),{sb,teams:[myCoach&&myCoach.team_code]});
   // The dashboard wears the team page: hero + Home / Photos / Store / Volunteers tabs; Home = this dashboard.
   if(myCoach&&myCoach.team_code&&!$('dashView').classList.contains('hidden')){ const q=new URLSearchParams(location.search), role=fullAccess?'admin':'coach';
-    window.TeamHub.mountTeamPage($('teamHub'),{sb,team:myCoach.team_code,email:myCoach.email,uid:user&&user.id,role,siteAdmin:!!myCoach.is_admin,name:[myCoach.first_name,myCoach.last_name].filter(Boolean).join(' '),phone:myCoach.phone||'',athletes:[],
+    const th=await window.TeamHub.mountTeamPage($('teamHub'),{sb,team:myCoach.team_code,email:myCoach.email,uid:user&&user.id,role,siteAdmin:!!myCoach.is_admin,name:[myCoach.first_name,myCoach.last_name].filter(Boolean).join(' '),phone:myCoach.phone||'',athletes:[],
       homeEl:$('dashHome'),tab:q.get('tab'),meet:q.get('meet'),showRegister:false,
       onTab:t=>{ const u=new URL(location.href); if(t==='home'){ u.searchParams.delete('tab'); u.searchParams.delete('meet'); } else u.searchParams.set('tab',t); history.replaceState(null,'',u); },
       onMeet:id=>{ const u=new URL(location.href); u.searchParams.set('meet',id); history.replaceState(null,'',u); }});
-    window.TeamHub.mountPosts($('teamNews'),{sb,team:myCoach.team_code,role});
+    if(th&&(th.extras||role==='admin')) window.TeamHub.mountPosts($('teamNews'),{sb,team:myCoach.team_code,role}); else $('teamNews').innerHTML='';
     window.TeamHub.mountVolunteerSummary($('volSummary'),{sb,teams:[{code:myCoach.team_code,role}],email:myCoach.email,volUrl:m=>`coach.html?tab=volunteers&meet=${m.id}`}); }
   const pending=rows.filter(r=>r.dob_check_status==='pending');
   if(fullAccess && pending.length) runChecks(pending);
