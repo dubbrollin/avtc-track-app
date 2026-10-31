@@ -18,9 +18,10 @@
 <script src="events.js"></script>
 <script src="pdf.js"></script>
 <style>
-  /* Coach dashboard sections: roster on the left in its own scroll box, meet tools on the right; on phones they stack. Only the roster box scrolls. */
-  .dash2{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-items:start}
-  @media(min-width:900px){ .dash2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)} }
+  /* Coach dashboard sections: on a wide screen the cards flow into two balanced columns (roster and who's-coming first, then the
+     meet tools), so neither side is left with a big empty space; on phones they stack in that same order. Only the roster box scrolls. */
+  .dash2{display:block}
+  @media(min-width:900px){ .dash2{columns:2;column-gap:16px} .dash2 .card{break-inside:avoid;-webkit-column-break-inside:avoid;page-break-inside:avoid} .dash2>div{display:block} }
   .schedScroll{max-height:460px;overflow-y:auto;padding-right:4px}
   .rosterScroll{max-height:52vh;overflow-y:auto;padding-right:6px;border:1px solid #e5e7eb;border-radius:8px;padding:8px}
   @media(min-width:900px){ .rosterScroll{max-height:calc(100vh - 250px);min-height:260px} }
