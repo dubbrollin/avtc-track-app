@@ -35,7 +35,19 @@ const CSS=`<style id="tmStyle">
 .tm .tm-m.coach .b{border-left:3px solid var(--act,#1764c8)}
 .tm .tm-m.mine .b{background:var(--act,#1764c8);color:#fff;border-color:var(--act,#1764c8)}.tm .tm-m.mine .b a{color:#fff}
 .tm .tm-m .b a{text-decoration:underline}.tm .tm-m.gone .b{background:transparent;border-style:dashed;color:#8794a6;font-style:italic}
-.tm .tm-m .del{font-size:11px;color:#8794a6;margin:0 4px;cursor:pointer;background:none;border:0}.tm .tm-m .del:hover{color:#b42318}
+.tm .tm-m .who .tm-acts{display:inline-flex;gap:0;vertical-align:middle;margin:0 2px;opacity:0;transition:opacity .15s}.tm .tm-m:hover .tm-acts,.tm.tm-narrow .tm-m .who .tm-acts,.tm .tm-m.open .tm-acts{opacity:1}
+.tm .tm-act{border:0;background:none;cursor:pointer;font-size:13px;line-height:1;padding:2px 5px;border-radius:6px;color:#5b6878}.tm .tm-act:hover{background:#e5e7eb;color:inherit}
+.tm .tm-q{display:block;font-size:12px;line-height:1.3;border-left:3px solid var(--act,#1764c8);background:rgba(0,0,0,.06);padding:4px 8px;border-radius:6px;margin-bottom:5px;cursor:pointer;white-space:normal;overflow:hidden;text-overflow:ellipsis;max-height:3.9em}
+.tm .tm-m.mine .tm-q{background:rgba(255,255,255,.2);border-color:#fff}.tm .tm-q b{display:block;font-size:11px;opacity:.85}
+.tm .tm-rx{display:flex;flex-wrap:wrap;gap:4px;margin:3px 4px 0}.tm .tm-m.mine .tm-rx{justify-content:flex-end}
+.tm .tm-rx button{border:1px solid var(--line,#e1e7ef);background:#fff;border-radius:999px;font-size:12px;line-height:1.3;padding:2px 8px;cursor:pointer;color:inherit}.tm .tm-rx button.me{border-color:var(--act,#1764c8);background:var(--act-soft,#e6f0fc)}
+.tm .tm-seen{display:flex;justify-content:flex-end;gap:3px;margin:-3px 4px 8px;align-items:center}
+.tm .tm-av{width:18px;height:18px;border-radius:50%;background:#5b6878;color:#fff;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;border:1.5px solid #fff;box-shadow:0 0 0 1px #cfd7e2;cursor:default}.tm .tm-av.more{background:#e5e7eb;color:#334155}
+.tm .tm-m.flash .b{box-shadow:0 0 0 3px #fde68a}
+.tm .tm-pop{position:fixed;z-index:9997;background:#fff;border:1px solid var(--line,#e1e7ef);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:4px}
+.tm .tm-pop.emo{display:flex;flex-wrap:wrap;gap:0;max-width:19.5rem}.tm .tm-pop.emo button{font-size:22px;line-height:1;border:0;background:none;cursor:pointer;padding:6px 6px;border-radius:8px}.tm .tm-pop.emo button:hover{background:#eef1f5}.tm .tm-pop.emo button.plus{font-size:16px;color:#5b6878;align-self:center}
+.tm .tm-pop.menu{min-width:9rem}.tm .tm-pop.menu button{display:block;width:100%;text-align:left;border:0;background:none;padding:8px 12px;font-size:14px;cursor:pointer;border-radius:8px;color:inherit}.tm .tm-pop.menu button:hover{background:#eef1f5}.tm .tm-pop.menu button.bad{color:#b42318}
+.tm .tm-replying{display:flex;align-items:center;gap:8px;padding:6px 8px 0;background:#fff;font-size:12px}.tm .tm-replying:empty{display:none}.tm .tm-replying .tm-q{flex:1;margin:0;cursor:default}.tm .tm-replying button{border:0;background:none;cursor:pointer;color:#b42318;font-weight:700}
 .tm .tm-atts{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}.tm .tm-m.mine .tm-atts{justify-content:flex-end}
 .tm .tm-atts img,.tm .tm-gal img{width:9.5rem;height:9.5rem;object-fit:cover;border-radius:10px;border:1px solid var(--line,#e1e7ef);background:#fff;cursor:zoom-in}
 .tm .tm-file{display:inline-flex;align-items:center;gap:.4rem;background:#fff;border:1px solid var(--line,#e1e7ef);border-radius:10px;padding:.4rem .6rem;font-size:.85rem;text-decoration:none;color:inherit;max-width:16rem}
@@ -78,6 +90,7 @@ const HTML=`
         <button data-tm="editBtn" class="tm-sbtn tm-lite tm-hide">Edit</button>
       </div>
       <div data-tm="msgs" class="tm-msgs"><p class="text-sm text-gray-500">Pick a chat on the left to read its messages.</p></div>
+      <div data-tm="replying" class="tm-replying"></div>
       <div data-tm="pending" class="tm-pending"></div>
       <div data-tm="composer" class="tm-composer tm-hide">
         <button data-tm="attach" type="button" class="tm-attach" title="Add photos or files" aria-label="Add photos or files">📎</button>
@@ -107,6 +120,7 @@ window.mountMessenger=async function(root, opts){
   const $=k=>root.querySelector(`[data-tm="${k}"]`), hide=(k,h)=>$(k).classList.toggle('tm-hide',!!h);
   const alive=()=>root.__tm===S&&document.body.contains(root);
   let uid=null, email=null, myTeams=[], team=null, mgr=false, chans=[], cur=null, msgs=[], files=[], urls={}, lim=200, hist=[], histLim=100, histQ='';
+  let rx=[], seenBy=[], quoted={}, replyTo=null;   // reactions and "seen by" for the open chat; quoted = older messages a reply points at; replyTo = the message I'm replying to
   // One column (list, then the chat) whenever the panel itself is narrow — a phone, or a slim dashboard column.
   const narrow=()=>(root.clientWidth||window.innerWidth)<700, fit=()=>{ root.classList.toggle('tm-narrow',narrow()); if(!narrow()&&!cur&&chans.length&&!$('main').classList.contains('tm-hide')) openChannel(latest().id); };
   try{ new ResizeObserver(()=>{ if(alive()) fit(); }).observe(root); }catch(e){ window.addEventListener('resize',fit); }
@@ -169,7 +183,7 @@ window.mountMessenger=async function(root, opts){
   async function openChannel(id,quiet){
     if(id===ALL) return openHistory();
     cur=id; lim=200; const c=chans.find(x=>x.id===id); if(!c) return;
-    files=[]; drawPending();
+    files=[]; drawPending(); setReply(null); closePop();
     $('shell').classList.add('open');
     root.querySelectorAll('.tm-chan').forEach(b=>b.classList.toggle('sel',b.dataset.ch===id));
     $('chName').textContent=c.name;
@@ -200,21 +214,61 @@ window.mountMessenger=async function(root, opts){
     if(id!==cur) return;
     if(error){ $('msgs').innerHTML=`<p class="text-sm text-red-700">${esc(clean(error))}</p>`; return; }
     const more=(data||[]).length>=lim, next=(data||[]).reverse(), box=$('msgs');
-    const sig=l=>l.map(m=>m.id+(m.deleted_at?'x':'')).join(','); const changed=sig(next)!==sig(msgs)||jump; msgs=next;
+    // Reactions and "seen by" come with the messages; a reply may quote a message older than the ones loaded, so fetch those too.
+    const ids=next.map(m=>m.id), have=new Set(ids), need=[...new Set(next.map(m=>m.reply_to).filter(r=>r&&!have.has(r)&&!quoted[r]))];
+    const [r1,r2,r3]=await Promise.all([
+      ids.length?sb.from('msg_reactions').select('message_id,user_id,name,emoji').in('message_id',ids):Promise.resolve({data:[]}),
+      sb.rpc('msg_seen',{p_channel:id}),
+      need.length?sb.from('msg_messages').select('id,sender_name,body,attachments,deleted_at').in('id',need):Promise.resolve({data:[]})]);
+    if(id!==cur) return;
+    (r3.data||[]).forEach(m=>quoted[m.id]=m);
+    const nrx=r1.data||[], nseen=r2.data||[];
+    // Redraw only when something on screen would change: the messages, a reaction, or who has read what.
+    const sig=next.map(m=>m.id+(m.deleted_at?'x':'')).join(',')+'|'+nrx.map(x=>x.message_id+x.user_id+x.emoji).sort().join(',')+'|'+nseen.map(s=>s.user_id+s.last_read_at).sort().join(',');
+    const changed=sig!==loadMessages.sig||jump; loadMessages.sig=sig; msgs=next; rx=nrx; seenBy=nseen;
     if(!changed) return;
     await signAll(msgs); if(id!==cur) return;
     const nearEnd=box.scrollHeight-box.scrollTop-box.clientHeight<120, c=chans.find(x=>x.id===id)||{};
+    // Who has read up to which message: each reader's avatar sits under the last message they had seen.
+    const seenAt={}; seenBy.forEach(s=>{ let last=null; const at=new Date(s.last_read_at); for(const m of msgs){ if(new Date(m.created_at)<=at) last=m.id; else break; } if(last) (seenAt[last]=seenAt[last]||[]).push(s); });
+    const initials=n=>String(n||'?').split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase();
+    const seenHtml=id=>{ const L=seenAt[id]; if(!L||!L.length) return ''; const show=L.slice(0,6), rest=L.length-show.length;
+      return `<div class="tm-seen" title="Seen by ${esc(L.map(s=>s.name).join(', '))}">${show.map(s=>`<span class="tm-av" title="${esc(s.name)}">${esc(initials(s.name))}</span>`).join('')}${rest>0?`<span class="tm-av more">+${rest}</span>`:''}</div>`; };
+    const rxHtml=m=>{ const L=rx.filter(x=>x.message_id===m.id); if(!L.length) return ''; const g={}; L.forEach(x=>{ (g[x.emoji]=g[x.emoji]||{n:0,me:false,who:[]}); g[x.emoji].n++; g[x.emoji].who.push(x.user_id===uid?'You':x.name); if(x.user_id===uid) g[x.emoji].me=true; });
+      return `<div class="tm-rx">${Object.entries(g).map(([e,v])=>`<button type="button" data-rxt="${m.id}" data-e="${esc(e)}" class="${v.me?'me':''}" title="${esc(v.who.join(', '))}">${esc(e)} ${v.n}</button>`).join('')}</div>`; };
+    const quoteHtml=m=>{ if(!m.reply_to) return ''; const q=msgs.find(x=>x.id===m.reply_to)||quoted[m.reply_to]; if(!q) return `<span class="tm-q"><b>Reply</b>…</span>`;
+      const body=q.deleted_at?'Message removed':(q.body||((q.attachments||[]).length?'📎 photo or file':''));
+      return `<span class="tm-q" data-jump="${q.id}"><b>${q.deleted_at?'':esc(q.sender_name)}</b>${esc(body.slice(0,160))}</span>`; };
     let day='';
     box.innerHTML=(more?`<p class="text-center mb-2"><button class="tm-sbtn tm-lite" data-older>Show earlier messages</button></p>`:msgs.length?`<p class="tm-day">Start of this chat</p>`:'')+msgs.map(m=>{ const d=new Date(m.created_at), dk=d.toDateString(), mine=m.sender_id===uid, att=m.attachments||[];
       const head=dk!==day?`<div class="tm-day">${d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</div>`:''; day=dk;
-      const t=d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-      return head+`<div class="tm-m ${mine?'mine':''} ${m.sender_role==='coach'?'coach':''} ${m.deleted_at?'gone':''}">
-        <div class="who">${mine?'You':`<b>${esc(m.sender_name)}</b>${m.sender_label?' · '+esc(m.sender_label):''}`} · ${t}${!m.deleted_at&&(mine||c.can_manage)?` <button class="del" data-del="${m.id}">remove</button>`:''}</div>
-        ${m.deleted_at?'<div class="b">Message removed</div>':(m.body?`<div class="b">${linkify(m.body)}</div>`:'')+(att.length?`<div class="tm-atts">${att.map(attHtml).join('')}</div>`:'')}</div>`; }).join('')
+      const t=d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}), qh=m.deleted_at?'':quoteHtml(m);
+      const acts=m.deleted_at?'':`<span class="tm-acts">${c.archived?'':`<button type="button" class="tm-act" data-rx="${m.id}" title="React" aria-label="React">☺</button>`}<button type="button" class="tm-act" data-menu="${m.id}" title="More" aria-label="More">⋯</button></span>`;
+      return head+`<div class="tm-m ${mine?'mine':''} ${m.sender_role==='coach'?'coach':''} ${m.deleted_at?'gone':''}" data-mid="${m.id}">
+        <div class="who">${mine?'You':`<b>${esc(m.sender_name)}</b>${m.sender_label?' · '+esc(m.sender_label):''}`} · ${t}${acts}</div>
+        ${m.deleted_at?'<div class="b">Message removed</div>':((m.body||qh)?`<div class="b">${qh}${linkify(m.body)}</div>`:'')+(att.length?`<div class="tm-atts">${att.map(attHtml).join('')}</div>`:'')}${m.deleted_at?'':rxHtml(m)}${seenHtml(m.id)}</div>`; }).join('')
       || `<p class="text-sm text-gray-500">No messages yet.${c.can_post?' Say hello 👋':''}</p>`;
     if(jump||nearEnd){ box.scrollTop=box.scrollHeight; box.querySelectorAll('img').forEach(i=>i.addEventListener('load',()=>{ box.scrollTop=box.scrollHeight; },{once:true})); }
     markSeen();
   }
+
+  /* ---------- reactions, reply, and the little per-message menu (Team App style) ---------- */
+  const QUICK=['👍','❤️','🙏','😂','😮','🎉'], MORE=['👏','🔥','💪','🏃','🥇','✅','😢','🤔','🙌','👀','🎂','⭐'];
+  let pop=null;
+  function closePop(){ if(pop){ pop.remove(); pop=null; } root.querySelectorAll('.tm-m.open').forEach(x=>x.classList.remove('open')); }
+  function openPop(anchor, cls, html){ closePop(); pop=document.createElement('div'); pop.className='tm-pop '+cls; pop.innerHTML=html; root.appendChild(pop);
+    const r=anchor.getBoundingClientRect(), w=pop.offsetWidth, h=pop.offsetHeight;
+    let x=Math.min(Math.max(8,r.left), window.innerWidth-w-8), y=r.bottom+4; if(y+h>window.innerHeight-8) y=Math.max(8,r.top-h-4);
+    pop.style.left=x+'px'; pop.style.top=y+'px'; const m=anchor.closest('.tm-m'); if(m) m.classList.add('open'); return pop; }
+  document.addEventListener('mousedown',e=>{ if(pop&&!pop.contains(e.target)&&!e.target.closest('[data-rx],[data-menu]')) closePop(); });
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closePop(); } });
+  $('msgs').addEventListener('scroll',closePop);
+  async function react(mid,emoji){ closePop(); const {error}=await sb.rpc('msg_react',{p_message:mid,p_emoji:emoji}); if(error){ toast(clean(error),true); return; } loadMessages(); }
+  function setReply(m){ replyTo=m||null; const box=$('replying'); if(!m){ box.innerHTML=''; return; }
+    box.innerHTML=`<span class="tm-q"><b>Replying to ${esc(m.sender_id===uid?'yourself':m.sender_name)}</b>${esc((m.body||'📎 photo or file').slice(0,160))}</span><button type="button" data-noreply aria-label="Cancel reply">✕</button>`;
+    box.querySelector('[data-noreply]').onclick=()=>setReply(null); $('body').focus(); }
+  function jumpTo(mid){ const el=$('msgs').querySelector(`[data-mid="${mid}"]`); if(!el){ toast('That message is further up — tap "Show earlier messages".'); return; }
+    el.scrollIntoView({block:'center',behavior:'smooth'}); el.classList.add('flash'); setTimeout(()=>el.classList.remove('flash'),1500); }
   // A chat only counts as READ once its messages are actually on the person's screen — opening the dashboard with the
   // chat scrolled out of view (or the tab in the background) must not clear the "new messages" notice.
   let onScreen=false; const seen=new Set();
@@ -225,10 +279,20 @@ window.mountMessenger=async function(root, opts){
   $('msgs').onclick=async e=>{
     if(e.target.closest('[data-older]')){ if(cur===ALL){ histLim+=100; return drawHistory(); } const box=$('msgs'), h=box.scrollHeight; lim+=200; await loadMessages(true); box.scrollTop=box.scrollHeight-h; return; }
     const go=!e.target.closest('a')&&e.target.closest('[data-go]'); if(go) return openChannel(go.dataset.go);
-    const b=e.target.closest('[data-del]'); if(!b) return; if(!confirm('Remove this message for everyone?')) return;
-    const m=msgs.find(x=>x.id===b.dataset.del), paths=((m&&m.attachments)||[]).map(a=>a.path);
-    if(paths.length){ try{ await sb.storage.from(BUCKET).remove(paths); }catch(e){} }
-    const {error}=await sb.rpc('msg_delete',{p_message:b.dataset.del}); if(error){ toast(clean(error),true); return; } loadMessages(); };
+    const jp=e.target.closest('[data-jump]'); if(jp) return jumpTo(jp.dataset.jump);
+    const rt=e.target.closest('[data-rxt]'); if(rt) return react(rt.dataset.rxt, rt.dataset.e);   // tap a reaction chip to add or take back that emoji
+    const rb=e.target.closest('[data-rx]'); if(rb){ if(pop&&pop.dataset.for==='rx'+rb.dataset.rx) return closePop();
+      const p=openPop(rb,'emo',QUICK.map(x=>`<button type="button" data-e="${x}">${x}</button>`).join('')+`<button type="button" class="plus" data-more title="More">＋</button>`); p.dataset.for='rx'+rb.dataset.rx;
+      p.onclick=ev=>{ const b=ev.target.closest('button'); if(!b) return; if(b.hasAttribute('data-more')){ b.outerHTML=MORE.map(x=>`<button type="button" data-e="${x}">${x}</button>`).join(''); return; } react(rb.dataset.rx,b.dataset.e); }; return; }
+    const mb=e.target.closest('[data-menu]'); if(mb){ if(pop&&pop.dataset.for==='mn'+mb.dataset.menu) return closePop();
+      const m=msgs.find(x=>x.id===mb.dataset.menu), c=chans.find(x=>x.id===cur)||{}; if(!m) return;
+      const p=openPop(mb,'menu',(c.can_post?`<button type="button" data-act="reply">↩ Reply</button>`:'')+(m.body?`<button type="button" data-act="copy">⎘ Copy</button>`:'')+((m.sender_id===uid||c.can_manage)?`<button type="button" class="bad" data-act="del">🗑 Remove</button>`:'')); p.dataset.for='mn'+mb.dataset.menu;
+      p.onclick=async ev=>{ const b=ev.target.closest('[data-act]'); if(!b) return; closePop();
+        if(b.dataset.act==='reply') return setReply(m);
+        if(b.dataset.act==='copy'){ try{ await navigator.clipboard.writeText(m.body); toast('Copied'); }catch(e){ toast('Could not copy on this device',true); } return; }
+        if(!confirm('Remove this message for everyone?')) return;
+        const paths=(m.attachments||[]).map(a=>a.path); if(paths.length){ try{ await sb.storage.from(BUCKET).remove(paths); }catch(e){} }
+        const {error}=await sb.rpc('msg_delete',{p_message:m.id}); if(error){ toast(clean(error),true); return; } loadMessages(); }; return; } };
 
   /* ---------- All messages: one history of everything sent in my chats, newest first ---------- */
   async function openHistory(){
@@ -289,8 +353,9 @@ window.mountMessenger=async function(root, opts){
       for(const f of files){ const path=`${ch}/${crypto.randomUUID()}-${f.name.replace(/[^\w.\-]+/g,'_').slice(-80)}`;
         const {error}=await sb.storage.from(BUCKET).upload(path,f,{contentType:f.type||'application/octet-stream'}); if(error) throw new Error(`${f.name}: ${clean(error)}`);
         att.push({path,name:f.name,type:f.type,size:f.size}); }
-      const {data:id,error}=await sb.rpc('msg_post',{p_channel:ch,p_body:text,p_attachments:att}); if(error) throw error;
-      ta.value=''; ta.style.height='auto'; files=[]; drawPending();
+      const params={p_channel:ch,p_body:text,p_attachments:att}; if(replyTo) params.p_reply_to=replyTo.id;   // p_reply_to only when replying (older database versions don't know it)
+      const {data:id,error}=await sb.rpc('msg_post',params); if(error) throw error;
+      ta.value=''; ta.style.height='auto'; files=[]; drawPending(); setReply(null);
       try{ sb.functions.invoke('msg-notify',{body:{message_id:id}}).catch(()=>{}); }catch(e){}   // email / text alerts go out in the background
       await loadMessages(true); loadChannels();
     }catch(e){ toast(clean(e),true); }
@@ -302,7 +367,9 @@ window.mountMessenger=async function(root, opts){
 
   async function refresh(){ if(!alive()){ clearInterval(S.timer); return; } if($('main').classList.contains('tm-hide')||document.hidden) return; await loadChannels(); if(cur===ALL) await drawHistory(true); else if(cur) await loadMessages(); }
   // New messages arrive live; a 25-second check is the safety net.
-  function subscribe(){ try{ if(S.live) sb.removeChannel(S.live); S.live=sb.channel('team-messenger-'+Math.random().toString(36).slice(2)).on('postgres_changes',{event:'*',schema:'public',table:'msg_messages'},()=>refresh()).subscribe(); }catch(e){} }
+  function subscribe(){ try{ if(S.live) sb.removeChannel(S.live); S.live=sb.channel('team-messenger-'+Math.random().toString(36).slice(2))
+    .on('postgres_changes',{event:'*',schema:'public',table:'msg_messages'},()=>refresh())
+    .on('postgres_changes',{event:'*',schema:'public',table:'msg_reactions'},()=>{ if(cur&&cur!==ALL) loadMessages(); }).subscribe(); }catch(e){} }
   S.timer=setInterval(refresh,25000);
   document.addEventListener('visibilitychange',()=>{ if(!document.hidden) refresh(); });
 
