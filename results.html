@@ -186,6 +186,7 @@ async function pageAll(mk){ const all=[]; for(let f=0;;f+=1000){ const {data,err
 let stds=[], recs=[];
 async function loadRefs(){
   if(window.leagueReady) await window.leagueReady;
+  if(window.eventsReady) await window.eventsReady;
   const [ss,rc]=await Promise.all([ pageAll(()=>sb.from('qualifying_standards').select('*').order('id')), pageAll(()=>sb.from('conference_records').select('*').order('id')) ]);
   stds=ss; recs=rc.filter(r=>!r.scope||r.scope==='conference');
   const lgE=rc.filter(r=>r.scope==='east'), lgW=rc.filter(r=>r.scope==='west');

@@ -315,6 +315,7 @@ function bgStatus(c){
 
 async function loadMe(){
   if(window.leagueReady) await window.leagueReady;
+  if(window.eventsReady) await window.eventsReady;
   ['notCoachBox','pendingBox','coachApp','timerBox'].forEach(id=>$(id).style.display='none');
   const {data,error}=await sb.from('coaches').select('*').eq('email',user.email).eq('approved',true).maybeSingle();
   if(error){ $('ncEmail').textContent=user.email||''; $('notCoachBox').style.display='block'; return; }

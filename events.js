@@ -1,4 +1,7 @@
-// ---- Standard event list (edit this file to match what the league actually runs) ----
+// ---- Standard event list ----
+// Since 2026-10-30 the real list lives in the database (table standard_events) and is edited on
+// Site Admin > League Setup > Event list. The list below is only the FALLBACK, used until the database
+// answers (or if it can't be reached); window.eventsReady (bottom of this file) swaps the live list in.
 // divs: which divisions may enter. Codes are Hy-Tek Meet Manager event codes.
 // SG=Sub-Gremlin(5-6) G=Gremlin(7-8) B=Bantam(9-10) J=Juniors(11-12) Y=Youth(13-14) I=Intermediates(15-18)
 // Source of truth: Riley's actual Hy-Tek Team Manager Event List export (2026-09-23) — replaces the
@@ -48,3 +51,20 @@ window.checkLimits = function(division, current, newEv){
   if(r.relayRequiredFor4th && all.length===4 && !all.some(e=>e.relay)) return `${division} may only have 4 events if one is a relay`;
   return null;
 };
+// ---- Live event list (Site Admin > League Setup > Event list). Replaces STANDARD_EVENTS in place, so anything holding a
+// reference to the array sees the change. Pages that need the list at start-up do `await window.eventsReady` first
+// (the same way they wait for window.leagueReady). Inactive events are left out.
+window.eventsReady = (async function(){
+  try{
+    if(!window.APP_CONFIG && document.readyState==='loading') await new Promise(r=>document.addEventListener('DOMContentLoaded',r,{once:true}));
+    const C=window.APP_CONFIG; if(!C||!C.SUPABASE_URL) return;
+    const r=await fetch(C.SUPABASE_URL+'/rest/v1/standard_events?select=*&active=eq.true&order=sort_order,name',
+      {headers:{apikey:C.SUPABASE_ANON_KEY,Authorization:'Bearer '+C.SUPABASE_ANON_KEY}});
+    if(!r.ok) return;
+    const rows=await r.json(); if(!Array.isArray(rows)||!rows.length) return;
+    window.STANDARD_EVENTS.splice(0,window.STANDARD_EVENTS.length,...rows.map(x=>{
+      const e={code:x.code,name:x.name,divs:x.divs||''};
+      if(x.is_relay) e.relay=true; if(x.is_field) e.field=true; if(x.gender) e.gender=x.gender; if(x.note) e.note=x.note;
+      return e; }));
+  }catch(e){}
+})();

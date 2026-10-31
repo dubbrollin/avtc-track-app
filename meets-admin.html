@@ -228,6 +228,7 @@ async function buildEvents(meetId){
 }
 
 async function load(){
+  if(window.eventsReady) await window.eventsReady;   // the standard event list (Site Admin > League Setup) must be in before meets are built
   const season=await window.currentSeason();
   const {data}=await sb.from('meets').select('*').eq('season_year',season).order('meet_date',{ascending:false}); meets=data||[];
   if(TIMER){ meets=meets.filter(m=>m.status!=='archived');

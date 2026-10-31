@@ -860,6 +860,7 @@ async function paintRecords(){
 $('pane').innerHTML=`<div class="flex flex-wrap rounded-lg overflow-hidden border text-sm mb-3 w-fit">${REC_SUBS.map(([k,l])=>`<button class="tab ${k===recSub?'active':''}" data-sub="${k}">${l}</button>`).join('')}</div><div id="recPane"><p class="text-sm text-gray-500">Loading…</p></div>`;
 document.querySelectorAll('[data-sub]').forEach(b=>b.onclick=()=>{ recSub=b.dataset.sub; paintRecords(); });
 const std=recSub==='standards';
+if(window.eventsReady) await window.eventsReady;
 try{ recRows=await pageAll(()=>{ let q=sb.from(std?'qualifying_standards':'conference_records').select('*'); if(!std) q=q.eq('scope',recSub); return q.order('event_code').order('gender').order('age_low').order('id'); }); }catch(e){ $('recPane').innerHTML='<p class="text-red-700">'+esc(e.message)+'</p>'; return; }
 const ageOpts=v=>Object.entries(AGES).map(([n,[lo,hi]])=>`<option value="${lo}-${hi}" ${v===lo+'-'+hi?'selected':''}>${n} (${lo}–${hi})</option>`).join('')+`<option value="0-99" ${v==='0-99'?'selected':''}>Open (0–99)</option>`;
 const evs=[...new Map((window.STANDARD_EVENTS||[]).map(e=>[e.code+(e.relay?'R':''),e])).values()];
@@ -919,7 +920,8 @@ ${teams.map(t=>`<tr data-code="${esc(t.code)}"><td class="font-mono font-bold">$
 <div class="flex flex-wrap gap-2 mt-2"><button class="btn lite" id="cbRebuild">Rebuild blocks from last season</button>
 <button class="btn pri" id="cbReassign">Reassign numbers from the certified roster</button></div>
 <p class="text-xs text-gray-500 mt-1"><b>Reassign</b> is for when certification is finished: every team's block is resized to its roster now (+20 cushion), and each team's athletes are renumbered alphabetically — certified athletes first, then any still under review. This changes numbers already handed out.</p></div>
-<div class="card"><h3 class="font-bold mb-1">Event list</h3><p class="text-sm text-gray-600">The standard event list (which events each division runs) still lives in the app's code, copied from Team Manager. To change it, tell Claude — it isn't editable here yet.</p></div>`;
+<div class="card" id="evCard"><h3 class="font-bold mb-1">Event list</h3><p class="text-sm text-gray-500">Loading…</p></div>`;
+paintEventList();
 $('nAdd').onclick=async()=>{ const code=$('nCode').value.trim().toUpperCase(), name=$('nName').value.trim(); if(!code||!name){ toast('Enter a code and a name.',true); return; }
 if(await run(sb.from('league_teams').insert({code,name,conference:$('nConf').value,active:true,sort_order:100}),'Team added')) paintLeague(); };
 $('sSave').onclick=()=>run(sb.from('app_settings').upsert({key:'season_year',value:String($('sYear').value)}),'Saved');
@@ -946,6 +948,50 @@ document.addEventListener('click',async e=>{
 const b=e.target.closest('#tBody button'); if(!b) return; const tr=b.closest('tr'), code=tr.dataset.code;
 if(b.dataset.act==='save'){ const patch={}; tr.querySelectorAll('[data-f]').forEach(el=>{ const k=el.dataset.f; patch[k]=el.type==='checkbox'?el.checked:el.type==='number'?+el.value:el.value; }); await run(sb.from('league_teams').update(patch).eq('code',code),'Saved'); }
 if(b.dataset.act==='del'){ if(!confirm(`Delete team ${code} from the list? Athletes, coaches and results keep their team code, but the team will no longer appear in dropdowns. (To hide a team instead, untick Active.)`)) return; if(await run(sb.from('league_teams').delete().eq('code',code),'Team deleted')) paintLeague(); }
+});
+/* ---- Event list (table standard_events): the standard events and which divisions run each one. events.js loads this
+   list on every page, so new meets, the Results page order and manual result entry all follow it. ---- */
+const EV_DIVS=[['SG','Sub-Gremlin'],['G','Gremlin'],['B','Bantam'],['J','Juniors'],['Y','Youth'],['I','Intermediates']];
+function evRow(r){
+const picked=new Set(String(r.divs||'').split(' ').filter(Boolean)), isNew=!r.id;
+const type=r.is_relay?'relay':r.is_field?'field':'run';
+return `<tr data-id="${esc(r.id||'')}" class="${r.active===false?'opacity-60':''}${isNew?' bg-green-50':''}">
+<td><input type="number" data-f="sort_order" value="${esc(r.sort_order??100)}" style="width:4.5rem"></td>
+<td><input data-f="code" value="${esc(r.code||'')}" class="font-mono" style="width:5rem" placeholder="e.g. 80H"></td>
+<td><input data-f="name" value="${esc(r.name||'')}" style="width:11rem" placeholder="e.g. 80m Hurdles"></td>
+<td><select data-f="type"><option value="run" ${type==='run'?'selected':''}>Running</option><option value="relay" ${type==='relay'?'selected':''}>Relay</option><option value="field" ${type==='field'?'selected':''}>Field</option></select></td>
+<td><select data-f="gender"><option value="" ${!r.gender?'selected':''}>Boys &amp; girls</option><option value="Girl" ${r.gender==='Girl'?'selected':''}>Girls only</option><option value="Boy" ${r.gender==='Boy'?'selected':''}>Boys only</option></select></td>
+<td class="whitespace-nowrap">${EV_DIVS.map(([k,n])=>`<label class="inline-flex items-center gap-0.5 mr-1 text-xs font-semibold" title="${n}"><input type="checkbox" data-div="${k}" ${picked.has(k)?'checked':''}>${k}</label>`).join('')}</td>
+<td><input data-f="note" value="${esc(r.note||'')}" style="width:12rem" placeholder="hurdle height, weight…"></td>
+<td><input type="checkbox" data-f="active" ${r.active!==false?'checked':''}></td>
+<td class="whitespace-nowrap">${isNew?'<button class="btn grn" data-act="add">+ Add event</button>':'<button class="btn pri" data-act="save">Save</button> <button class="btn red" data-act="del">Delete</button>'}</td></tr>`;
+}
+function evPatch(tr){
+const g=f=>tr.querySelector(`[data-f="${f}"]`), type=g('type').value;
+return {sort_order:parseInt(g('sort_order').value,10)||100, code:g('code').value.trim().toUpperCase(), name:g('name').value.trim(),
+  is_relay:type==='relay', is_field:type==='field', gender:g('gender').value||null,
+  divs:[...tr.querySelectorAll('[data-div]')].filter(c=>c.checked).map(c=>c.dataset.div).join(' '), note:g('note').value.trim()||null, active:g('active').checked};
+}
+async function paintEventList(){
+const el=$('evCard'); if(!el) return;
+const {data:evs,error}=await sb.from('standard_events').select('*').order('sort_order').order('name');
+if(error){ el.innerHTML=`<h3 class="font-bold mb-1">Event list</h3><p class="text-sm text-red-700">Couldn't load the event list: ${esc(error.message)}</p>`; return; }
+el.innerHTML=`<h3 class="font-bold mb-1">Event list</h3>
+<p class="text-xs text-gray-500 mb-2">The standard events and which divisions run each one (SG = Sub-Gremlin, G = Gremlin, B = Bantam, J = Juniors, Y = Youth, I = Intermediates). Codes are the Hy-Tek Meet Manager event codes; relays use the total distance (400 = 4x100m, 1600 = 4x400m). An event that only one gender runs (hurdles) is its own row. <b>New meets</b> get their events from this list, and it sets the event order on the Results page; meets that already exist keep the events they were built with. Untick <b>Active</b> to hide an event without losing it. Changes show across the app the next time a page loads.</p>
+<div class="scroll" style="max-height:none"><table class="t"><thead><tr><th>Order</th><th>Code</th><th>Event</th><th>Type</th><th>Who</th><th>Divisions</th><th>Note (admins only)</th><th>Active</th><th></th></tr></thead>
+<tbody id="evBody">${(evs||[]).map(evRow).join('')}${evRow({sort_order:((evs||[]).reduce((m,e)=>Math.max(m,e.sort_order||0),0)||0)+10,divs:'SG G B J Y I'})}</tbody></table></div>`;
+viewOnly(el);
+}
+document.addEventListener('click',async e=>{
+const b=e.target.closest('#evBody button'); if(!b) return; const tr=b.closest('tr'), id=tr.dataset.id, act=b.dataset.act;
+const nice=err=>/standard_events_key|duplicate key/i.test(err.message)?'There is already an event with that code, type and boys/girls setting.':err.message;
+if(act==='save'||act==='add'){
+  const p=evPatch(tr); if(!p.code||!p.name){ toast('Enter a code and an event name.',true); return; } if(!p.divs){ toast('Tick at least one division.',true); return; }
+  const {error}=act==='add'?await sb.from('standard_events').insert(p):await sb.from('standard_events').update(p).eq('id',id);
+  if(error){ toast(nice(error),true); return; } toast(act==='add'?'Event added':'Saved'); paintEventList(); }
+if(act==='del'){ const name=tr.querySelector('[data-f="name"]').value;
+  if(!confirm(`Delete "${name}" from the event list? Meets and results that already use it are not affected. (To hide it instead, untick Active.)`)) return;
+  if(await run(sb.from('standard_events').delete().eq('id',id),'Event deleted')) paintEventList(); }
 });
 </script>
 </body>
