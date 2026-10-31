@@ -1,5 +1,5 @@
 // Team Messenger — the chat panel that sits INSIDE the dashboards (there is no separate Messages page):
-//   Coach Dashboard  → coaches and team admins message their parents (groups, direct messages, photos/files)
+//   Coach Dashboard  → coaches and team admins message their parents (groups, direct messages, photos/files, polls)
 //   Parent Dashboard → each parent sees their team's messages and can reply
 //   Site Admin → Messages tab → a site admin can open any team's chats
 // A paid team extra: nothing shows for a team until a site admin has switched it on (Site Admin → Messages).
@@ -48,19 +48,27 @@ const CSS=`<style id="tmStyle">
 .tm .tm-pop.emo{display:flex;flex-wrap:wrap;gap:0;max-width:19.5rem}.tm .tm-pop.emo button{font-size:22px;line-height:1;border:0;background:none;cursor:pointer;padding:6px 6px;border-radius:8px}.tm .tm-pop.emo button:hover{background:#eef1f5}.tm .tm-pop.emo button.plus{font-size:16px;color:#5b6878;align-self:center}
 .tm .tm-pop.menu{min-width:9rem}.tm .tm-pop.menu button{display:block;width:100%;text-align:left;border:0;background:none;padding:8px 12px;font-size:14px;cursor:pointer;border-radius:8px;color:inherit}.tm .tm-pop.menu button:hover{background:#eef1f5}.tm .tm-pop.menu button.bad{color:#b42318}
 .tm .tm-replying{display:flex;align-items:center;gap:8px;padding:6px 8px 0;background:#fff;font-size:12px}.tm .tm-replying:empty{display:none}.tm .tm-replying .tm-q{flex:1;margin:0;cursor:default}.tm .tm-replying button{border:0;background:none;cursor:pointer;color:#b42318;font-weight:700}
+.tm .tm-m .b.tm-poll{background:#fff;color:inherit;border-color:var(--line,#e1e7ef);white-space:normal;min-width:min(20rem,100%)}.tm .tm-m.mine .b.tm-poll{border-color:var(--act,#1764c8)}
+.tm .tm-pq{font-weight:700;margin-bottom:6px}
+.tm .tm-po{position:relative;display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:1px solid var(--line,#e1e7ef);border-radius:8px;padding:6px 10px;margin-top:5px;background:#f7f9fc;cursor:pointer;color:inherit;font-size:.9rem;overflow:hidden}
+.tm .tm-po .bar{position:absolute;left:0;top:0;bottom:0;background:var(--act-soft,#e6f0fc);transition:width .3s}.tm .tm-po .lbl{position:relative;flex:1;overflow-wrap:anywhere}.tm .tm-po .pct{position:relative;font-size:12px;color:#5b6878;white-space:nowrap}
+.tm .tm-po.me{border-color:var(--act,#1764c8)}.tm .tm-po.me .lbl{font-weight:700}.tm .tm-po.me .bar{background:#cfe0f8}.tm .tm-po:disabled{cursor:default}.tm .tm-po:not(:disabled):hover{border-color:var(--act,#1764c8)}
+.tm .tm-pw{font-size:11px;color:#5b6878;margin:1px 10px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tm .tm-pf{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;color:#5b6878;margin-top:8px}.tm .tm-pf button{border:0;background:none;color:#b42318;font-weight:700;cursor:pointer;font-size:11px}
+.tm .tm-pform input[type=text]{width:100%;border:1.5px solid var(--field,#c7d1de);border-radius:8px;padding:.5rem .65rem;font-size:16px;margin-bottom:6px}.tm .tm-pform label{font-size:.9rem}
 .tm .tm-atts{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}.tm .tm-m.mine .tm-atts{justify-content:flex-end}
 .tm .tm-atts img,.tm .tm-gal img{width:9.5rem;height:9.5rem;object-fit:cover;border-radius:10px;border:1px solid var(--line,#e1e7ef);background:#fff;cursor:zoom-in}
 .tm .tm-file{display:inline-flex;align-items:center;gap:.4rem;background:#fff;border:1px solid var(--line,#e1e7ef);border-radius:10px;padding:.4rem .6rem;font-size:.85rem;text-decoration:none;color:inherit;max-width:16rem}
 .tm .tm-file span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tm .tm-file button{color:#b42318;font-weight:700;background:none;border:0;cursor:pointer}
 .tm .tm-pending{display:flex;flex-wrap:wrap;gap:6px;padding:6px 8px 0;background:#fff}.tm .tm-pending:empty{display:none}
 .tm .tm-composer{border-top:1px solid var(--line,#e1e7ef);padding:8px;display:flex;gap:8px;align-items:flex-end;background:#fff}
-.tm .tm-composer textarea{flex:1;resize:none;max-height:9rem;padding:.5rem .65rem;font-size:16px;border:1.5px solid var(--field,#c7d1de);border-radius:8px}
+.tm .tm-composer textarea{flex:1;min-width:0;resize:none;max-height:9rem;padding:.5rem .65rem;font-size:16px;border:1.5px solid var(--field,#c7d1de);border-radius:8px}
 .tm .tm-attach{font-size:1.25rem;line-height:1;padding:.5rem .6rem;border-radius:.5rem;background:#eef1f5;cursor:pointer;border:0}
 .tm .tm-ro{font-size:12px;color:#5b6878;padding:.75rem;border-top:1px solid var(--line,#e1e7ef);background:#fff}
 .tm .tm-back{display:none}.tm .tm-gal{display:flex;flex-wrap:wrap;gap:8px}
 .tm.tm-narrow .tm-shell{grid-template-columns:1fr}.tm.tm-narrow .tm-list,.tm.tm-narrow .tm-thread{height:min(78vh,38rem)}
 .tm.tm-narrow .tm-shell.open .tm-list{display:none}.tm.tm-narrow .tm-shell:not(.open) .tm-thread{display:none}
-.tm.tm-narrow .tm-back{display:inline-block}.tm.tm-narrow .tm-atts img,.tm.tm-narrow .tm-gal img{width:7rem;height:7rem}
+.tm.tm-narrow .tm-back{display:inline-block}.tm.tm-narrow .tm-composer{gap:5px}.tm.tm-narrow .tm-attach{padding:.5rem .45rem}.tm.tm-narrow .tm-composer .tm-btn{padding:.6rem .75rem}.tm.tm-narrow .tm-atts img,.tm.tm-narrow .tm-gal img{width:7rem;height:7rem}
 .tm .tm-modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:9998;padding:1rem}
 .tm .tm-modal>div{background:#fff;border-radius:12px;padding:16px;max-width:34rem;width:100%;max-height:90vh;overflow:auto}
 .tm .tm-opt{display:flex;gap:.5rem;align-items:flex-start;border:1px solid var(--line,#e1e7ef);border-radius:8px;padding:.5rem .6rem;margin-bottom:6px;cursor:pointer;font-size:.9rem}
@@ -94,6 +102,7 @@ const HTML=`
       <div data-tm="pending" class="tm-pending"></div>
       <div data-tm="composer" class="tm-composer tm-hide">
         <button data-tm="attach" type="button" class="tm-attach" title="Add photos or files" aria-label="Add photos or files">📎</button>
+        <button data-tm="pollBtn" type="button" class="tm-attach" title="Start a poll" aria-label="Start a poll">📊</button>
         <input data-tm="fileIn" type="file" multiple class="tm-hide" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt">
         <textarea data-tm="body" rows="1" maxlength="2000" placeholder="Write a message…"></textarea><button data-tm="send" class="tm-btn tm-pri">Send</button></div>
       <div data-tm="readOnly" class="tm-ro tm-hide"></div>
@@ -120,7 +129,7 @@ window.mountMessenger=async function(root, opts){
   const $=k=>root.querySelector(`[data-tm="${k}"]`), hide=(k,h)=>$(k).classList.toggle('tm-hide',!!h);
   const alive=()=>root.__tm===S&&document.body.contains(root);
   let uid=null, email=null, myTeams=[], team=null, mgr=false, chans=[], cur=null, msgs=[], files=[], urls={}, lim=200, hist=[], histLim=100, histQ='';
-  let rx=[], seenBy=[], quoted={}, replyTo=null;   // reactions and "seen by" for the open chat; quoted = older messages a reply points at; replyTo = the message I'm replying to
+  let rx=[], seenBy=[], quoted={}, replyTo=null, polls={};   // polls = poll + results by message id   // reactions and "seen by" for the open chat; quoted = older messages a reply points at; replyTo = the message I'm replying to
   // One column (list, then the chat) whenever the panel itself is narrow — a phone, or a slim dashboard column.
   const narrow=()=>(root.clientWidth||window.innerWidth)<700, fit=()=>{ root.classList.toggle('tm-narrow',narrow()); if(!narrow()&&!cur&&chans.length&&!$('main').classList.contains('tm-hide')) openChannel(latest().id); };
   try{ new ResizeObserver(()=>{ if(alive()) fit(); }).observe(root); }catch(e){ window.addEventListener('resize',fit); }
@@ -216,16 +225,18 @@ window.mountMessenger=async function(root, opts){
     const more=(data||[]).length>=lim, next=(data||[]).reverse(), box=$('msgs');
     // Reactions and "seen by" come with the messages; a reply may quote a message older than the ones loaded, so fetch those too.
     const ids=next.map(m=>m.id), have=new Set(ids), need=[...new Set(next.map(m=>m.reply_to).filter(r=>r&&!have.has(r)&&!quoted[r]))];
-    const [r1,r2,r3]=await Promise.all([
+    const [r1,r2,r3,r4]=await Promise.all([
       ids.length?sb.from('msg_reactions').select('message_id,user_id,name,emoji').in('message_id',ids):Promise.resolve({data:[]}),
       sb.rpc('msg_seen',{p_channel:id}),
-      need.length?sb.from('msg_messages').select('id,sender_name,body,attachments,deleted_at').in('id',need):Promise.resolve({data:[]})]);
+      need.length?sb.from('msg_messages').select('id,sender_name,body,attachments,deleted_at').in('id',need):Promise.resolve({data:[]}),
+      sb.rpc('msg_polls_in',{p_channel:id})]);
     if(id!==cur) return;
     (r3.data||[]).forEach(m=>quoted[m.id]=m);
-    const nrx=r1.data||[], nseen=r2.data||[];
-    // Redraw only when something on screen would change: the messages, a reaction, or who has read what.
-    const sig=next.map(m=>m.id+(m.deleted_at?'x':'')).join(',')+'|'+nrx.map(x=>x.message_id+x.user_id+x.emoji).sort().join(',')+'|'+nseen.map(s=>s.user_id+s.last_read_at).sort().join(',');
-    const changed=sig!==loadMessages.sig||jump; loadMessages.sig=sig; msgs=next; rx=nrx; seenBy=nseen;
+    const nrx=r1.data||[], nseen=r2.data||[], npolls={}; (r4.data||[]).forEach(p=>npolls[p.message_id]=p);
+    // Redraw only when something on screen would change: the messages, a reaction, who has read what, or a poll's votes / open-closed state.
+    const sig=next.map(m=>m.id+(m.deleted_at?'x':'')).join(',')+'|'+nrx.map(x=>x.message_id+x.user_id+x.emoji).sort().join(',')+'|'+nseen.map(s=>s.user_id+s.last_read_at).sort().join(',')
+      +'|'+Object.values(npolls).map(p=>p.poll_id+(p.counts||[]).join('.')+(p.mine||[]).join('.')+(p.closed_at?'c':'')+(pollOpen(p)?'o':'z')).join(',');
+    const changed=sig!==loadMessages.sig||jump; loadMessages.sig=sig; msgs=next; rx=nrx; seenBy=nseen; polls=npolls;
     if(!changed) return;
     await signAll(msgs); if(id!==cur) return;
     const nearEnd=box.scrollHeight-box.scrollTop-box.clientHeight<120, c=chans.find(x=>x.id===id)||{};
@@ -246,11 +257,39 @@ window.mountMessenger=async function(root, opts){
       const acts=m.deleted_at?'':`<span class="tm-acts">${c.archived?'':`<button type="button" class="tm-act" data-rx="${m.id}" title="React" aria-label="React">☺</button>`}<button type="button" class="tm-act" data-menu="${m.id}" title="More" aria-label="More">⋯</button></span>`;
       return head+`<div class="tm-m ${mine?'mine':''} ${m.sender_role==='coach'?'coach':''} ${m.deleted_at?'gone':''}" data-mid="${m.id}">
         <div class="who">${mine?'You':`<b>${esc(m.sender_name)}</b>${m.sender_label?' · '+esc(m.sender_label):''}`} · ${t}${acts}</div>
-        ${m.deleted_at?'<div class="b">Message removed</div>':((m.body||qh)?`<div class="b">${qh}${linkify(m.body)}</div>`:'')+(att.length?`<div class="tm-atts">${att.map(attHtml).join('')}</div>`:'')}${m.deleted_at?'':rxHtml(m)}${seenHtml(m.id)}</div>`; }).join('')
+        ${m.deleted_at?'<div class="b">Message removed</div>':polls[m.id]?pollHtml(polls[m.id],c):((m.body||qh)?`<div class="b">${qh}${linkify(m.body)}</div>`:'')+(att.length?`<div class="tm-atts">${att.map(attHtml).join('')}</div>`:'')}${m.deleted_at?'':rxHtml(m)}${seenHtml(m.id)}</div>`; }).join('')
       || `<p class="text-sm text-gray-500">No messages yet.${c.can_post?' Say hello 👋':''}</p>`;
     if(jump||nearEnd){ box.scrollTop=box.scrollHeight; box.querySelectorAll('img').forEach(i=>i.addEventListener('load',()=>{ box.scrollTop=box.scrollHeight; },{once:true})); }
     markSeen();
   }
+
+  /* ---------- polls: a question card in the chat, tap an answer to vote (Team App style) ---------- */
+  function pollOpen(p){ return !p.closed_at&&new Date(p.closes_at)>Date.now(); }   // (function declarations: loadMessages may run before this line is reached)
+  function rel(t){ const s=(new Date(t)-Date.now())/1000; if(s<90) return 'in a minute'; if(s<3600) return `in ${Math.round(s/60)} min`; if(s<86400*1.5) return `in ${Math.round(s/3600)} h`; return `in ${Math.round(s/86400)} days`; };
+  function pollHtml(p,c){ const open=pollOpen(p)&&!c.archived, mine=new Set(p.mine||[]), voters=p.voters||0, who=p.who||{};
+    const rows=(p.options||[]).map((o,i)=>{ const n=(p.counts||[])[i]||0, pct=voters?Math.round(n*100/voters):0, names=who[String(i)]||[];
+      return `<button type="button" class="tm-po ${mine.has(i)?'me':''}" data-vote="${p.poll_id}" data-c="${i}" ${open?'':'disabled'} title="${esc(names.join(', '))}"><span class="bar" style="width:${pct}%"></span><span class="lbl">${mine.has(i)?'✓ ':''}${esc(o)}</span><span class="pct">${n} · ${pct}%</span></button>${names.length?`<div class="tm-pw">${esc(names.join(', '))}</div>`:''}`; }).join('');
+    const state=p.closed_at?'closed early':pollOpen(p)?'ends '+rel(p.closes_at):'ended';
+    const foot=`<span>${voters===1?'1 person':voters+' people'} voted · ${p.anonymous?'anonymous · ':''}${p.multi?'pick any · ':''}${state}</span>${open&&(p.created_by===uid||c.can_manage)?`<button type="button" data-pollclose="${p.poll_id}">End poll</button>`:''}`;
+    return `<div class="b tm-poll"><div class="tm-pq">📊 ${esc(p.question)}</div>${rows}<div class="tm-pf">${foot}</div></div>`; }
+  async function vote(pid,choice){ const {error}=await sb.rpc('msg_poll_vote',{p_poll:pid,p_choice:+choice}); if(error){ toast(clean(error),true); } loadMessages(); }
+  const LENGTHS=[[15,'15 minutes'],[60,'1 hour'],[480,'8 hours'],[1440,'24 hours'],[4320,'3 days'],[10080,'1 week']];
+  $('pollBtn').onclick=()=>{ if(!cur||cur===ALL) return;
+    openModal(`<div class="tm-pform"><h2 class="font-bold text-lg mb-2">Start a poll</h2>
+      <label class="block font-semibold mb-1">Question</label><input type="text" data-p="q" maxlength="300" placeholder="Who can make Saturday's meet?">
+      <label class="block font-semibold mb-1">Answers</label><div data-p="opts"><input type="text" maxlength="80" placeholder="Answer 1"><input type="text" maxlength="80" placeholder="Answer 2"></div>
+      <button type="button" class="tm-sbtn tm-lite" data-p="add">+ Add an answer</button>
+      <div class="flex flex-wrap gap-3 items-center mt-3 mb-3"><label>Open for <select data-p="len" class="border rounded p-1">${LENGTHS.map(([v,l])=>`<option value="${v}" ${v===1440?'selected':''}>${l}</option>`).join('')}</select></label>
+        <label><input type="checkbox" data-p="multi"> Pick more than one</label><label><input type="checkbox" data-p="anon"> Anonymous</label></div>
+      <div class="flex gap-2"><button class="tm-btn tm-pri" data-p="go">Start poll</button><button class="tm-btn tm-lite" data-close>Cancel</button></div></div>`);
+    const P=k=>q(`[data-p="${k}"]`); P('q').focus();
+    P('add').onclick=()=>{ const n=P('opts').querySelectorAll('input').length; if(n>=6){ toast('Six answers at most.',true); return; } P('opts').insertAdjacentHTML('beforeend',`<input type="text" maxlength="80" placeholder="Answer ${n+1}">`); P('opts').lastElementChild.focus(); };
+    P('go').onclick=async()=>{ const opts=[...P('opts').querySelectorAll('input')].map(i=>i.value.trim()).filter(Boolean);
+      P('go').disabled=true; P('go').textContent='Starting…';
+      const {data:id,error}=await sb.rpc('msg_poll_create',{p_channel:cur,p_question:P('q').value,p_options:opts,p_minutes:+P('len').value,p_anonymous:P('anon').checked,p_multi:P('multi').checked});
+      if(error){ toast(clean(error),true); P('go').disabled=false; P('go').textContent='Start poll'; return; }
+      closeModal(); try{ sb.functions.invoke('msg-notify',{body:{message_id:id}}).catch(()=>{}); }catch(e){}
+      await loadMessages(true); loadChannels(); }; };
 
   /* ---------- reactions, reply, and the little per-message menu (Team App style) ---------- */
   const QUICK=['👍','❤️','🙏','😂','😮','🎉'], MORE=['👏','🔥','💪','🏃','🥇','✅','😢','🤔','🙌','👀','🎂','⭐'];
@@ -281,6 +320,9 @@ window.mountMessenger=async function(root, opts){
     const go=!e.target.closest('a')&&e.target.closest('[data-go]'); if(go) return openChannel(go.dataset.go);
     const jp=e.target.closest('[data-jump]'); if(jp) return jumpTo(jp.dataset.jump);
     const rt=e.target.closest('[data-rxt]'); if(rt) return react(rt.dataset.rxt, rt.dataset.e);   // tap a reaction chip to add or take back that emoji
+    const vt=e.target.closest('[data-vote]'); if(vt){ if(vt.disabled) return; return vote(vt.dataset.vote, vt.dataset.c); }
+    const pc=e.target.closest('[data-pollclose]'); if(pc){ if(!confirm('End this poll now? Nobody will be able to vote after this.')) return;
+      const {error}=await sb.rpc('msg_poll_close',{p_poll:pc.dataset.pollclose}); if(error) toast(clean(error),true); return loadMessages(); }
     const rb=e.target.closest('[data-rx]'); if(rb){ if(pop&&pop.dataset.for==='rx'+rb.dataset.rx) return closePop();
       const p=openPop(rb,'emo',QUICK.map(x=>`<button type="button" data-e="${x}">${x}</button>`).join('')+`<button type="button" class="plus" data-more title="More">＋</button>`); p.dataset.for='rx'+rb.dataset.rx;
       p.onclick=ev=>{ const b=ev.target.closest('button'); if(!b) return; if(b.hasAttribute('data-more')){ b.outerHTML=MORE.map(x=>`<button type="button" data-e="${x}">${x}</button>`).join(''); return; } react(rb.dataset.rx,b.dataset.e); }; return; }
@@ -369,7 +411,8 @@ window.mountMessenger=async function(root, opts){
   // New messages arrive live; a 25-second check is the safety net.
   function subscribe(){ try{ if(S.live) sb.removeChannel(S.live); S.live=sb.channel('team-messenger-'+Math.random().toString(36).slice(2))
     .on('postgres_changes',{event:'*',schema:'public',table:'msg_messages'},()=>refresh())
-    .on('postgres_changes',{event:'*',schema:'public',table:'msg_reactions'},()=>{ if(cur&&cur!==ALL) loadMessages(); }).subscribe(); }catch(e){} }
+    .on('postgres_changes',{event:'*',schema:'public',table:'msg_reactions'},()=>{ if(cur&&cur!==ALL) loadMessages(); })
+    .on('postgres_changes',{event:'*',schema:'public',table:'msg_polls'},()=>{ if(cur&&cur!==ALL) loadMessages(); }).subscribe(); }catch(e){} }
   S.timer=setInterval(refresh,25000);
   document.addEventListener('visibilitychange',()=>{ if(!document.hidden) refresh(); });
 
