@@ -1,5 +1,5 @@
 // Team Messenger — the chat panel that sits INSIDE the dashboards (there is no separate Messages page):
-//   Coach Dashboard  → coaches and team admins message their parents (groups, direct messages, photos/files, polls)
+//   Coach Dashboard  → coaches and team admins message their parents (groups, direct messages, photos/files, polls, mute, app notifications)
 //   Parent Dashboard → each parent sees their team's messages and can reply
 //   Site Admin → Messages tab → a site admin can open any team's chats
 // A paid team extra: nothing shows for a team until a site admin has switched it on (Site Admin → Messages).
@@ -27,6 +27,7 @@ const CSS=`<style id="tmStyle">
 .tm .tm-chan .pv{font-size:12px;color:#5b6878;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tm .tm-unread{background:#d2451e;color:#fff;border-radius:999px;font-size:11px;font-weight:700;padding:1px 7px;margin-left:auto}
 .tm .tm-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px;border-bottom:1px solid var(--line,#e1e7ef)}
+.tm .tm-title{flex:1;min-width:0}.tm.tm-narrow .tm-title{min-width:11rem}.tm.tm-narrow .tm-sub{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .tm .tm-msgs{flex:1;overflow:auto;padding:12px;background:var(--soft,#f7f9fc)}
 .tm .tm-day{text-align:center;font-size:11px;color:#5b6878;margin:10px 0 6px;font-weight:600}
 .tm .tm-m{max-width:min(34rem,85%);margin-bottom:8px}.tm .tm-m.mine{margin-left:auto}
@@ -93,8 +94,9 @@ const HTML=`
     <div class="tm-thread">
       <div class="tm-head">
         <button data-tm="backBtn" class="tm-sbtn tm-lite tm-back">← All chats</button>
-        <div style="flex:1;min-width:0"><div class="font-bold truncate" data-tm="chName">Pick a chat</div><div class="text-xs text-gray-500" data-tm="chSub"></div></div>
-        <button data-tm="galBtn" class="tm-sbtn tm-lite tm-hide">Photos</button>
+        <div class="tm-title"><div class="font-bold truncate" data-tm="chName">Pick a chat</div><div class="text-xs text-gray-500 tm-sub" data-tm="chSub"></div></div>
+        <button data-tm="muteBtn" class="tm-sbtn tm-lite tm-hide" title="Alerts for this chat" aria-label="Alerts for this chat">🔔</button>
+      <button data-tm="galBtn" class="tm-sbtn tm-lite tm-hide">Photos</button>
         <button data-tm="editBtn" class="tm-sbtn tm-lite tm-hide">Edit</button>
       </div>
       <div data-tm="msgs" class="tm-msgs"><p class="text-sm text-gray-500">Pick a chat on the left to read its messages.</p></div>
@@ -172,7 +174,7 @@ window.mountMessenger=async function(root, opts){
     chans=data||[];
     hide('newBtn',!mgr); hide('permBtn',!mgr); hide('allDivBtn',!mgr); hide('dmBtn',!canStart());
     const row=c=>`<button type="button" class="tm-chan ${cur===c.id?'sel':''}" data-ch="${c.id}">
-        <div class="nm"><span>${esc(c.name)}</span>${c.archived?'<span class="tm-pill">closed</span>':''}${c.unread&&cur!==c.id?`<span class="tm-unread">${c.unread}</span>`:''}</div>
+        <div class="nm"><span>${esc(c.name)}</span>${c.archived?'<span class="tm-pill">closed</span>':''}${c.muted?'<span class="tm-pill" title="Muted — no alerts for this chat" style="background:none;padding:0">🔕</span>':''}${c.unread&&cur!==c.id?`<span class="tm-unread">${c.unread}</span>`:''}</div>
         <div class="pv">${c.last_at?`<b>${esc((c.last_sender||'').split(' ')[0])}:</b> ${esc(c.last_body)}`:esc(who(c))}</div></button>`;
     const groups=chans.filter(c=>c.audience!=='direct'), dms=chans.filter(c=>c.audience==='direct');
     const total=chans.reduce((a,c)=>a+(c.unread||0),0);
@@ -201,6 +203,7 @@ window.mountMessenger=async function(root, opts){
       : `${esc(who(c))}${c.audience!=='coaches'?` · ${c.families} famil${c.families===1?'y':'ies'}`:''} · ${c.mode==='announce'?'announcements — only coaches post':'two-way chat'} · team admins are in every chat`;
     hide('editBtn',!c.can_manage); $('editBtn').textContent=c.audience==='direct'?(c.archived?'Re-open':'Close chat'):'Edit';
     hide('galBtn',false); hide('composer',!c.can_post); hide('readOnly',c.can_post);
+    hide('muteBtn',false); $('muteBtn').textContent=c.muted?'🔕':'🔔'; $('muteBtn').title=c.muted?'Muted — tap to unmute':'Alerts for this chat';
     $('readOnly').textContent=c.archived?'This chat is closed — you can still read everything that was sent.':c.my_role==='coach_read'?(c.audience==='team'?"Only a Head Coach or team admin with permission can post to the whole team.":"Your team admin hasn't given you permission to message parents yet."):'Only the coaches can post in this group.';
     $('msgs').innerHTML='<p class="text-sm text-gray-500">Loading…</p>';
     await loadMessages(true);
@@ -291,6 +294,31 @@ window.mountMessenger=async function(root, opts){
       closeModal(); try{ sb.functions.invoke('msg-notify',{body:{message_id:id}}).catch(()=>{}); }catch(e){}
       await loadMessages(true); loadChannels(); }; };
 
+  /* ---------- mute this chat (Team App style): 1 hour, 8 hours, a week, or until I unmute ---------- */
+  const MUTES=[[1,'1 hour'],[8,'8 hours'],[168,'1 week'],[null,'Until I unmute']];
+  $('muteBtn').onclick=()=>{ const c=chans.find(x=>x.id===cur); if(!c) return; if(pop&&pop.dataset.for==='mute') return closePop();
+    const p=openPop($('muteBtn'),'menu',c.muted?`<button type="button" data-h="off">🔔 Unmute</button>`:`<div class="text-xs text-gray-500 px-3 py-1">Mute alerts for this chat</div>`+MUTES.map(([h,l])=>`<button type="button" data-h="${h===null?'':h}">${l}</button>`).join('')); p.dataset.for='mute';
+    p.onclick=async ev=>{ const b=ev.target.closest('[data-h]'); if(!b) return; closePop();
+      const {error}=b.dataset.h==='off'?await sb.rpc('msg_unmute',{p_channel:c.id}):await sb.rpc('msg_mute',{p_channel:c.id,p_hours:b.dataset.h===''?null:+b.dataset.h});
+      if(error){ toast(clean(error),true); return; } c.muted=b.dataset.h!=='off'; $('muteBtn').textContent=c.muted?'🔕':'🔔'; toast(c.muted?'Muted — you still see new messages here, you just won\'t be alerted':'Alerts back on'); loadChannels(); }; };
+
+  /* ---------- app notifications on this device (web push through the app's service worker) ---------- */
+  const PUSH_KEY=(window.APP_CONFIG||{}).VAPID_PUBLIC_KEY||'';
+  const b64u=s=>{ const b=atob((s+'='.repeat((4-s.length%4)%4)).replace(/-/g,'+').replace(/_/g,'/')); return Uint8Array.from(b,c=>c.charCodeAt(0)); };
+  const deviceName=()=>{ const u=navigator.userAgent||''; const os=/iPhone|iPad|iPod/.test(u)?'iPhone/iPad':/Android/.test(u)?'Android':/Windows/.test(u)?'Windows':/Mac/.test(u)?'Mac':'device';
+    const br=/Edg\//.test(u)?'Edge':/CriOS|Chrome/.test(u)?'Chrome':/FxiOS|Firefox/.test(u)?'Firefox':/Safari/.test(u)?'Safari':'browser'; return `${br} on ${os}`; };
+  const standalone=()=>(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;
+  const ios=()=>/iPhone|iPad|iPod/.test(navigator.userAgent||'')||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  // 'on' | 'off' | 'blocked' | 'install' (iPhone: add to Home Screen first) | 'unsupported'
+  async function pushState(){ try{ if(!PUSH_KEY||!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window)) return ios()&&!standalone()?'install':'unsupported';
+      const reg=await navigator.serviceWorker.getRegistration(); if(!reg) return 'unsupported'; if(Notification.permission==='denied') return 'blocked';
+      const sub=await reg.pushManager.getSubscription(); return sub?'on':'off'; }catch(e){ return 'unsupported'; } }
+  async function pushOn(){ const perm=await Notification.requestPermission(); if(perm!=='granted') throw new Error('Notifications are blocked for this site — allow them in your browser settings, then try again.');
+    const reg=await navigator.serviceWorker.getRegistration(); const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u(PUSH_KEY)}); const j=sub.toJSON();
+    const {error}=await sb.rpc('msg_push_subscribe',{p_endpoint:j.endpoint,p_p256dh:j.keys.p256dh,p_auth:j.keys.auth,p_device:deviceName()}); if(error){ try{ await sub.unsubscribe(); }catch(e){} throw error; } }
+  async function pushOff(){ const reg=await navigator.serviceWorker.getRegistration(); const sub=reg&&await reg.pushManager.getSubscription(); if(!sub) return;
+    await sb.rpc('msg_push_unsubscribe',{p_endpoint:sub.endpoint}); try{ await sub.unsubscribe(); }catch(e){} }
+
   /* ---------- reactions, reply, and the little per-message menu (Team App style) ---------- */
   const QUICK=['👍','❤️','🙏','😂','😮','🎉'], MORE=['👏','🔥','💪','🏃','🥇','✅','😢','🤔','🙌','👀','🎂','⭐'];
   let pop=null;
@@ -299,7 +327,7 @@ window.mountMessenger=async function(root, opts){
     const r=anchor.getBoundingClientRect(), w=pop.offsetWidth, h=pop.offsetHeight;
     let x=Math.min(Math.max(8,r.left), window.innerWidth-w-8), y=r.bottom+4; if(y+h>window.innerHeight-8) y=Math.max(8,r.top-h-4);
     pop.style.left=x+'px'; pop.style.top=y+'px'; const m=anchor.closest('.tm-m'); if(m) m.classList.add('open'); return pop; }
-  document.addEventListener('mousedown',e=>{ if(pop&&!pop.contains(e.target)&&!e.target.closest('[data-rx],[data-menu]')) closePop(); });
+  document.addEventListener('mousedown',e=>{ if(pop&&!pop.contains(e.target)&&!e.target.closest('[data-rx],[data-menu],[data-tm="muteBtn"]')) closePop(); });
   document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closePop(); } });
   $('msgs').addEventListener('scroll',closePop);
   async function react(mid,emoji){ closePop(); const {error}=await sb.rpc('msg_react',{p_message:mid,p_emoji:emoji}); if(error){ toast(clean(error),true); return; } loadMessages(); }
@@ -343,7 +371,7 @@ window.mountMessenger=async function(root, opts){
     root.querySelectorAll('.tm-chan').forEach(b=>b.classList.toggle('sel',b.dataset.ch===ALL));
     $('chName').textContent='All messages';
     $('chSub').textContent=`Everything ever sent in your ${TEAM(team)} chats, newest first — tap a message to open that chat`;
-    hide('editBtn',true); hide('galBtn',true); hide('composer',true); hide('readOnly',true);
+    hide('editBtn',true); hide('galBtn',true); hide('muteBtn',true); hide('composer',true); hide('readOnly',true);
     $('msgs').innerHTML='<p class="text-sm text-gray-500">Loading…</p>';
     await drawHistory();
   }
@@ -509,16 +537,28 @@ window.mountMessenger=async function(root, opts){
 
   /* ---------- my alerts: email and/or text when there's a new message ---------- */
   $('alertsBtn').onclick=async()=>{
-    const {data:p}=await sb.from('msg_prefs').select('*').maybeSingle(); const d=p||{email_on:true,sms_on:false,sms_phone:''};
+    const [{data:p},{data:devs},st]=await Promise.all([sb.from('msg_prefs').select('*').maybeSingle(), sb.from('msg_push_subs').select('endpoint,device,created_at').order('created_at'), pushState()]);
+    const d=p||{email_on:true,sms_on:false,sms_phone:'',alert_team_chat:false,email_always:false}, n=(devs||[]).length;
+    const pushRow=st==='unsupported'?`<p class="text-xs text-gray-500 mb-2">App notifications aren't available in this browser${n?` (you have them on ${n} other device${n>1?'s':''})`:''}.</p>`
+      :st==='install'?`<div class="tm-opt" style="cursor:default"><span>📱</span><span><b>App notifications on this iPhone</b><br><span class="text-xs text-gray-500">First add the app to your Home Screen (Share → Add to Home Screen), then open it from there and come back here.</span></span></div>`
+      :st==='blocked'?`<div class="tm-opt" style="cursor:default"><span>🔕</span><span><b>App notifications are blocked</b><br><span class="text-xs text-gray-500">Your browser is blocking notifications for this site — allow them in its site settings, then come back here.</span></span></div>`
+      :`<label class="tm-opt"><input type="checkbox" data-g="push" ${st==='on'?'checked':''} class="mt-1"><span><b>Notify this device</b> (${esc(deviceName())})<br><span class="text-xs text-gray-500">A notification pops up on this ${/iPhone|Android/.test(deviceName())?'phone':'computer'} when your team posts.${n?` On for ${n} device${n>1?'s':''} so far.`:''}</span></span></label>`;
     openModal(`<h2 class="font-bold text-lg mb-1">My message alerts</h2>
-      <p class="text-xs text-gray-500 mb-3">Get a heads-up when your team posts something new. You get one alert per chat, then no more for that chat until you've opened it — so a busy chat won't flood you.</p>
-      <label class="tm-opt"><input type="checkbox" data-g="email" ${d.email_on?'checked':''} class="mt-1"><span><b>Email me</b> at ${esc(email)}</span></label>
+      <p class="text-xs text-gray-500 mb-3">Get a heads-up when your team posts something new. You get one alert per chat, then no more for that chat until you've opened it — so a busy chat won't flood you. Use the 🔔 on any chat to mute just that one.</p>
+      ${pushRow}
+      <label class="tm-opt"><input type="checkbox" data-g="email" ${d.email_on?'checked':''} class="mt-1"><span><b>Email me</b> at ${esc(email)}<br><span class="text-xs text-gray-500">Used when none of your devices gets the notification.</span>
+        <label class="block text-xs mt-1"><input type="checkbox" data-g="emailAlways" ${d.email_always?'checked':''}> Email me even when a device was notified</label></span></label>
+      <label class="tm-opt"><input type="checkbox" data-g="teamChat" ${d.alert_team_chat?'checked':''} class="mt-1"><span><b>Whole-team chats too</b><br><span class="text-xs text-gray-500">Announcements, your division's groups and direct messages always alert you. Busy whole-team two-way chats only do if you tick this.</span></span></label>
       <label class="tm-opt"><input type="checkbox" data-g="sms" ${d.sms_on?'checked':''} class="mt-1"><span><b>Text me</b><br><input data-g="phone" type="tel" class="border rounded p-2 mt-1" placeholder="Mobile number" value="${esc((d.sms_phone||'').replace(/^\+1/,''))}"></span></label>
       <p class="text-xs text-gray-500">By turning on texts you agree to receive team message alerts from VYC Track &amp; Field at this number. Message and data rates may apply. Reply STOP to any text to stop them.</p>
       <div class="flex gap-2 mt-3"><button data-g="save" class="tm-btn tm-pri">Save</button><button class="tm-btn tm-lite" data-close>Cancel</button><span data-g="msg" class="text-sm text-red-600 self-center"></span></div>`);
     const G=k=>q(`[data-g="${k}"]`);
-    G('save').onclick=async()=>{ const {error}=await sb.rpc('msg_save_prefs',{p_email_on:G('email').checked,p_sms_on:G('sms').checked,p_phone:G('phone').value});
-      if(error){ G('msg').textContent=clean(error); return; } closeModal(); toast('Saved'); };
+    G('save').onclick=async()=>{ G('save').disabled=true;
+      try{
+        if(G('push')){ if(G('push').checked&&st!=='on') await pushOn(); else if(!G('push').checked&&st==='on') await pushOff(); }
+        const {error}=await sb.rpc('msg_save_prefs',{p_email_on:G('email').checked,p_sms_on:G('sms').checked,p_phone:G('phone').value,p_alert_team_chat:G('teamChat').checked,p_email_always:G('emailAlways').checked});
+        if(error) throw error; closeModal(); toast('Saved');
+      }catch(e){ G('msg').textContent=clean(e); G('save').disabled=false; } };
   };
 
   return await loadTeam();

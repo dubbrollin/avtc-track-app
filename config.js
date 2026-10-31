@@ -7,5 +7,7 @@ window.APP_CONFIG = {
   TEAM_CODE: "AVTC",        // Hy-Tek team code, 4 characters max
   STATE: "CA",
   SEED_WRITE_IN: "coaches",  // who may type a seed time when an athlete has no recorded result: "coaches" or "parents"
-  SEASON_YEAR: 2027
+  SEASON_YEAR: 2027,
+  // App notifications (web push) public key — the matching PRIVATE key is a msg-notify secret, never in this file.
+  VAPID_PUBLIC_KEY: "BIVCORMkf6OBKFUcpaOM-wkBGoc1LOVzWLYf9Q5rEC2TnMEAIfkagW0o95w_UsUZbD6kuH57QpjBQNqeqJwSyzg"
 };

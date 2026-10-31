@@ -49,3 +49,21 @@ self.addEventListener('fetch', function (e) {
   }
   // Everything else (Supabase, Stripe, maps…) is left alone.
 });
+
+// App notifications: the msg-notify server function pushes { title, body, url, tag } for a new team message.
+self.addEventListener('push', function (e) {
+  var d = {}; try { d = e.data ? e.data.json() : {}; } catch (err) { d = { body: e.data && e.data.text() }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'VYC Track & Field', {
+    body: d.body || 'You have a new team message.', icon: 'icons/icon-192.png', badge: 'icons/icon-192.png',
+    tag: d.tag || 'vyc-msg', renotify: true, data: { url: d.url || 'home.html' }
+  }));
+});
+// Tapping the notification opens (or focuses) the app on the messages.
+self.addEventListener('notificationclick', function (e) {
+  e.notification.close();
+  var url = new URL((e.notification.data && e.notification.data.url) || 'home.html', self.location.href).href;
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
+    for (var i = 0; i < list.length; i++) { if (list[i].url.indexOf(self.location.origin) === 0 && 'focus' in list[i]) { list[i].navigate(url); return list[i].focus(); } }
+    return self.clients.openWindow(url);
+  }));
+});
