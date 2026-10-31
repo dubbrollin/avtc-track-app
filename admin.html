@@ -920,8 +920,9 @@ ${teams.map(t=>`<tr data-code="${esc(t.code)}"><td class="font-mono font-bold">$
 <div class="flex flex-wrap gap-2 mt-2"><button class="btn lite" id="cbRebuild">Rebuild blocks from last season</button>
 <button class="btn pri" id="cbReassign">Reassign numbers from the certified roster</button></div>
 <p class="text-xs text-gray-500 mt-1"><b>Reassign</b> is for when certification is finished: every team's block is resized to its roster now (+20 cushion), and each team's athletes are renumbered alphabetically — certified athletes first, then any still under review. This changes numbers already handed out.</p></div>
+<div class="card" id="limCard"><h3 class="font-bold mb-1">Entry limits</h3><p class="text-sm text-gray-500">Loading…</p></div>
 <div class="card" id="evCard"><h3 class="font-bold mb-1">Event list</h3><p class="text-sm text-gray-500">Loading…</p></div>`;
-paintEventList();
+paintEntryLimits(); paintEventList();
 $('nAdd').onclick=async()=>{ const code=$('nCode').value.trim().toUpperCase(), name=$('nName').value.trim(); if(!code||!name){ toast('Enter a code and a name.',true); return; }
 if(await run(sb.from('league_teams').insert({code,name,conference:$('nConf').value,active:true,sort_order:100}),'Team added')) paintLeague(); };
 $('sSave').onclick=()=>run(sb.from('app_settings').upsert({key:'season_year',value:String($('sYear').value)}),'Saved');
@@ -948,6 +949,23 @@ document.addEventListener('click',async e=>{
 const b=e.target.closest('#tBody button'); if(!b) return; const tr=b.closest('tr'), code=tr.dataset.code;
 if(b.dataset.act==='save'){ const patch={}; tr.querySelectorAll('[data-f]').forEach(el=>{ const k=el.dataset.f; patch[k]=el.type==='checkbox'?el.checked:el.type==='number'?+el.value:el.value; }); await run(sb.from('league_teams').update(patch).eq('code',code),'Saved'); }
 if(b.dataset.act==='del'){ if(!confirm(`Delete team ${code} from the list? Athletes, coaches and results keep their team code, but the team will no longer appear in dropdowns. (To hide a team instead, untick Active.)`)) return; if(await run(sb.from('league_teams').delete().eq('code',code),'Team deleted')) paintLeague(); }
+});
+/* ---- Entry limits (table entry_limits): how many events an athlete may enter per meet, per division, and whether the last
+   spot must be a relay. Read by events.js on every page AND by the database's entry check, so the two always agree. ---- */
+async function paintEntryLimits(){
+const el=$('limCard'); if(!el) return;
+const {data:lims,error}=await sb.from('entry_limits').select('*').order('sort_order').order('division');
+if(error){ el.innerHTML=`<h3 class="font-bold mb-1">Entry limits</h3><p class="text-sm text-red-700">Couldn't load the entry limits: ${esc(error.message)}</p>`; return; }
+el.innerHTML=`<h3 class="font-bold mb-1">Entry limits</h3>
+<p class="text-xs text-gray-500 mb-2">How many events one athlete may enter at a meet, by division. With <b>Last spot must be a relay</b> ticked, an athlete can only reach the maximum if one of their events is a relay (e.g. Bantam: 3 events, or 4 if one is a relay). The database enforces these too, so a coach can't go over them. Changes apply to new entries from the next page load.</p>
+<div class="scroll" style="max-height:none"><table class="t"><thead><tr><th>Division</th><th>Max events per meet</th><th>Last spot must be a relay</th><th></th></tr></thead>
+<tbody id="limBody">${(lims||[]).map(l=>`<tr data-div="${esc(l.division)}"><td class="font-bold">${esc(l.division)}</td><td><input type="number" data-f="max_events" min="1" max="20" value="${esc(l.max_events)}" style="width:5rem"></td><td><input type="checkbox" data-f="relay_required_for_max" ${l.relay_required_for_max?'checked':''}></td><td><button class="btn pri" data-act="save">Save</button></td></tr>`).join('')}</tbody></table></div>`;
+viewOnly(el);
+}
+document.addEventListener('click',async e=>{
+const b=e.target.closest('#limBody button'); if(!b) return; const tr=b.closest('tr'), div=tr.dataset.div;
+const max=parseInt(tr.querySelector('[data-f="max_events"]').value,10); if(!(max>=1&&max<=20)){ toast('Max events must be between 1 and 20.',true); return; }
+if(await run(sb.from('entry_limits').update({max_events:max,relay_required_for_max:tr.querySelector('[data-f="relay_required_for_max"]').checked}).eq('division',div),'Saved')) paintEntryLimits();
 });
 /* ---- Event list (table standard_events): the standard events and which divisions run each one. events.js loads this
    list on every page, so new meets, the Results page order and manual result entry all follow it. ---- */

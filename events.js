@@ -30,7 +30,8 @@ window.STANDARD_EVENTS = [
   {code:"SP",   name:"Shot Put",           divs:"B J Y I",      field:true}, // 6lb (B/J), 4kg or 10lb by gender for Y/I
   {code:"JT",   name:"Javelin Throw",      divs:"G B J Y I",    field:true}, // 300g (G/B), 450g (J), 600g (Y/I)
 ];
-// Entry limits per division
+// Entry limits per division. Since 2026-10-30 the real limits live in the database (table entry_limits, edited on
+// Site Admin > League Setup > Entry limits, and enforced there by the check_entry trigger too); these are the fallback.
 window.ENTRY_RULES = {
   "Sub-Gremlin":  {max:3, relayRequiredFor4th:false},
   "Gremlin":      {max:3, relayRequiredFor4th:false},
@@ -48,23 +49,28 @@ window.checkLimits = function(division, current, newEv){
   const r = window.ENTRY_RULES[division]; if(!r) return "Unknown division";
   const all = newEv ? [...current, newEv] : current;
   if(all.length > r.max) return `Max ${r.max} events for ${division}`;
-  if(r.relayRequiredFor4th && all.length===4 && !all.some(e=>e.relay)) return `${division} may only have 4 events if one is a relay`;
+  if(r.relayRequiredFor4th && all.length===r.max && !all.some(e=>e.relay)) return `${division} may only have ${r.max} events if one is a relay`;
   return null;
 };
-// ---- Live event list (Site Admin > League Setup > Event list). Replaces STANDARD_EVENTS in place, so anything holding a
-// reference to the array sees the change. Pages that need the list at start-up do `await window.eventsReady` first
+// ---- Live event list and entry limits (Site Admin > League Setup). They replace STANDARD_EVENTS and ENTRY_RULES in place,
+// so anything holding a reference sees the change. Pages that need them at start-up do `await window.eventsReady` first
 // (the same way they wait for window.leagueReady). Inactive events are left out.
 window.eventsReady = (async function(){
   try{
     if(!window.APP_CONFIG && document.readyState==='loading') await new Promise(r=>document.addEventListener('DOMContentLoaded',r,{once:true}));
     const C=window.APP_CONFIG; if(!C||!C.SUPABASE_URL) return;
-    const r=await fetch(C.SUPABASE_URL+'/rest/v1/standard_events?select=*&active=eq.true&order=sort_order,name',
-      {headers:{apikey:C.SUPABASE_ANON_KEY,Authorization:'Bearer '+C.SUPABASE_ANON_KEY}});
-    if(!r.ok) return;
-    const rows=await r.json(); if(!Array.isArray(rows)||!rows.length) return;
-    window.STANDARD_EVENTS.splice(0,window.STANDARD_EVENTS.length,...rows.map(x=>{
-      const e={code:x.code,name:x.name,divs:x.divs||''};
-      if(x.is_relay) e.relay=true; if(x.is_field) e.field=true; if(x.gender) e.gender=x.gender; if(x.note) e.note=x.note;
-      return e; }));
+    const h={apikey:C.SUPABASE_ANON_KEY,Authorization:'Bearer '+C.SUPABASE_ANON_KEY};
+    const get=async p=>{ try{ const r=await fetch(C.SUPABASE_URL+'/rest/v1/'+p,{headers:h}); return r.ok?await r.json():null; }catch(e){ return null; } };
+    const [rows,lims]=await Promise.all([ get('standard_events?select=*&active=eq.true&order=sort_order,name'), get('entry_limits?select=*&order=sort_order,division') ]);
+    if(Array.isArray(rows)&&rows.length){
+      window.STANDARD_EVENTS.splice(0,window.STANDARD_EVENTS.length,...rows.map(x=>{
+        const e={code:x.code,name:x.name,divs:x.divs||''};
+        if(x.is_relay) e.relay=true; if(x.is_field) e.field=true; if(x.gender) e.gender=x.gender; if(x.note) e.note=x.note;
+        return e; }));
+    }
+    if(Array.isArray(lims)&&lims.length){
+      Object.keys(window.ENTRY_RULES).forEach(k=>delete window.ENTRY_RULES[k]);
+      lims.forEach(l=>{ window.ENTRY_RULES[l.division]={max:l.max_events,relayRequiredFor4th:!!l.relay_required_for_max}; });
+    }
   }catch(e){}
 })();

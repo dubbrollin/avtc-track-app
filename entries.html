@@ -106,6 +106,7 @@ function renderViewToggle(){
 }
 
 async function loadMeets(){
+  if(window.eventsReady) await window.eventsReady;   // entry limits (Site Admin > League Setup) must be in before athletes are listed
   const {data}=await sb.from('meets').select('*').eq('season_year',await window.currentSeason()).neq('status','archived').order('meet_date');
   meets=data||[];
   $('meet').innerHTML=meets.map(m=>`<option value="${m.id}">${m.name} — ${fmtDate(m.meet_date)}</option>`).join('')||'<option>No meets posted yet</option>';
