@@ -1,5 +1,5 @@
 // Team Messenger — the chat panel that sits INSIDE the dashboards (there is no separate Messages page):
-//   Coach Dashboard  → coaches and team admins message their parents (groups, direct messages, photos/files, polls, mute, app notifications)
+//   Coach Dashboard  → coaches and team admins message their parents (groups, direct messages, photos/videos/files, polls, mute, app notifications, search, export)
 //   Parent Dashboard → each parent sees their team's messages and can reply
 //   Site Admin → Messages tab → a site admin can open any team's chats
 // A paid team extra: nothing shows for a team until a site admin has switched it on (Site Admin → Messages).
@@ -57,6 +57,11 @@ const CSS=`<style id="tmStyle">
 .tm .tm-pw{font-size:11px;color:#5b6878;margin:1px 10px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tm .tm-pf{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;color:#5b6878;margin-top:8px}.tm .tm-pf button{border:0;background:none;color:#b42318;font-weight:700;cursor:pointer;font-size:11px}
 .tm .tm-pform input[type=text]{width:100%;border:1.5px solid var(--field,#c7d1de);border-radius:8px;padding:.5rem .65rem;font-size:16px;margin-bottom:6px}.tm .tm-pform label{font-size:.9rem}
+.tm .tm-atts video{width:16rem;max-width:100%;max-height:14rem;border-radius:10px;border:1px solid var(--line,#e1e7ef);background:#000}.tm.tm-narrow .tm-atts video{width:100%}
+.tm .tm-search{display:flex;gap:6px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--line,#e1e7ef);background:#fff}.tm .tm-search input{flex:1;min-width:0;border:1.5px solid var(--field,#c7d1de);border-radius:8px;padding:.4rem .6rem;font-size:16px}
+.tm .tm-search button{border:0;background:none;cursor:pointer;color:#b42318;font-weight:700}
+.tm .tm-typing{font-size:12px;color:#5b6878;padding:2px 12px;background:var(--soft,#f7f9fc);min-height:0;font-style:italic}.tm .tm-typing:empty{display:none}
+.tm .tm-m mark{background:#fde68a;color:inherit;border-radius:3px;padding:0 1px}.tm .tm-m.mine mark{background:#fde68a;color:#111}
 .tm .tm-atts{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}.tm .tm-m.mine .tm-atts{justify-content:flex-end}
 .tm .tm-atts img,.tm .tm-gal img{width:9.5rem;height:9.5rem;object-fit:cover;border-radius:10px;border:1px solid var(--line,#e1e7ef);background:#fff;cursor:zoom-in}
 .tm .tm-file{display:inline-flex;align-items:center;gap:.4rem;background:#fff;border:1px solid var(--line,#e1e7ef);border-radius:10px;padding:.4rem .6rem;font-size:.85rem;text-decoration:none;color:inherit;max-width:16rem}
@@ -96,16 +101,20 @@ const HTML=`
         <button data-tm="backBtn" class="tm-sbtn tm-lite tm-back">← All chats</button>
         <div class="tm-title"><div class="font-bold truncate" data-tm="chName">Pick a chat</div><div class="text-xs text-gray-500 tm-sub" data-tm="chSub"></div></div>
         <button data-tm="muteBtn" class="tm-sbtn tm-lite tm-hide" title="Alerts for this chat" aria-label="Alerts for this chat">🔔</button>
+      <button data-tm="searchBtn" class="tm-sbtn tm-lite tm-hide" title="Search this chat" aria-label="Search this chat">🔍</button>
       <button data-tm="galBtn" class="tm-sbtn tm-lite tm-hide">Photos</button>
+      <button data-tm="exportBtn" class="tm-sbtn tm-lite tm-hide" title="Download this chat as a spreadsheet">⬇ Export</button>
         <button data-tm="editBtn" class="tm-sbtn tm-lite tm-hide">Edit</button>
       </div>
+      <div data-tm="search" class="tm-search tm-hide"><input data-tm="searchIn" type="search" placeholder="Search this chat…" aria-label="Search this chat"><button type="button" data-tm="searchX" aria-label="Close search">✕</button></div>
       <div data-tm="msgs" class="tm-msgs"><p class="text-sm text-gray-500">Pick a chat on the left to read its messages.</p></div>
+      <div data-tm="typing" class="tm-typing"></div>
       <div data-tm="replying" class="tm-replying"></div>
       <div data-tm="pending" class="tm-pending"></div>
       <div data-tm="composer" class="tm-composer tm-hide">
-        <button data-tm="attach" type="button" class="tm-attach" title="Add photos or files" aria-label="Add photos or files">📎</button>
+        <button data-tm="attach" type="button" class="tm-attach" title="Add photos, videos or files" aria-label="Add photos, videos or files">📎</button>
         <button data-tm="pollBtn" type="button" class="tm-attach" title="Start a poll" aria-label="Start a poll">📊</button>
-        <input data-tm="fileIn" type="file" multiple class="tm-hide" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt">
+        <input data-tm="fileIn" type="file" multiple class="tm-hide" accept="image/*,video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt">
         <textarea data-tm="body" rows="1" maxlength="2000" placeholder="Write a message…"></textarea><button data-tm="send" class="tm-btn tm-pri">Send</button></div>
       <div data-tm="readOnly" class="tm-ro tm-hide"></div>
     </div>
@@ -118,20 +127,21 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 const linkify=s=>esc(s).replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)\]])/g,'<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
 const TEAM=c=>((window.VYC_TEAMS||[]).find(t=>t.code===c)||{}).name||c;
 const isImg=a=>/^image\/(jpeg|png|gif|webp)$/.test(a.type||'');
+const isVid=a=>/^video\/(mp4|quicktime|webm)$/.test(a.type||'')||/\.(mp4|mov|webm)$/i.test(a.name||'');
 const clean=e=>String((e&&e.message)||e).replace(/^.*?: /,'');
 function toast(m,bad){ let t=document.getElementById('tmToast'); if(!t){ t=document.createElement('div'); t.id='tmToast'; t.style.cssText='position:fixed;bottom:16px;left:50%;transform:translateX(-50%);color:#fff;padding:.6rem 1rem;border-radius:.5rem;font-size:.9rem;z-index:9999;display:none;max-width:90vw'; document.body.appendChild(t); }
   t.textContent=m; t.style.background=bad?'#991b1b':'#111827'; t.style.display='block'; clearTimeout(toast.h); toast.h=setTimeout(()=>t.style.display='none',bad?6000:2500); }
 
 window.mountMessenger=async function(root, opts){
   opts=opts||{}; const sb=opts.sb;
-  if(root.__tm){ clearInterval(root.__tm.timer); try{ if(root.__tm.live) sb.removeChannel(root.__tm.live); }catch(e){} }
+  if(root.__tm){ clearInterval(root.__tm.timer); try{ if(root.__tm.live) sb.removeChannel(root.__tm.live); if(root.__tm.typing) sb.removeChannel(root.__tm.typing); }catch(e){} }
   const S=root.__tm={timer:null,live:null};
   if(!document.getElementById('tmStyle')) document.head.insertAdjacentHTML('beforeend',CSS);
   root.classList.add('tm'); root.innerHTML=HTML;
   const $=k=>root.querySelector(`[data-tm="${k}"]`), hide=(k,h)=>$(k).classList.toggle('tm-hide',!!h);
   const alive=()=>root.__tm===S&&document.body.contains(root);
   let uid=null, email=null, myTeams=[], team=null, mgr=false, chans=[], cur=null, msgs=[], files=[], urls={}, lim=200, hist=[], histLim=100, histQ='';
-  let rx=[], seenBy=[], quoted={}, replyTo=null, polls={};   // polls = poll + results by message id   // reactions and "seen by" for the open chat; quoted = older messages a reply points at; replyTo = the message I'm replying to
+  let rx=[], seenBy=[], quoted={}, replyTo=null, polls={}, searchQ='';   // polls = poll + results by message id   // reactions and "seen by" for the open chat; quoted = older messages a reply points at; replyTo = the message I'm replying to
   // One column (list, then the chat) whenever the panel itself is narrow — a phone, or a slim dashboard column.
   const narrow=()=>(root.clientWidth||window.innerWidth)<700, fit=()=>{ root.classList.toggle('tm-narrow',narrow()); if(!narrow()&&!cur&&chans.length&&!$('main').classList.contains('tm-hide')) openChannel(latest().id); };
   try{ new ResizeObserver(()=>{ if(alive()) fit(); }).observe(root); }catch(e){ window.addEventListener('resize',fit); }
@@ -204,6 +214,7 @@ window.mountMessenger=async function(root, opts){
     hide('editBtn',!c.can_manage); $('editBtn').textContent=c.audience==='direct'?(c.archived?'Re-open':'Close chat'):'Edit';
     hide('galBtn',false); hide('composer',!c.can_post); hide('readOnly',c.can_post);
     hide('muteBtn',false); $('muteBtn').textContent=c.muted?'🔕':'🔔'; $('muteBtn').title=c.muted?'Muted — tap to unmute':'Alerts for this chat';
+    hide('searchBtn',false); hide('exportBtn',!c.can_manage); setSearch(false); setTypingChannel(id);
     $('readOnly').textContent=c.archived?'This chat is closed — you can still read everything that was sent.':c.my_role==='coach_read'?(c.audience==='team'?"Only a Head Coach or team admin with permission can post to the whole team.":"Your team admin hasn't given you permission to message parents yet."):'Only the coaches can post in this group.';
     $('msgs').innerHTML='<p class="text-sm text-gray-500">Loading…</p>';
     await loadMessages(true);
@@ -218,14 +229,16 @@ window.mountMessenger=async function(root, opts){
   const U=p=>(urls[p]||{}).url||'';
   const attHtml=a=>{ const u=U(a.path); if(!u) return `<span class="tm-file">📎 <span>${esc(a.name)}</span></span>`;
     return isImg(a)?`<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="${esc(a.name)}" loading="lazy"></a>`
+      :isVid(a)?`<video src="${esc(u)}" controls playsinline preload="metadata" title="${esc(a.name)}"></video>`
       :`<a class="tm-file" href="${esc(u)}" target="_blank" rel="noopener" download="${esc(a.name)}">📎 <span>${esc(a.name)}</span></a>`; };
 
   async function loadMessages(jump){
     const id=cur; if(!id||id===ALL) return;
-    const {data,error}=await sb.from('msg_messages').select('*').eq('channel_id',id).order('created_at',{ascending:false}).limit(lim);
-    if(id!==cur) return;
+    const q=searchQ; let rq=sb.from('msg_messages').select('*').eq('channel_id',id); if(q) rq=rq.ilike('body','%'+q.replace(/[%_]/g,'')+'%');
+    const {data,error}=await rq.order('created_at',{ascending:false}).limit(q?100:lim);
+    if(id!==cur||q!==searchQ) return;
     if(error){ $('msgs').innerHTML=`<p class="text-sm text-red-700">${esc(clean(error))}</p>`; return; }
-    const more=(data||[]).length>=lim, next=(data||[]).reverse(), box=$('msgs');
+    const more=!q&&(data||[]).length>=lim, next=(data||[]).reverse(), box=$('msgs');
     // Reactions and "seen by" come with the messages; a reply may quote a message older than the ones loaded, so fetch those too.
     const ids=next.map(m=>m.id), have=new Set(ids), need=[...new Set(next.map(m=>m.reply_to).filter(r=>r&&!have.has(r)&&!quoted[r]))];
     const [r1,r2,r3,r4]=await Promise.all([
@@ -233,11 +246,11 @@ window.mountMessenger=async function(root, opts){
       sb.rpc('msg_seen',{p_channel:id}),
       need.length?sb.from('msg_messages').select('id,sender_name,body,attachments,deleted_at').in('id',need):Promise.resolve({data:[]}),
       sb.rpc('msg_polls_in',{p_channel:id})]);
-    if(id!==cur) return;
+    if(id!==cur||q!==searchQ) return;
     (r3.data||[]).forEach(m=>quoted[m.id]=m);
     const nrx=r1.data||[], nseen=r2.data||[], npolls={}; (r4.data||[]).forEach(p=>npolls[p.message_id]=p);
     // Redraw only when something on screen would change: the messages, a reaction, who has read what, or a poll's votes / open-closed state.
-    const sig=next.map(m=>m.id+(m.deleted_at?'x':'')).join(',')+'|'+nrx.map(x=>x.message_id+x.user_id+x.emoji).sort().join(',')+'|'+nseen.map(s=>s.user_id+s.last_read_at).sort().join(',')
+    const sig=q+'|'+next.map(m=>m.id+(m.deleted_at?'x':'')).join(',')+'|'+nrx.map(x=>x.message_id+x.user_id+x.emoji).sort().join(',')+'|'+nseen.map(s=>s.user_id+s.last_read_at).sort().join(',')
       +'|'+Object.values(npolls).map(p=>p.poll_id+(p.counts||[]).join('.')+(p.mine||[]).join('.')+(p.closed_at?'c':'')+(pollOpen(p)?'o':'z')).join(',');
     const changed=sig!==loadMessages.sig||jump; loadMessages.sig=sig; msgs=next; rx=nrx; seenBy=nseen; polls=npolls;
     if(!changed) return;
@@ -253,15 +266,16 @@ window.mountMessenger=async function(root, opts){
     const quoteHtml=m=>{ if(!m.reply_to) return ''; const q=msgs.find(x=>x.id===m.reply_to)||quoted[m.reply_to]; if(!q) return `<span class="tm-q"><b>Reply</b>…</span>`;
       const body=q.deleted_at?'Message removed':(q.body||((q.attachments||[]).length?'📎 photo or file':''));
       return `<span class="tm-q" data-jump="${q.id}"><b>${q.deleted_at?'':esc(q.sender_name)}</b>${esc(body.slice(0,160))}</span>`; };
+    const hl=h=>{ if(!q) return h; const re=new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'ig'); return h.split(/(<[^>]+>)/).map(x=>x.startsWith('<')?x:x.replace(re,'<mark>$&</mark>')).join(''); };
     let day='';
-    box.innerHTML=(more?`<p class="text-center mb-2"><button class="tm-sbtn tm-lite" data-older>Show earlier messages</button></p>`:msgs.length?`<p class="tm-day">Start of this chat</p>`:'')+msgs.map(m=>{ const d=new Date(m.created_at), dk=d.toDateString(), mine=m.sender_id===uid, att=m.attachments||[];
+    box.innerHTML=(q?`<p class="tm-day">${msgs.length?`${msgs.length}${msgs.length>=100?'+':''} message${msgs.length===1?'':'s'} mention`:'Nothing in this chat mentions'} “${esc(q)}”</p>`:more?`<p class="text-center mb-2"><button class="tm-sbtn tm-lite" data-older>Show earlier messages</button></p>`:msgs.length?`<p class="tm-day">Start of this chat</p>`:'')+msgs.map(m=>{ const d=new Date(m.created_at), dk=d.toDateString(), mine=m.sender_id===uid, att=m.attachments||[];
       const head=dk!==day?`<div class="tm-day">${d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</div>`:''; day=dk;
       const t=d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}), qh=m.deleted_at?'':quoteHtml(m);
       const acts=m.deleted_at?'':`<span class="tm-acts">${c.archived?'':`<button type="button" class="tm-act" data-rx="${m.id}" title="React" aria-label="React">☺</button>`}<button type="button" class="tm-act" data-menu="${m.id}" title="More" aria-label="More">⋯</button></span>`;
       return head+`<div class="tm-m ${mine?'mine':''} ${m.sender_role==='coach'?'coach':''} ${m.deleted_at?'gone':''}" data-mid="${m.id}">
         <div class="who">${mine?'You':`<b>${esc(m.sender_name)}</b>${m.sender_label?' · '+esc(m.sender_label):''}`} · ${t}${acts}</div>
-        ${m.deleted_at?'<div class="b">Message removed</div>':polls[m.id]?pollHtml(polls[m.id],c):((m.body||qh)?`<div class="b">${qh}${linkify(m.body)}</div>`:'')+(att.length?`<div class="tm-atts">${att.map(attHtml).join('')}</div>`:'')}${m.deleted_at?'':rxHtml(m)}${seenHtml(m.id)}</div>`; }).join('')
-      || `<p class="text-sm text-gray-500">No messages yet.${c.can_post?' Say hello 👋':''}</p>`;
+        ${m.deleted_at?'<div class="b">Message removed</div>':polls[m.id]?pollHtml(polls[m.id],c):((m.body||qh)?`<div class="b">${qh}${hl(linkify(m.body))}</div>`:'')+(att.length?`<div class="tm-atts">${att.map(attHtml).join('')}</div>`:'')}${m.deleted_at?'':rxHtml(m)}${q?'':seenHtml(m.id)}</div>`; }).join('')
+      || (q?'':`<p class="text-sm text-gray-500">No messages yet.${c.can_post?' Say hello 👋':''}</p>`);
     if(jump||nearEnd){ box.scrollTop=box.scrollHeight; box.querySelectorAll('img').forEach(i=>i.addEventListener('load',()=>{ box.scrollTop=box.scrollHeight; },{once:true})); }
     markSeen();
   }
@@ -293,6 +307,31 @@ window.mountMessenger=async function(root, opts){
       if(error){ toast(clean(error),true); P('go').disabled=false; P('go').textContent='Start poll'; return; }
       closeModal(); try{ sb.functions.invoke('msg-notify',{body:{message_id:id}}).catch(()=>{}); }catch(e){}
       await loadMessages(true); loadChannels(); }; };
+
+  /* ---------- search inside this chat ---------- */
+  function setSearch(open){ hide('search',!open); if(!open){ if(searchQ){ searchQ=''; $('searchIn').value=''; if(cur&&cur!==ALL) loadMessages(true); } return; } $('searchIn').focus(); }
+  $('searchBtn').onclick=()=>setSearch($('search').classList.contains('tm-hide'));
+  $('searchX').onclick=()=>setSearch(false);
+  $('searchIn').addEventListener('input',()=>{ clearTimeout(setSearch.t); setSearch.t=setTimeout(()=>{ searchQ=$('searchIn').value.trim(); loadMessages(true); },300); });
+  $('searchIn').addEventListener('keydown',e=>{ if(e.key==='Escape') setSearch(false); });
+
+  /* ---------- export this chat as a spreadsheet (team admins) ---------- */
+  $('exportBtn').onclick=async()=>{ const c=chans.find(x=>x.id===cur); if(!c) return; $('exportBtn').disabled=true;
+    const {data,error}=await sb.rpc('msg_export',{p_channel:c.id}); $('exportBtn').disabled=false; if(error){ toast(clean(error),true); return; }
+    const cell=v=>{ const t=v==null?'':String(v); return /[",\r\n]/.test(t)?'"'+t.replace(/"/g,'""')+'"':t; };
+    const rows=[['Sent','Name','Role','Label','Message','Attachments','Replying to','Poll','Removed'],...(data||[]).map(r=>[new Date(r.sent_at).toLocaleString('en-US'),r.sender,r.role,r.label,r.body,r.attachments,r.reply_to,r.poll,r.removed?'yes':''])];
+    const blob=new Blob(['\ufeff'+rows.map(r=>r.map(cell).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`${(c.name||'chat').replace(/[^\w\- ]+/g,'').trim()||'chat'} - ${TEAM(team)} - ${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1000); toast(`Exported ${(data||[]).length} message${(data||[]).length===1?'':'s'}`); };
+
+  /* ---------- "… is typing" (a realtime broadcast per chat; nothing is stored) ---------- */
+  let typers={}, lastTyped=0;
+  function drawTyping(){ const now=Date.now(), names=Object.values(typers).filter(t=>now-t.at<3000).map(t=>(t.name||'Someone').split(' ')[0]);
+    $('typing').textContent=names.length?`${names.slice(0,3).join(', ')}${names.length>3?' and others':''} ${names.length===1?'is':'are'} typing…`:''; }
+  function setTypingChannel(id){ try{ if(S.typing){ sb.removeChannel(S.typing); S.typing=null; } }catch(e){} typers={}; drawTyping(); if(!id||id===ALL) return;
+    try{ S.typing=sb.channel('tm-typing-'+id).on('broadcast',{event:'typing'},({payload})=>{ if(!payload||payload.uid===uid) return; typers[payload.uid]={name:payload.name,at:Date.now()}; drawTyping(); setTimeout(drawTyping,3200); }).subscribe(); }catch(e){} }
+  function sendTyping(){ if(!S.typing||Date.now()-lastTyped<2000) return; lastTyped=Date.now(); const me=(msgs.find(m=>m.sender_id===uid)||{}).sender_name||'Someone';
+    try{ S.typing.send({type:'broadcast',event:'typing',payload:{uid,name:me}}); }catch(e){} }
 
   /* ---------- mute this chat (Team App style): 1 hour, 8 hours, a week, or until I unmute ---------- */
   const MUTES=[[1,'1 hour'],[8,'8 hours'],[168,'1 week'],[null,'Until I unmute']];
@@ -371,7 +410,7 @@ window.mountMessenger=async function(root, opts){
     root.querySelectorAll('.tm-chan').forEach(b=>b.classList.toggle('sel',b.dataset.ch===ALL));
     $('chName').textContent='All messages';
     $('chSub').textContent=`Everything ever sent in your ${TEAM(team)} chats, newest first — tap a message to open that chat`;
-    hide('editBtn',true); hide('galBtn',true); hide('muteBtn',true); hide('composer',true); hide('readOnly',true);
+    hide('editBtn',true); hide('galBtn',true); hide('muteBtn',true); hide('searchBtn',true); hide('exportBtn',true); hide('composer',true); hide('readOnly',true); setSearch(false); setTypingChannel(null);
     $('msgs').innerHTML='<p class="text-sm text-gray-500">Loading…</p>';
     await drawHistory();
   }
@@ -400,18 +439,19 @@ window.mountMessenger=async function(root, opts){
   /* ---------- photos & files ---------- */
   $('attach').onclick=()=>$('fileIn').click();
   $('fileIn').onchange=async e=>{ for(const f of [...e.target.files]){ if(files.length>=6){ toast('Six photos or files at most per message.',true); break; }
-      const g=await shrink(f); if(g.size>10*1024*1024){ toast(`${f.name} is over 10 MB.`,true); continue; } files.push(g); }
+      const g=await shrink(f), cap=isVid(f)?50:10; if(g.size>cap*1024*1024){ toast(`${f.name} is over ${cap} MB${isVid(f)?' — trim the clip first.':'.'}`,true); continue; } files.push(g); }
     e.target.value=''; drawPending(); };
-  function drawPending(){ $('pending').innerHTML=files.map((f,i)=>`<span class="tm-file">${/^image\//.test(f.type)?'🖼️':'📎'} <span>${esc(f.name)}</span> <button type="button" data-rm="${i}" aria-label="Remove">✕</button></span>`).join(''); }
+  function drawPending(){ $('pending').innerHTML=files.map((f,i)=>`<span class="tm-file">${/^image\//.test(f.type)?'🖼️':isVid(f)?'🎬':'📎'} <span>${esc(f.name)}</span> <button type="button" data-rm="${i}" aria-label="Remove">✕</button></span>`).join(''); }
   $('pending').onclick=e=>{ const b=e.target.closest('[data-rm]'); if(!b) return; files.splice(+b.dataset.rm,1); drawPending(); };
   // Phone photos are huge — shrink big JPEG/PNG photos to 2000px before uploading.
   async function shrink(f){ if(!/^image\/(jpeg|png)$/.test(f.type)||f.size<1.5*1024*1024) return f;
     try{ const bmp=await createImageBitmap(f), k=Math.min(1,2000/Math.max(bmp.width,bmp.height)), cv=document.createElement('canvas'); cv.width=Math.round(bmp.width*k); cv.height=Math.round(bmp.height*k);
       cv.getContext('2d').drawImage(bmp,0,0,cv.width,cv.height); const blob=await new Promise(r=>cv.toBlob(r,'image/jpeg',.85));
       return blob&&blob.size<f.size?new File([blob],f.name.replace(/\.\w+$/,'')+'.jpg',{type:'image/jpeg'}):f; }catch(e){ return f; } }
-  $('galBtn').onclick=()=>{ const live=msgs.filter(m=>!m.deleted_at), pics=live.flatMap(m=>(m.attachments||[]).filter(isImg).map(a=>({a,m}))).reverse(), docs=live.flatMap(m=>(m.attachments||[]).filter(a=>!isImg(a))).reverse();
-    openModal(`<h2 class="font-bold text-lg mb-2">Photos &amp; files — ${esc($('chName').textContent)}</h2>
+  $('galBtn').onclick=()=>{ const live=msgs.filter(m=>!m.deleted_at), pics=live.flatMap(m=>(m.attachments||[]).filter(isImg).map(a=>({a,m}))).reverse(), vids=live.flatMap(m=>(m.attachments||[]).filter(isVid)).reverse(), docs=live.flatMap(m=>(m.attachments||[]).filter(a=>!isImg(a)&&!isVid(a))).reverse();
+    openModal(`<h2 class="font-bold text-lg mb-2">Photos, videos &amp; files — ${esc($('chName').textContent)}</h2>
       ${pics.length?`<div class="tm-gal">${pics.map(({a,m})=>`<a href="${esc(U(a.path))}" target="_blank" rel="noopener" title="${esc(m.sender_name)} · ${new Date(m.created_at).toLocaleDateString()}"><img src="${esc(U(a.path))}" alt="${esc(a.name)}" loading="lazy"></a>`).join('')}</div>`:'<p class="text-sm text-gray-500">No photos in this chat yet.</p>'}
+      ${vids.length?`<h3 class="font-bold mt-3 mb-1">Videos</h3><div class="tm-atts">${vids.map(attHtml).join('')}</div>`:''}
       ${docs.length?`<h3 class="font-bold mt-3 mb-1">Files</h3><div class="flex flex-wrap gap-2">${docs.map(attHtml).join('')}</div>`:''}
       <div class="mt-3"><button class="tm-btn tm-lite" data-close>Close</button></div>`); };
 
@@ -433,7 +473,7 @@ window.mountMessenger=async function(root, opts){
   }
   $('send').onclick=send;
   $('body').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey&&!narrow()){ e.preventDefault(); send(); } });
-  $('body').addEventListener('input',e=>{ e.target.style.height='auto'; e.target.style.height=Math.min(e.target.scrollHeight,144)+'px'; });
+  $('body').addEventListener('input',e=>{ e.target.style.height='auto'; e.target.style.height=Math.min(e.target.scrollHeight,144)+'px'; if(e.target.value) sendTyping(); });
 
   async function refresh(){ if(!alive()){ clearInterval(S.timer); return; } if($('main').classList.contains('tm-hide')||document.hidden) return; await loadChannels(); if(cur===ALL) await drawHistory(true); else if(cur) await loadMessages(); }
   // New messages arrive live; a 25-second check is the safety net.
