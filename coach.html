@@ -551,7 +551,7 @@ const xferLabel=x=>x.flagged?`Possible transfer to ${esc(TEAM_NAME(x.to_team))} 
 const STATUS_LABEL={submitted:'needs team review',reviewed:'team reviewed',verified:'certified',rejected:'rejected',archived:'archived'};
 const statusPill=s=>`<span class="pill ${s==='verified'?'bg-green-600 text-white':s==='rejected'?'bg-red-600 text-white':s==='reviewed'?'bg-blue-100 text-blue-800':'bg-gray-200'}">${STATUS_LABEL[s]||s}</span>`;
 function pill(r){
-  const s=r.dob_check_status;
+  const s=r.status==='verified'?'match':r.dob_check_status; // certified = no ID issues
   const c={match:'bg-green-100 text-green-800',mismatch:'bg-red-100 text-red-800',pending:'bg-yellow-100 text-yellow-800',unreadable:'bg-orange-100 text-orange-800',error:'bg-red-100 text-red-800'}[s];
   return `<span class="pill ${c}">ID: ${s}</span>`;
 }
@@ -628,7 +628,7 @@ function render(){
         :`<button class="btn bg-blue-600 text-white" onclick="setStatus('${r.id}','reviewed')">✓ Team reviewed</button>`):''}
       ${r.status==='reviewed'?'<span class="text-xs text-blue-800 font-semibold self-center">Waiting for the Conference President to certify</span>':''}
       ${r.status!=='rejected'&&r.status!=='verified'?`<button class="btn bg-red-100 text-red-800" onclick="setStatus('${r.id}','rejected')">Reject</button>`:''}
-      ${r.dob_check_status!=='pending'&&r.proof_path?`<button class="btn bg-gray-100 text-sm" onclick="runChecks([rows.find(x=>x.id==='${r.id}')],true)">Re-run ID check</button>`:''}
+      ${r.dob_check_status!=='pending'&&r.proof_path&&r.status!=='verified'?`<button class="btn bg-gray-100 text-sm" onclick="runChecks([rows.find(x=>x.id==='${r.id}')],true)">Re-run ID check</button>`:''}
       ${canDeleteAthlete(r)?`<button class="btn bg-red-600 text-white" onclick="deleteAthlete('${r.id}')">Delete athlete</button>`:''}
     </div>
     <div id="proof-${r.id}" class="mt-2"></div>
@@ -721,7 +721,7 @@ async function setStatus(id,status){
   r.status=status; if(status==='reviewed'){ r.reviewed_by=user.email; r.reviewed_at=new Date().toISOString(); } render();
 }
 async function runChecks(list,force){
-  list=(list||[]).filter(r=>r&&r.proof_path); // returning athletes verified from last season's record have no document to check
+  list=(list||[]).filter(r=>r&&r.proof_path&&r.status!=='verified'); // certified athletes are never re-checked; returning athletes have no document to check
   if(!list.length){ $('msg').textContent='Nothing to check.'; return; }
   $('msg').textContent=`Running ID check on ${list.length} registration(s)…`;
   for(const r of list){
