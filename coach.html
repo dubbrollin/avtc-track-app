@@ -113,7 +113,19 @@
         <a id="rosterBtn" href="coach.html?view=roster" class="btn bg-blue-600 text-white hidden">Team admin: roster &amp; intake</a>
         <a id="backBtn" href="coach.html" class="btn bg-blue-600 text-white hidden">← Back to dashboard</a>
         <a href="results.html" class="btn bg-gray-800 text-white">Results &amp; rankings</a>
+        <button id="myInfoBtn" class="btn bg-gray-200">My info</button>
         <button id="logout" class="btn bg-gray-200">Sign out</button>
+        <div id="myInfoBox" class="hidden w-full mt-2 p-2" style="background:#f8fafc;border-radius:8px">
+          <div class="flex flex-wrap gap-2 items-end">
+            <label class="text-xs">First name<br><input id="miFirst" class="border rounded px-2 py-1" style="width:9rem"></label>
+            <label class="text-xs">Last name<br><input id="miLast" class="border rounded px-2 py-1" style="width:9rem"></label>
+            <label class="text-xs">Phone<br><input id="miPhone" class="border rounded px-2 py-1" style="width:9rem"></label>
+            <label class="text-xs">USATF member #<br><input id="miUsatf" class="border rounded px-2 py-1" style="width:9rem"></label>
+            <button id="miSave" class="btn bg-green-600 text-white">Save</button>
+            <span id="miMsg" class="text-xs"></span>
+          </div>
+          <p class="text-xs text-gray-500 mt-1">To change your email or team, ask your team admin or a site admin.</p>
+        </div>
       </div>
 
       <!-- ROSTER & INTAKE (head coaches only, opened from the Roster button) -->
@@ -347,6 +359,14 @@ async function loadMe(){
   $('notCoachBox').style.display='none'; $('coachApp').style.display='block';
   const team=window.VYC_TEAMS.find(t=>t.code===myCoach.team_code);
   $('teamLabel').textContent = (team ? `— ${team.name}${team.conference?' ('+team.conference+')':''} · ${roleLabel(myCoach)}${myCoach.is_admin?' · Site admin':myCoach.team_admin?' · Team admin':''}` : `— ${roleLabel(myCoach)}`);
+  // "My info": a coach can fix their own name, phone and USATF number.
+  $('myInfoBtn').onclick=()=>{ $('miFirst').value=myCoach.first_name||(myCoach.last_name?'':myCoach.name)||''; $('miLast').value=myCoach.last_name||''; $('miPhone').value=myCoach.phone||''; $('miUsatf').value=myCoach.usatf_member_number||''; $('miMsg').textContent=''; $('myInfoBox').classList.toggle('hidden'); };
+  $('miSave').onclick=async()=>{ const v=id=>$(id).value.trim()||null; const patch={first_name:v('miFirst'),last_name:v('miLast'),phone:v('miPhone'),usatf_member_number:v('miUsatf')};
+    if(!patch.first_name){ $('miMsg').textContent='First name is required.'; $('miMsg').style.color='#b91c1c'; return; }
+    patch.name=[patch.first_name,patch.last_name].filter(Boolean).join(' ');
+    $('miSave').disabled=true; const {error}=await sb.from('coaches').update(patch).eq('email',myCoach.email); $('miSave').disabled=false;
+    if(error){ $('miMsg').textContent='Could not save: '+error.message; $('miMsg').style.color='#b91c1c'; return; }
+    Object.assign(myCoach,patch); $('miMsg').textContent='Saved ✓'; $('miMsg').style.color='#15803d'; };
   const st=bgStatus(myCoach);
   $('bgStatusLine').innerHTML = `Your background-check status: <span class="pill ${st.cls}">${st.label}</span>`
     + (/current/.test(st.label)?'':window.bgCheckLinkHtml(myCoach.usatf_certified&&myCoach.usatf_registry_status&&myCoach.usatf_registry_status!=='verified'

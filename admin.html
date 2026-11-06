@@ -276,7 +276,7 @@ const rows=coaches.filter(c=>(!t||c.team_code===t)&&(!s||(s==='pending'?!c.appro
 .sort((a,b)=>(a.approved===b.approved?0:a.approved?1:-1)); // pending first
 $('pCount').textContent=rows.length+' of '+coaches.length;
 $('pBody').innerHTML=rows.map(c=>{ const self=c.email.toLowerCase()===me.email.toLowerCase(), lock=!SITE&&self; return `<tr data-id="${esc(c.email)}">
-<td><div class="font-semibold">${esc((c.first_name||c.name||'')+' '+(c.last_name||''))}</div><div class="text-xs text-gray-500">${esc(c.email)}${c.phone?' · '+esc(c.phone):''}${c.admin_title?' · '+esc(c.admin_title):''}</div>${c.requested_team_admin&&!c.team_admin?'<span class="pill warn">Requested team admin</span>':''}${c.president_conference?`<span class="pill ${c.president_season===SEASON?'ok':'gray'}">${CONF_NAME[c.president_conference]} President${c.president_season===SEASON?'':' ('+c.president_season+' — not confirmed for '+SEASON+')'}</span>`:''}${c.commissioner_season?`<span class="pill ${c.commissioner_season===SEASON?'ok':'gray'}">Commissioner${c.commissioner_season===SEASON?'':' ('+c.commissioner_season+')'}</span>`:''}${c.treasurer_season?`<span class="pill ${c.treasurer_season===SEASON?'ok':'gray'}">Treasurer${c.treasurer_season===SEASON?'':' ('+c.treasurer_season+')'}</span>`:''}${c.requested_president_conference&&holds(c,c.requested_president_conference)!==SEASON?`<span class="pill warn">Says they are ${POSITIONS[c.requested_president_conference]?POSITIONS[c.requested_president_conference].title:c.requested_president_conference}</span>`:''}</td>
+<td><div class="font-semibold">${esc((c.first_name||c.name||'')+' '+(c.last_name||''))}</div><div class="text-xs text-gray-500">${esc(c.email)}${c.phone?' · '+esc(c.phone):''}${c.usatf_member_number?' · USATF #'+esc(c.usatf_member_number):''}${c.admin_title?' · '+esc(c.admin_title):''}</div>${c.requested_team_admin&&!c.team_admin?'<span class="pill warn">Requested team admin</span>':''}${c.president_conference?`<span class="pill ${c.president_season===SEASON?'ok':'gray'}">${CONF_NAME[c.president_conference]} President${c.president_season===SEASON?'':' ('+c.president_season+' — not confirmed for '+SEASON+')'}</span>`:''}${c.commissioner_season?`<span class="pill ${c.commissioner_season===SEASON?'ok':'gray'}">Commissioner${c.commissioner_season===SEASON?'':' ('+c.commissioner_season+')'}</span>`:''}${c.treasurer_season?`<span class="pill ${c.treasurer_season===SEASON?'ok':'gray'}">Treasurer${c.treasurer_season===SEASON?'':' ('+c.treasurer_season+')'}</span>`:''}${c.requested_president_conference&&holds(c,c.requested_president_conference)!==SEASON?`<span class="pill warn">Says they are ${POSITIONS[c.requested_president_conference]?POSITIONS[c.requested_president_conference].title:c.requested_president_conference}</span>`:''}</td>
 <td><select data-f="team_code" ${SITE?'':'disabled title="Only a site admin can move a coach to another team"'}>${teamOpts(c.team_code,'(none)')}</select></td>
 <td><select data-f="role_type" ${lock?'disabled':''}>${opts(ROLES,(c.role_type==='head_age_group'||!c.role_type)?'head_coach':c.role_type)}</select></td>
 <td><input data-f="division_or_age_group" value="${esc(c.division_or_age_group||'')}" style="width:9rem" placeholder="e.g. Bantam"></td>
@@ -286,7 +286,7 @@ $('pBody').innerHTML=rows.map(c=>{ const self=c.email.toLowerCase()===me.email.t
 <option value="team" ${accessOf(c)==='team'?'selected':''}>Team admin</option>
 ${SITE||c.is_admin?`<option value="site" ${accessOf(c)==='site'?'selected':''}>Site admin</option>`:''}
 </select></td>
-<td class="whitespace-nowrap">${lock?'<span class="text-xs text-gray-500">(you)</span>':`${c.approved?'<button class="btn lite" data-act="revoke">Revoke</button>':c.requested_team_admin?'<button class="btn grn" data-act="tadmin">Approve as team admin</button> <button class="btn lite" data-act="approve">Approve as coach only</button>':'<button class="btn grn" data-act="approve">Approve</button>'}
+<td class="whitespace-nowrap"><button class="btn lite" data-act="edit" title="Fix name, phone or USATF number">Edit info</button> ${lock?'<span class="text-xs text-gray-500">(you)</span>':`${c.approved?'<button class="btn lite" data-act="revoke">Revoke</button>':c.requested_team_admin?'<button class="btn grn" data-act="tadmin">Approve as team admin</button> <button class="btn lite" data-act="approve">Approve as coach only</button>':'<button class="btn grn" data-act="approve">Approve</button>'}
 ${c.usatf_certified?'<button class="btn lite" data-act="usatf" title="Search USATF\'s public Safe Sport Compliance list and Coaches Registry">Check USATF</button>':''}
 ${SITE&&!self?'<button class="btn red" data-act="del">Delete</button>':''}`}</td></tr>`; }).join('')||'<tr><td colspan="7" class="text-gray-500 p-3">No coaches match.</td></tr>';
 }
@@ -308,7 +308,23 @@ const email=tr.dataset.id, c=coaches.find(x=>x.email===email); let v=el.value; i
 const patch={[el.dataset.f]:v}; if(await run(sb.from('coaches').update(patch).eq('email',email),'Saved')) Object.assign(c,patch);
 });
 document.addEventListener('click',async e=>{
-const b=e.target.closest('#pBody button'); if(!b) return; const email=b.closest('tr').dataset.id, c=coaches.find(x=>x.email===email); const act=b.dataset.act;
+const b=e.target.closest('#pBody button'); if(!b) return;
+if(b.dataset.act==='edit'||b.dataset.act==='editSave'||b.dataset.act==='editCancel'){ const tr0=b.closest('tr'); const email0=tr0.dataset.id||tr0.previousElementSibling.dataset.id, c0=coaches.find(x=>x.email===email0);
+  if(b.dataset.act==='edit'){ const nx=tr0.nextElementSibling; if(nx&&nx.classList.contains('editrow')){ nx.remove(); return; }
+    const er=document.createElement('tr'); er.className='editrow'; er.innerHTML=`<td colspan="7" style="background:#f8fafc"><div class="flex flex-wrap gap-2 items-end p-2">
+<label class="text-xs">First name<br><input data-e="first_name" value="${esc(c0.first_name||(c0.last_name?'':c0.name)||'')}" style="width:9rem"></label>
+<label class="text-xs">Last name<br><input data-e="last_name" value="${esc(c0.last_name||'')}" style="width:9rem"></label>
+<label class="text-xs">Phone<br><input data-e="phone" value="${esc(c0.phone||'')}" style="width:9rem"></label>
+<label class="text-xs">USATF member #<br><input data-e="usatf_member_number" value="${esc(c0.usatf_member_number||'')}" style="width:9rem"></label>
+<button class="btn grn" data-act="editSave">Save</button> <button class="btn lite" data-act="editCancel">Cancel</button>
+<span class="text-xs text-gray-500">Email can't be changed here — it's how they sign in.</span></div></td>`; tr0.after(er); return; }
+  if(b.dataset.act==='editCancel'){ tr0.remove(); return; }
+  const g=k=>{ const v=tr0.querySelector(`[data-e="${k}"]`).value.trim(); return v||null; };
+  const patch={first_name:g('first_name'),last_name:g('last_name'),phone:g('phone'),usatf_member_number:g('usatf_member_number')};
+  if(!patch.first_name){ toast('First name is required.',true); return; }
+  patch.name=[patch.first_name,patch.last_name].filter(Boolean).join(' ');
+  if(await run(sb.from('coaches').update(patch).eq('email',email0),'Saved')){ Object.assign(c0,patch); tr0.remove(); drawPeople(); }
+  return; } const email=b.closest('tr').dataset.id, c=coaches.find(x=>x.email===email); const act=b.dataset.act;
 const nm=(c.first_name||c.name||c.email);
 if(act==='usatf'){ b.disabled=true; b.textContent='Checking…'; if(await checkUsatf(c)) toast(`${nm}: ${({verified:'USATF background screen verified',not_current:'not on the Safe Sport list',not_found:'not found on USATF lists',error:'check failed'})[c.usatf_registry_status]||c.usatf_registry_status}`); drawPeople(); return; }
 if(act==='approve'||act==='revoke'){ if(act==='revoke'&&!confirm(`Revoke access for ${nm}? They will lose the Coach Dashboard until approved again.`)) return;
