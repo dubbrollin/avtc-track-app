@@ -4,3 +4,4 @@ supabase/.branches/
 .env
 *.local
 NEXT-STEPS-FOR-CLAUDE-CODE.md
+supabase/backups/

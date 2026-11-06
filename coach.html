@@ -590,6 +590,7 @@ function render(){
       ${r.status==='reviewed'?'<span class="text-xs text-blue-800 font-semibold self-center">Waiting for the Conference President to certify</span>':''}
       ${r.status!=='rejected'&&r.status!=='verified'?`<button class="btn bg-red-100 text-red-800" onclick="setStatus('${r.id}','rejected')">Reject</button>`:''}
       ${r.dob_check_status!=='pending'&&r.proof_path?`<button class="btn bg-gray-100 text-sm" onclick="runChecks([rows.find(x=>x.id==='${r.id}')],true)">Re-run ID check</button>`:''}
+      ${canDeleteAthlete(r)?`<button class="btn bg-red-600 text-white" onclick="deleteAthlete('${r.id}')">Delete athlete</button>`:''}
     </div>
     <div id="proof-${r.id}" class="mt-2"></div>
     <div id="det-${r.id}" class="mt-2 text-sm hidden"></div>
@@ -660,6 +661,14 @@ function details(id){
     ${r.reviewed_by?`<div class="sm:col-span-2"><b>Team reviewed by:</b> ${esc(r.reviewed_by)} on ${fmtDate(r.reviewed_at)}</div>`:''}
     ${r.verified_by?`<div class="sm:col-span-2"><b>Certified by:</b> ${esc(r.verified_by)} on ${fmtDate(r.verified_at)}</div>`:''}
   </div>`;
+}
+// Site admins can delete any athlete; team admins their own team's athletes that aren't certified yet (the database enforces it).
+function canDeleteAthlete(r){ return !!myCoach&&(!!myCoach.is_admin||(!!myCoach.team_admin&&myCoach.team_code===r.team_code&&r.status!=='verified')); }
+async function deleteAthlete(id){
+  const r=rows.find(x=>x.id===id); if(!r) return;
+  if(!confirm(`Delete ${r.first_name} ${r.last_name} permanently, including their meet entries and uploaded birth certificate? Their past results stay but are unlinked. This can't be undone.`)) return;
+  const err=await window.removeAthleteRecords(sb,[id]); if(err){ alert('Could not delete: '+err); return; }
+  rows=rows.filter(x=>x.id!==id); render();
 }
 async function setStatus(id,status){
   const r=rows.find(x=>x.id===id);

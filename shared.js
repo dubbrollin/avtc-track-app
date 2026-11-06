@@ -183,6 +183,21 @@ window.mountLoginWidget = function(sb, container, opts){
     if (window.drawDemoBanner) window.drawDemoBanner(); else location.reload();
   });
 };
+// ---- Delete athletes (Coach Dashboard roster + Site Admin > Athletes). Who may: site admins (anyone), team admins (own team,
+// not certified yet), Conference Presidents; the database enforces it. Entries go with the athlete, past results stay but are
+// unlinked, unpaid fees are voided, and the uploaded proof-of-birth file is deleted too. Returns an error message or null.
+window.removeAthleteRecords = async function(sb, ids){
+  for (let i = 0; i < ids.length; i += 100) {
+    const chunk = ids.slice(i, i + 100);
+    const { data: regs } = await sb.from('registrations').select('id,proof_path').in('id', chunk);
+    const { data: gone, error } = await sb.from('registrations').delete().in('id', chunk).select('id');
+    if (error) return error.message;
+    if ((gone || []).length < chunk.length) return 'Some athletes could not be deleted — you may not have permission for them.';
+    const paths = (regs || []).map(r => r.proof_path).filter(Boolean);
+    if (paths.length) { const { error: fe } = await sb.storage.from('proof-of-birth').remove(paths); if (fe) console.warn('proof file cleanup:', fe.message); }
+  }
+  return null;
+};
 // Any sign-out (page buttons or the banner) ends the look-around view too.
 window.endLookAround = async function(sb){ try { localStorage.removeItem('vyc_demo_role'); } catch (e) {} if (window.clearRoleFlags) window.clearRoleFlags(); try { if (sb) await sb.auth.signOut(); } catch (e) {} };
 

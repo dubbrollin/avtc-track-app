@@ -356,23 +356,22 @@ aRows=aRows.concat(data||[]); aFrom=aRows.length; aTotal=count||0;
 $('aInfo').textContent=`Showing ${aRows.length} of ${aTotal} athletes`; $('aMore').classList.toggle('hide',aRows.length>=aTotal);
 $('aBody').innerHTML=aRows.map(r=>`<tr data-id="${r.id}"><td class="font-mono">${r.comp_number??''}<span class="text-xs text-gray-400"> ${r.season_year??''}</span></td><td><b>${esc(r.last_name)}</b>, ${esc(r.first_name)} <span class="text-xs text-gray-500">${r.gender==='Girl'?'F':'M'}${r.dob?' · '+esc(r.dob):''}</span></td><td>${esc(teamName(r.team_code))}</td><td>${esc(r.division||'')}</td>
 <td>${statusPill(r.status)}${r.is_late?' <span class="pill bad">Late</span>':''}</td>
-<td class="whitespace-nowrap"><button class="btn lite" data-act="edit">${SITE&&!isPresFor(r.team_code)?'Request change':isPresFor(r.team_code)?'Edit':'Review'}</button> ${isPresFor(r.team_code)?'<button class="btn red" data-act="del">Delete</button>':SITE?'<button class="btn red" data-act="del">Request delete</button>':''}</td></tr>`).join('')||'<tr><td colspan="6" class="p-3 text-gray-500">No athletes match.</td></tr>';
+<td class="whitespace-nowrap"><button class="btn lite" data-act="edit">${SITE&&!isPresFor(r.team_code)?'Request change':isPresFor(r.team_code)?'Edit':'Review'}</button> ${canDelete(r)?'<button class="btn red" data-act="del">Delete</button>':''}</td></tr>`).join('')||'<tr><td colspan="6" class="p-3 text-gray-500">No athletes match.</td></tr>';
 }
 document.addEventListener('click',async e=>{
 const b=e.target.closest('#aBody button'); if(!b) return; const id=b.closest('tr').dataset.id; const r=aRows.find(x=>x.id===id);
 if(b.dataset.act==='edit') return editAthlete(id,()=>aLoad(true));
-if(!isPresFor(r.team_code)){ // site admin: removing an athlete needs the conference president's approval
+if(!canDelete(r)){ // not allowed to delete directly: ask the conference president
   const reason=prompt(`Ask the ${CONF_NAME[teamConf(r.team_code)]||''} Conference President to delete ${r.first_name} ${r.last_name}?\n\nWhy? (the president sees this)`); if(reason===null) return;
   const {error}=await sb.rpc('request_athlete_change',{p_reg:id,p_kind:'delete',p_changes:{},p_reason:reason}); if(error){ toast(error.message,true); return; }
   toast('Sent to the Conference President for approval'); refreshCertBadge(); return; }
-if(!confirm(`Delete ${r.first_name} ${r.last_name} permanently, including their meet entries? Their past results stay but are unlinked. This can't be undone.`)) return;
+if(!confirm(`Delete ${r.first_name} ${r.last_name} permanently, including their meet entries and uploaded birth certificate? Their past results stay but are unlinked. This can't be undone.`)) return;
 if(await deleteAthletes([id])){ toast('Deleted'); aRows=aRows.filter(x=>x.id!==id); aTotal--; aLoad(true); }
 });
+// Site admins: any athlete. Team admins: own team, not certified yet. Presidents: their conference. (Database enforces the same.)
+function canDelete(r){ return SITE||isPresFor(r.team_code)||(!!(me&&me.team_admin)&&r.team_code===MYTEAM&&r.status!=='verified'); }
 async function deleteAthletes(ids){
-for(let i=0;i<ids.length;i+=100){ const chunk=ids.slice(i,i+100);
-if(!await run(sb.from('entries').delete().in('registration_id',chunk))) return false;
-if(!await run(sb.from('results').update({registration_id:null}).in('registration_id',chunk))) return false;
-if(!await run(sb.from('registrations').delete().in('id',chunk))) return false; }
+const err=await window.removeAthleteRecords(sb,ids); if(err){ toast(err,true); return false; }
 return true;
 }
 async function wipeTest(){

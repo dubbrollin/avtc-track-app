@@ -11,6 +11,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="theme.css?v=b1">
 <script src="theme.js?v=b2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script><script src="shared.js"></script>
 <style>
   body{background:#f3f4f6}
@@ -51,6 +52,18 @@
     <button type="button" class="btn bg-blue-600 text-white px-4 py-2" data-install hidden>Install app</button>
   </div>
 
+  <div id="signInCard" class="card mt-3">
+    <div class="text-lg font-bold">Already registered? Sign in</div>
+    <div id="homeLogin" class="mt-2"></div>
+    <div id="homeSignedIn" class="hidden mt-2 text-sm">
+      <p>Signed in as <b id="homeEmail"></b>.</p>
+      <div class="flex flex-wrap gap-2 mt-2">
+        <a id="homeGo" class="btn bg-blue-600 text-white px-4 py-2 no-underline" href="parent.html">Go to my dashboard</a>
+        <button type="button" id="homeOut" class="btn bg-gray-200 px-4 py-2">Sign out</button>
+      </div>
+    </div>
+  </div>
+
   <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
     <a class="tile" href="index.html">
       <div class="text-lg font-bold"><span class="tile-ic" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span>Register</div>
@@ -62,7 +75,7 @@
     </a>
     <a class="tile" href="entries.html">
       <div class="text-lg font-bold"><span class="tile-ic" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>Meet Register</div>
-      <p class="text-sm text-gray-600 mt-1">Coaches: add your team into races. Parents who registered with their email can enter their own athlete too.</p>
+      <p class="text-sm text-gray-600 mt-1">Coaches: add your team into races.</p>
     </a>
     <a class="tile" href="schedule.html">
       <div class="text-lg font-bold"><span class="tile-ic" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg></span>Season Schedule</div>
@@ -88,6 +101,28 @@
 function drawTeams(){ const act=window.VYC_TEAMS.filter(t=>t.active!==false); const list=c=>act.filter(t=>t.conference===c).map(t=>t.name).join(', ')+'.';
   document.getElementById('eastList').innerHTML='<b>Eastern Conference:</b> '+list('East'); document.getElementById('westList').innerHTML='<b>Western Conference:</b> '+list('West'); }
 if(window.leagueReady) window.leagueReady.then(drawTeams);
+</script>
+<script>
+// Sign in from Home: people who already registered go straight to their own dashboard.
+const CFG=window.APP_CONFIG, $=id=>document.getElementById(id);
+let sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } });
+window.mountLoginWidget(sb, $('homeLogin'), {hint:'Coaches, parents, team admins and timers: sign in with the email you registered with.'});
+$('homeOut').onclick=async()=>{ await window.endLookAround(sb); location.reload(); };
+// Only forward someone who signed in from this page just now (a Google sign-in comes back here first), not anyone visiting Home while signed in.
+$('homeLogin').addEventListener('click',e=>{ if(e.target.closest('#authSignIn,#authGoogle')) try{ sessionStorage.setItem('vyc_home_signin','1'); }catch(x){} },true);
+sb.auth.onAuthStateChange(async(_e,session)=>{
+  const user=session&&session.user; if(!user) return;
+  if(window.__authDone===user.id) return; window.__authDone=user.id;
+  sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } }); // rebuild: the original can wedge after an OAuth redirect
+  $('homeLogin').classList.add('hidden'); $('homeSignedIn').classList.remove('hidden'); $('homeEmail').textContent=user.email;
+  // Approved coach / team admin / timer -> their page; everyone else -> Parent Dashboard.
+  let dest='parent.html';
+  try{ const {data:c}=await sb.from('coaches').select('is_admin,team_admin,role_type').eq('email',user.email).eq('approved',true).maybeSingle();
+    if(c){ window.setRoleFlags(c); dest=c.role_type==='timer'?'meets-admin.html?view=timer':'coach.html'; } }catch(e){}
+  $('homeGo').href=dest;
+  let fwd=false; try{ fwd=sessionStorage.getItem('vyc_home_signin')==='1'; sessionStorage.removeItem('vyc_home_signin'); }catch(e){}
+  if(fwd && !window.isDemoEmail(user.email)) location.href=dest;
+});
 </script>
 </body>
 </html>
