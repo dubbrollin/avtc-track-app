@@ -1,7 +1,7 @@
 // Service worker for the installable app. Pages and app files are fetched fresh whenever there is a connection
 // (so every push shows up right away) and the last good copy is kept for when there isn't.
 // Supabase (all app data, sign-in, uploads) is never cached — it always goes straight to the network.
-var VERSION = 'vyc-app-33';
+var VERSION = 'vyc-app-34';
 var SHELL = ['./', 'home.html', 'index.html', 'parent.html', 'coach.html', 'entries.html', 'results.html', 'schedule.html', 'team.html', 'team-hub.js',
   'theme.css', 'theme.js', 'config.js', 'shared.js', 'events.js', 'logo.png', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/apple-touch-icon.png'];
@@ -23,6 +23,8 @@ self.addEventListener('fetch', function (e) {
   var req = e.request;
   if (req.method !== 'GET') return;
   var url = new URL(req.url);
+  // On the server (track.avyouthathletics.org) app data, sign-in, uploads, live updates and functions share this address: never cache them.
+  if (url.origin === self.location.origin && /^\/(rest|auth|storage|realtime|functions)\/v1\//.test(url.pathname)) return;
 
   // Same-site pages and files: network first, fall back to the saved copy, then to the Home page.
   if (url.origin === self.location.origin) {
