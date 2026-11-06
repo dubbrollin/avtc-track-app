@@ -135,6 +135,8 @@
             <div class="col-head"><h2 class="flex-1">Roster <span id="count" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
             <div class="flex flex-wrap items-center gap-2 mb-2">
               <select id="filter" class="flex-1 min-w-0"><option value="">All</option><option value="submitted">Needs team review</option><option value="reviewed">Team reviewed — waiting for the president</option><option value="verified">Certified</option><option value="rejected">Rejected</option></select>
+              <select id="sortBy" class="min-w-0" title="Sort the roster"><option value="name">Sort: Name (A–Z)</option><option value="sex">Sort: Sex (girls, then boys)</option><option value="division">Sort: Division (youngest first)</option><option value="newest">Sort: Newest first</option></select>
+              <input id="nameSearch" type="search" class="min-w-0 border rounded p-2" style="flex:1 1 160px" placeholder="Search name…">
               <button id="runChecks" class="btn bg-gray-800 text-white">Run ID checks</button>
               <button id="exportCsv" class="btn bg-gray-200">Export CSV</button>
               <button id="exportHytek" class="btn bg-gray-200">Hy-Tek roster</button>
@@ -551,9 +553,26 @@ function renderDashRoster(){
     return `<div class="mb-3"><div class="text-xs font-bold uppercase text-gray-500 divhead">${esc(d)} (${total})</div>${sex('Boy','Boys')}${sex('Girl','Girls')}</div>`;
   }).join('');
 }
+// Roster order + search (name, sex or division; the choice is remembered on this device).
+const DIV_ORDER=(window.DIVISIONS||[]).map(d=>d.name); // Sub-Gremlin → Intermediates
+function sortRoster(list){
+  const by=($('sortBy')&&$('sortBy').value)||'name';
+  const nm=(a,b)=>String(a.last_name||'').localeCompare(String(b.last_name||''),undefined,{sensitivity:'base'})||String(a.first_name||'').localeCompare(String(b.first_name||''),undefined,{sensitivity:'base'});
+  const sex=r=>r.gender==='Girl'?0:r.gender==='Boy'?1:2;
+  const div=r=>{ const i=DIV_ORDER.indexOf(r.division); return i<0?(+r.age_on_dec31||99)+100:i; };
+  const cmp={ name:nm,
+    sex:(a,b)=>sex(a)-sex(b)||nm(a,b),
+    division:(a,b)=>div(a)-div(b)||(+a.age_on_dec31||0)-(+b.age_on_dec31||0)||sex(a)-sex(b)||nm(a,b),
+    newest:(a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')) }[by]||nm;
+  return list.slice().sort(cmp);
+}
+function visibleRows(){
+  const f=$('filter').value, q=(($('nameSearch')&&$('nameSearch').value)||'').trim().toLowerCase();
+  return sortRoster(rows.filter(r=>(!f||r.status===f)&&(!q||`${r.first_name} ${r.last_name} ${r.last_name}, ${r.first_name} ${r.comp_number??''}`.toLowerCase().includes(q))));
+}
 function render(){
   renderDashRoster();
-  const f=$('filter').value; const shown=rows.filter(r=>!f||r.status===f);
+  const f=$('filter').value; const shown=visibleRows();
   $('count').textContent=`(${shown.length})`;
   if(!shown.length){ $('list').innerHTML='<div class="card text-gray-500 text-sm">No registrations yet for your team. Share the registration link with parents.</div>'; return; }
   if(!fullAccess){
@@ -636,6 +655,9 @@ async function setTeamAdmin(email,on){
   if(c) Object.assign(c,patch); renderCoaches();
 }
 $('filter').onchange=render;
+try{ const sv=localStorage.getItem('vyc_roster_sort'); if(sv&&$('sortBy').querySelector(`option[value="${sv}"]`)) $('sortBy').value=sv; }catch(e){}
+$('sortBy').onchange=()=>{ try{ localStorage.setItem('vyc_roster_sort',$('sortBy').value); }catch(e){} render(); };
+$('nameSearch').oninput=render;
 
 async function viewProof(id){
   const r=rows.find(x=>x.id===id); const box=$('proof-'+id);
@@ -700,7 +722,7 @@ async function makePdf(id){
   a.href=URL.createObjectURL(blob); a.download=`VYC_${r.last_name}_${r.first_name}_${r.season_year}.pdf`; a.click();
 }
 $('exportHytek').onclick=()=>{
-  const f=$('filter').value; const shown=rows.filter(r=>!f||r.status===f);
+  const f=$('filter').value; const shown=visibleRows();
   if(!shown.length){ alert('Nothing to export.'); return; }
   if(f!=='verified' && !confirm(`This will include ${shown.length} athlete(s), some not yet certified. Tip: set the filter to "Certified" to export only certified athletes. Continue?`)) return;
   const txt=hytekRoster(shown, CFG);
@@ -708,7 +730,7 @@ $('exportHytek').onclick=()=>{
 };
 $('exportCsv').onclick=()=>{
   const cols=['last_name','first_name','dob','age_on_dec31','division','gender','sport','is_returning','prior_team','address','city','zip','phone','email','emergency_name','emergency_phone','parent1_name','parent1_relationship','parent2_name','parent2_relationship','insurance_carrier','medical_option','medical_conditions','doctor_name','doctor_date','dob_check_status','status','verified_by','created_at'];
-  const csv=[cols.join(',')].concat(rows.map(r=>cols.map(c=>`"${String(r[c]??'').replace(/"/g,'""')}"`).join(','))).join('\n');
+  const csv=[cols.join(',')].concat(sortRoster(rows).map(r=>cols.map(c=>`"${String(r[c]??'').replace(/"/g,'""')}"`).join(','))).join('\n');
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download=`registrations_${myCoach.team_code}_${CFG.SEASON_YEAR}.csv`; a.click();
 };
 
