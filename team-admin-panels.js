@@ -173,6 +173,7 @@ window.mountTeamMessaging=async function(el, ctx){
 <ul class="text-sm text-gray-700 mb-2" style="list-style:disc;padding-left:1.25rem">
 <li><b>Team Messenger</b> — coaches and parents message each other on their dashboards: team, division and coaches-only groups, one-to-one direct messages, photos and files, message history, and email/text alerts.</li>
 <li><b>Taking payments online and tracking them</b> — parents pay by card straight into the team's bank account (with optional automatic payment plans) or by Zelle / Cash App / Venmo / check with "I sent it", and the app keeps track of who has paid, what's outstanding, and each family's payment history.</li>
+<li><b>Livestream</b> — coaches stream a meet to YouTube Live (free) and paste the link; the team's coaches and parents watch it on their dashboards, and it stays as a replay.</li>
 <li><b>Photo gallery</b> — albums of team photos on the team page for the team's parents and coaches (parents can be allowed to add photos too).</li>
 <li><b>Team store</b> — the team sells its shirts, hoodies and gear on its team page; parents order and pay the team, the team confirms and hands the order over.</li></ul>
 <p class="text-xs text-gray-500 mb-2">Always free, on every team's page: the page itself (about, practice info, coaches, news, schedule) and meet-day volunteer duties.</p>

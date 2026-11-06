@@ -14,7 +14,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="config.js"></script>
-<script src="shared.js"></script><script src="messenger.js"></script><script src="team-admin-panels.js"></script><script src="team-hub.js"></script>
+<script src="shared.js"></script><script src="messenger.js"></script><script src="livestream.js"></script><script src="team-admin-panels.js"></script><script src="team-hub.js"></script>
 <script src="events.js"></script>
 <script src="pdf.js"></script>
 <style>
@@ -272,6 +272,10 @@
           <div class="col-head"><h2 class="flex-1">Messages <span id="msgBadge" style="display:none;background:#D2451E;color:#fff;border-radius:999px;padding:1px 8px;font-size:12px;font-weight:700;letter-spacing:0;vertical-align:middle"></span> <span class="text-gray-500 font-normal text-xs normal-case tracking-normal">with your team's parents and coaches</span></h2></div>
           <div id="msgMount"></div>
         </div></div>
+        <div class="max-w-6xl mx-auto"><div class="card hidden" id="liveCard">
+          <div class="col-head"><h2 class="flex-1">Livestream <span class="text-gray-500 font-normal text-xs normal-case tracking-normal">meets streamed for your team's parents</span></h2></div>
+          <div id="liveMount"></div>
+        </div></div>
         </div><!-- /dashHome -->
       </div>
     </div>
@@ -356,6 +360,8 @@ async function loadMe(){
   document.getElementById('msgAlert').onclick=()=>document.getElementById('msgCard').scrollIntoView({behavior:'smooth',block:'start'}); // the notice stays until the messages have been read
   // Team Messenger (a paid team extra) lives right on the dashboard. Hidden when the team doesn't have it (team admins see how to get it).
   window.mountMessenger($('msgMount'),{sb,team:myCoach.team_code, onUnread:n=>{ const b=document.getElementById('msgBadge'); if(b){ b.textContent=n||''; b.style.display=n?'':'none'; } const a=document.getElementById('msgAlert'); if(a){ a.classList.toggle('hidden',!n); a.textContent=n?`🔔 You have ${n} new message${n>1?'s':''} — tap here to read ${n>1?'them':'it'} ↓`:''; } }}).then(st=>{ if(st==='none') return; $('msgCard').classList.remove('hidden'); if(location.hash==='#messages') $('msgCard').scrollIntoView({block:'start'}); }).catch(()=>{});
+  // Livestream (part of the Paid extras): hidden when the team doesn't have them.
+  window.Livestream.mount($('liveMount'),{sb,team:myCoach.team_code}).then(st=>{ if(st==='on') $('liveCard').classList.remove('hidden'); }).catch(()=>{});
   $('notCoachBox').style.display='none'; $('coachApp').style.display='block';
   const team=window.VYC_TEAMS.find(t=>t.code===myCoach.team_code);
   $('teamLabel').textContent = (team ? `— ${team.name}${team.conference?' ('+team.conference+')':''} · ${roleLabel(myCoach)}${myCoach.is_admin?' · Site admin':myCoach.team_admin?' · Team admin':''}` : `— ${roleLabel(myCoach)}`);

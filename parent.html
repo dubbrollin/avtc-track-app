@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="theme.css?v=b1">
 <script src="theme.js?v=b2"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="config.js"></script><script src="shared.js"></script><script src="events.js"></script><script src="payments.js"></script><script src="messenger.js"></script><script src="team-hub.js"></script>
+<script src="config.js"></script><script src="shared.js"></script><script src="events.js"></script><script src="payments.js"></script><script src="messenger.js"></script><script src="livestream.js"></script><script src="team-hub.js"></script>
 <style>
 .btn{padding:.6rem 1rem;border-radius:.5rem;font-weight:600}
 .card{background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
@@ -63,6 +63,11 @@
       <div id="msgMount"></div>
     </div>
 
+    <div class="card hidden" id="liveCard">
+      <h2 class="font-bold mb-2">Livestream</h2>
+      <div id="liveMount"></div>
+    </div>
+
     <div class="card" id="resCard">
       <h2 class="font-bold mb-2">Meet results</h2>
       <div id="myResults"><p class="text-sm text-gray-500">Loading…</p></div>
@@ -104,6 +109,7 @@ sb.auth.onAuthStateChange(async(_e,session)=>{
   document.getElementById('msgAlert').onclick=()=>document.getElementById('msgCard').scrollIntoView({behavior:'smooth',block:'start'}); // the notice stays until the messages have been read
   // Team Messenger (a paid team extra): messages from the coaches show here, and the parent can reply. Hidden when the team doesn't have it.
   window.mountMessenger($('msgMount'),{sb, onUnread:n=>{ const b=document.getElementById('msgBadge'); if(b){ b.textContent=n||''; b.style.display=n?'':'none'; } const a=document.getElementById('msgAlert'); if(a){ a.classList.toggle('hidden',!n); a.textContent=n?`🔔 You have ${n} new message${n>1?'s':''} — tap here to read ${n>1?'them':'it'} ↓`:''; } }}).then(st=>{ if(st==='none') return; $('msgCard').classList.remove('hidden'); $('wrap').classList.add('wide'); if(location.hash==='#messages') $('msgCard').scrollIntoView({block:'start'}); }).catch(()=>{});
+  window.Livestream.mount($('liveMount'),{sb}).then(st=>{ if(st==='on') $('liveCard').classList.remove('hidden'); }).catch(()=>{}); // Livestream (Paid extras): hidden when no team has it
   await loadMyAthletes();
   await loadMyResults();
   await loadMeets();
