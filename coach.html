@@ -441,7 +441,7 @@ async function load(){
   if(fullAccess){ await loadClearances(); loadFeeNotice(); }
   render();
   loadComing();
-  window.mountTeamSchedule($('teamSched'),{sb,teams:[myCoach&&myCoach.team_code]});
+  window.mountTeamSchedule($('teamSched'),{sb,teams:[myCoach&&myCoach.team_code],backups:true});
   window.mountLockoutNotice($('lockBanner'),{sb,teams:[myCoach&&myCoach.team_code]});
   // The dashboard wears the team page: hero + Home / Photos / Store / Volunteers tabs; Home = this dashboard.
   if(myCoach&&myCoach.team_code&&!$('dashView').classList.contains('hidden')){ const q=new URLSearchParams(location.search), role=fullAccess?'admin':'coach';

@@ -377,6 +377,7 @@ async function resultsPanel(m){
     <label class="text-xs ml-2"><input type="checkbox" id="rall-${m.id}" checked> keep all teams (semicolon format)</label>
     <div id="rprev-${m.id}" class="text-sm mt-2"></div>
     <div id="rhist-${m.id}" class="text-xs mt-2"></div>
+    <div id="bk-${m.id}" class="mt-3"></div>
     <hr class="my-3">
     <p class="text-sm font-semibold">Add one result by hand</p>
     <div class="grid grid-cols-2 gap-1 mt-1 text-sm">
@@ -393,7 +394,7 @@ async function resultsPanel(m){
   const {data:regs0,error:rerr}=await sb.rpc('results_athletes'); const regs=regs0||[];
   if(rerr) $('rprev-'+m.id).innerHTML='<span class="text-red-600">Could not load the athlete list: '+rerr.message+'</span>';
   if(liveOk) window.mountLiveConnect($('live-'+m.id),{sb,meet:m,getRegs:()=>regs});
-  uploadHistory(m);
+  uploadHistory(m); backupBox(m);
   const sa=$('ra-'+m.id); regs.forEach(r=>sa.add(new Option(`${r.last_name}, ${r.first_name} (${r.division} ${r.gender})`,r.id)));
   sa.onchange=()=>{ const r=regs.find(x=>x.id===sa.value); const se=$('re-'+m.id); se.innerHTML='<option value="">Event…</option>';
     if(r) eventsFor(r.division,r.gender).filter(e=>!e.relay).forEach(e=>se.add(new Option(e.name,e.code))); };
@@ -437,6 +438,8 @@ async function resultsPanel(m){
       const v=await logUpload(m,{file_name:fileName,all_teams:allTeams,rows_in_file:rows.length,added:d.added.length,changed:d.changed.length,removed:d.removed.length,unchanged:d.unchanged.length,confirmed_changes:!!confirmed,changes:changesForLog(d)});
       const what=d.changed.length||d.removed.length?` ${d.changed.length} changed, ${d.removed.length} removed, ${d.added.length} new.`:(d.added.length&&d.unchanged.length?` ${d.added.length} new, ${d.unchanged.length} already posted and unchanged.`:'');
       pv.innerHTML=`Saved ${n??rows.length} results${v?` (upload #${v} for this meet)`:''} — they're live on the Results page now.${what}`;
+      // Results go up together with the Meet Manager backup — if this meet has none yet, ask for it now instead of refreshing away.
+      if(!(await backupBox(m))){ pv.innerHTML+=`<p class="mt-1 font-semibold text-amber-800">Last step: upload the Meet Manager backup just below, so the visiting teams can download it.</p>`; const b=$('bk-'+m.id); if(b) b.scrollIntoView({behavior:'smooth',block:'center'}); return; }
       setTimeout(()=>resultsPanel(m),2500);
     };
     $('rgo-'+m.id).onclick=async()=>{
@@ -456,6 +459,37 @@ async function resultsPanel(m){
       $('rno-'+m.id).onclick=()=>{ pv.innerHTML='Nothing was changed — the posted results were kept.'; ev.target.value=''; };
     };
   };
+}
+
+// ---- Meet Manager backup: uploaded along with the results so every team at the meet can download it (supabase/2026-11-09-meet-backups.sql).
+// Draws the box and returns how many backups the meet has (0 = still needed).
+async function backupBox(m){
+  const box=$('bk-'+m.id); if(!box) return 0;
+  const {data,error}=await sb.from('meet_backups').select('id,path,file_name,size_bytes,uploaded_at,uploaded_by').eq('meet_id',m.id).order('uploaded_at',{ascending:false});
+  if(error){ box.innerHTML=`<p class="text-xs text-gray-500">Meet Manager backups aren't switched on in the database yet (supabase/2026-11-09-meet-backups.sql).</p>`; return 1; }
+  const list=data||[], mb=b=>b?(b/1048576).toFixed(b<1048576?2:1)+' MB':'';
+  box.innerHTML=`<div class="rounded p-3 ${list.length?'bg-white border':''}" ${list.length?'':'style="border:2px solid #f59e0b;background:#fffbeb"'}>
+    <p class="text-sm font-semibold">${list.length?'✅ ':'⚠️ '}Meet Manager backup${list.length?'':' — needed'}</p>
+    <p class="text-xs text-gray-600 mb-1">Upload it with the results. In Meet Manager: <b>File → Backup</b>, save the .zip, then choose it here. Every team at this meet can download it from their Coach Dashboard for their own files. ${list.length?'If you fix results later, upload the new backup too — the newest is listed first.':''}</p>
+    <input type="file" id="bkf-${m.id}" accept=".zip,.mdb,application/zip,application/x-zip-compressed" class="text-sm">
+    <div id="bkmsg-${m.id}" class="text-sm mt-1"></div>
+    ${list.length?`<ul class="text-xs mt-2">${list.map((b,i)=>`<li class="border-t py-1"><a href="#" class="underline font-semibold" data-bk="${escH(b.path)}" data-name="${escH(b.file_name)}">⬇ ${escH(b.file_name)}</a> ${i===0?'<span class="text-green-700">(newest)</span>':''}<br><span class="text-gray-600">${escH(new Date(b.uploaded_at).toLocaleString([], {dateStyle:'medium',timeStyle:'short'}))} — ${escH(b.uploaded_by)} · ${mb(b.size_bytes)}</span></li>`).join('')}</ul>`:''}
+  </div>`;
+  box.querySelectorAll('[data-bk]').forEach(a=>a.onclick=e=>{ e.preventDefault(); window.downloadMeetBackup(sb,a.dataset.bk,a.dataset.name); });
+  $('bkf-'+m.id).onchange=async e=>{
+    const f=e.target.files[0], msg=$('bkmsg-'+m.id); if(!f) return;
+    if(!/\.(zip|mdb)$/i.test(f.name)) return msg.innerHTML='<span class="text-red-600">That doesn\'t look like a Meet Manager backup. Choose the .zip file Meet Manager made with File → Backup.</span>';
+    if(f.size>50*1048576) return msg.innerHTML='<span class="text-red-600">That file is over 50 MB — too big. Make sure it\'s the Meet Manager backup .zip.</span>';
+    msg.textContent='Uploading…';
+    const path=`${m.id}/${new Date().toISOString().replace(/[:.]/g,'-')}-${f.name.replace(/[^\w.\- ]+/g,'_')}`;
+    const {error:upErr}=await sb.storage.from('meet-backups').upload(path,f,{contentType:f.type||'application/zip',upsert:false});
+    if(upErr) return msg.innerHTML=`<span class="text-red-600">Upload failed: ${escH(upErr.message)}</span>`;
+    const {error:rowErr}=await sb.from('meet_backups').insert({meet_id:m.id,path,file_name:f.name,size_bytes:f.size});
+    if(rowErr) return msg.innerHTML=`<span class="text-red-600">The file went up but couldn't be listed: ${escH(rowErr.message)}</span>`;
+    msg.innerHTML='<span class="text-green-700">Backup saved — the teams at this meet can download it now.</span>';
+    setTimeout(()=>backupBox(m),1500);
+  };
+  return list.length;
 }
 
 // ---- Re-uploads: compare a results file with what's already posted, and keep a history of uploads ----

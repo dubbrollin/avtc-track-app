@@ -260,6 +260,12 @@ document.addEventListener('DOMContentLoaded',function(){ try{
 window.setRoleFlags=function(c){ try{ localStorage.setItem('vyc_admin',(c&&(c.is_admin||c.team_admin))?'1':'0'); localStorage.setItem('vyc_team_admin',(c&&(c.is_admin||c.team_admin))?'1':'0'); localStorage.setItem('vyc_timer',(c&&c.role_type==='timer')?'1':'0'); localStorage.setItem('vyc_coach',(c&&c.role_type!=='timer')?'1':'0'); }catch(e){} };
 window.clearRoleFlags=function(){ try{ ['vyc_admin','vyc_team_admin','vyc_timer','vyc_coach','vyc_demo_role'].forEach(k=>localStorage.removeItem(k)); }catch(e){} };
 
+// ---- Download a meet's Meet Manager backup (private bucket meet-backups) under its original file name.
+window.downloadMeetBackup = async function(sb, path, name){
+  const {data,error}=await sb.storage.from('meet-backups').createSignedUrl(path,300,{download:name||true});
+  if(error||!data){ alert('Could not download the backup: '+(error?error.message:'no link')); return; }
+  const a=document.createElement('a'); a.href=data.signedUrl; a.download=name||''; document.body.appendChild(a); a.click(); a.remove();
+};
 // ---- "Our schedule" box on the Coach and Parent dashboards (like a team's season calendar on Athletic.net):
 // only the meets the team is at this season — date, where they're going (or home meet), who they're up against, the school
 // with directions, and Results → once results are posted. The league-wide schedule is schedule.html.
@@ -285,6 +291,8 @@ window.mountTeamSchedule = async function(el, opts){
   const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
   const tName=c=>(window.VYC_TEAMS.find(t=>t.code===c)||{}).name||c;
   const res={}; await Promise.all(meets.filter(m=>m.meet_date&&m.meet_date<=today).map(async m=>{ const {count}=await sb.from('results').select('id',{count:'exact',head:true}).eq('meet_id',m.id); res[m.id]=count||0; }));
+  // Coaches only: the Meet Manager backup each meet's uploader posted with the results (newest per meet). Parents never get these (the database says no).
+  const bk={}; if(opts.backups&&meets.length){ try{ const {data:b}=await sb.from('meet_backups').select('meet_id,path,file_name,uploaded_at').in('meet_id',meets.map(m=>m.id)).order('uploaded_at',{ascending:false}); (b||[]).forEach(x=>{ if(!bk[x.meet_id]) bk[x.meet_id]=x; }); }catch(e){} }
   if(!meets.length){ el.innerHTML='<p class="text-sm text-gray-500">No meets on '+(teams.length>1?'your teams\'':'your team\'s')+' schedule yet this season. <a class="underline" href="schedule.html">See the league schedule →</a></p>'; return; }
   const next=meets.find(m=>m.meet_date&&m.meet_date>=today), T=window.MEET_DAY;
   const row=m=>{ const d=m.meet_date?new Date(m.meet_date+'T12:00:00'):null, done=m.meet_date&&m.meet_date<today;
@@ -293,7 +301,8 @@ window.mountTeamSchedule = async function(el, opts){
     const opp=(m.team_codes||[]).filter(c=>!mine.includes(c));
     const sub=!(m.team_codes||[]).length?'All VYC teams':!opp.length?'':opp.length<=5?'vs '+opp.map(tName).join(', '):'with '+opp.length+' other teams';
     const place=[m.venue,m.location].filter(Boolean).join(', ');
-    const side=res[m.id]?`<a class="font-semibold" style="color:var(--act,#1764c8)" href="results.html?meet=${m.id}">Results →</a>`:next&&m.id===next.id?'<span class="ts-pill" style="background:var(--act,#1764c8);color:#fff">Next</span>':done?'<span class="ts-pill" style="background:#e5e7eb;color:#4b5563">Done</span>':'';
+    const side=(res[m.id]?`<a class="font-semibold" style="color:var(--act,#1764c8)" href="results.html?meet=${m.id}">Results →</a>`:next&&m.id===next.id?'<span class="ts-pill" style="background:var(--act,#1764c8);color:#fff">Next</span>':done?'<span class="ts-pill" style="background:#e5e7eb;color:#4b5563">Done</span>':'')
+      +(bk[m.id]?`<br><a href="#" class="text-xs underline" style="color:var(--act,#1764c8)" data-bk="${esc(bk[m.id].path)}" data-name="${esc(bk[m.id].file_name)}" title="Meet Manager backup — for your team's files">Backup ⬇</a>`:'');
     return `<div class="ts-row ${done?'done':''} ${next&&m.id===next.id?'next':''}">
       <div class="ts-date">${d?`<div class="mo">${d.toLocaleDateString('en-US',{month:'short'}).toUpperCase()}</div><div class="dy">${d.getDate()}</div><div class="wd">${d.toLocaleDateString('en-US',{weekday:'short'})}</div>`:'<div class="mo">TBA</div><div class="dy">–</div>'}</div>
       <div class="ts-main"><div class="ts-title">${esc(title)}${m.is_championship?' <span class="ts-pill" style="background:#fef3c7;color:#92400e">Championship</span>':''}${m.is_invitational?' <span class="ts-pill" style="background:#e5e7eb">Invitational</span>':''}</div>
@@ -303,6 +312,7 @@ window.mountTeamSchedule = async function(el, opts){
         ${T&&next&&m.id===next.id?`<div class="text-xs text-gray-600 mt-0.5">Field events ${esc(T.field)} · first race (${esc(T.firstRace)}) ${esc(T.firstRaceAt)}</div>`:''}
       </div><div class="ts-side">${side}</div></div>`; };
   el.innerHTML=`<div>${meets.map(row).join('')}</div><p class="text-xs mt-2"><a class="underline" style="color:var(--act,#1764c8)" href="schedule.html">Full league schedule →</a></p>`;
+  el.querySelectorAll('[data-bk]').forEach(a=>a.onclick=e=>{ e.preventDefault(); window.downloadMeetBackup(sb,a.dataset.bk,a.dataset.name); });
   // In a fixed-height box (Coach Dashboard), open on the next meet instead of the top of the season.
   const nx=el.querySelector('.ts-row.next'); if(nx&&el.scrollHeight>el.clientHeight) el.scrollTop=Math.max(0,nx.offsetTop-el.offsetTop-8);
 };
