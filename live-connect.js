@@ -153,12 +153,18 @@ window.mmEventKey=function(e){
   return [col(e,['ind_rel'])||'I', col(e,['trk_field','event_type'])||'', col(e,['event_dist','dist'])||'', col(e,['event_stroke','stroke'])||'', name||''].join('|');
 };
 // Best guess of which of our events an Event row is. Returns {code, relay} or null (the timer picks it once on screen).
+// Meet Manager's own event-type letter (Event_stroke) comes first: A/B runs, E hurdles, W relays; field K high jump, L pole vault,
+// M long jump, N triple jump, Q javelin, R shot put, S discus, T hammer (checked against 2024-2026 VYC meet databases: R notes say
+// "6 lb./4 kg.", Q notes "300g/450g/600g", E notes are hurdle heights). Event_note holds those heights/weights — never an event name.
+const MM_FIELD={K:'HJ',L:'PV',M:'LJ',N:'TJ',Q:'JT',R:'SP',S:'DT',T:'HT'};
 window.mmGuessEvent=function(e){
-  const name=col(e,['event_name','event_title','ev_name','event_desc','event_note']);
-  if(name){ const c=classifyEvent(name); if(c) return {code:c.code,relay:c.relay}; }
   const relay=String(col(e,['ind_rel'])||'').toUpperCase()==='R', dist=+col(e,['event_dist','dist'])||0;
-  const tf=String(col(e,['trk_field','event_type'])||'').toUpperCase(), stroke=String(col(e,['event_stroke','stroke'])||'').toUpperCase();
+  const tf=String(col(e,['trk_field','event_type'])||'').toUpperCase(), stroke=String(col(e,['event_stroke','stroke'])||'').trim().toUpperCase();
   if(relay&&dist) return {code:String(dist),relay:true};
+  if(tf==='F'&&MM_FIELD[stroke]) return {code:MM_FIELD[stroke],relay:false};
+  if(tf==='T'&&dist&&/^[ABE]$/.test(stroke)) return {code:dist+(stroke==='E'?'H':''),relay:false};
+  const name=col(e,['event_name','event_title','ev_name','event_desc']);
+  if(name){ const c=classifyEvent(name); if(c) return {code:c.code,relay:c.relay}; }
   if(tf==='F') return null; // field events: which jump/throw can't be told from the numbers — picked once on screen
   if(dist){ const hurdles=+col(e,['num_hurdles','hurdles','hurdle_ht'])>0||stroke==='H'; return {code:dist+(hurdles?'H':''),relay:false}; }
   return null;
@@ -228,6 +234,40 @@ window.describeMeetManagerDb=function(reader){
 // ---------- the Timer-page panel ----------
 let mdbLoading=null;
 function loadMdbReader(){ return mdbLoading||(mdbLoading=new Promise((ok,bad)=>{ if(window.MDBReader) return ok(); const s=document.createElement('script'); s.src='vendor/mdb-reader.js'; s.onload=ok; s.onerror=()=>bad(new Error('Could not load the database reader')); document.head.appendChild(s); })); }
+// ---- Meet Manager backup (.zip from File › Backup, or the .mdb itself) -> result rows, all in the browser ----
+// A backup zip holds tfmeets6/<meet>.mdb (+ hybackup.txt), plain deflate. Read the zip's directory, inflate the .mdb with the
+// browser's own DecompressionStream, then the same reader as the live database connection.
+async function mdbFromZip(buf){
+  const u8=new Uint8Array(buf), dv=new DataView(buf);
+  let eocd=-1; for(let i=u8.length-22;i>=Math.max(0,u8.length-65557);i--){ if(dv.getUint32(i,true)===0x06054b50){ eocd=i; break; } }
+  if(eocd<0) throw new Error('That file isn\'t a readable .zip.');
+  const n=dv.getUint16(eocd+10,true); let p=dv.getUint32(eocd+16,true);
+  for(let k=0;k<n;k++){
+    if(dv.getUint32(p,true)!==0x02014b50) break;
+    const method=dv.getUint16(p+10,true), csize=dv.getUint32(p+20,true), nlen=dv.getUint16(p+28,true), xlen=dv.getUint16(p+30,true), clen=dv.getUint16(p+32,true), off=dv.getUint32(p+42,true);
+    const name=new TextDecoder().decode(u8.subarray(p+46,p+46+nlen)); p+=46+nlen+xlen+clen;
+    if(!/\.mdb$/i.test(name)) continue;
+    const start=off+30+dv.getUint16(off+26,true)+dv.getUint16(off+28,true), data=u8.subarray(start,start+csize);
+    if(method===0) return {name:name.split('/').pop(), buf:data.slice().buffer};
+    if(method!==8) throw new Error('This backup is packed in a way the app can\'t open (zip method '+method+').');
+    if(typeof DecompressionStream==='undefined') throw new Error('This browser can\'t open .zip files — use an up-to-date Chrome or Edge.');
+    const out=await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer();
+    return {name:name.split('/').pop(), buf:out};
+  }
+  throw new Error('No Meet Manager database (.mdb) inside that .zip — is it the backup from File › Backup?');
+}
+// file: File (.zip or .mdb). Returns {rows, needMap, unmatched, dbName, events}. Uses the event-type choices saved for this meet on this computer.
+window.resultsFromMeetBackup=async function(file, regs, meetId){
+  const raw=await file.arrayBuffer();
+  const db=/\.zip$/i.test(file.name)?await mdbFromZip(raw):{name:file.name, buf:raw};
+  await loadMdbReader();
+  let reader; try{ reader=new window.MDBReader(window.MDBBuffer.from(db.buf)); }catch(e){ throw new Error('Couldn\'t read the Meet Manager database in that file ('+e.message+').'); }
+  const tb=window.readMeetManagerTables(reader);
+  if(!tb.events.length) throw new Error('That database has no events in it — is it the right meet?');
+  const out=window.buildRowsFromMeetManager(tb,{regs:regs||[],eventMap:loadMap(meetId),fieldUnit:'auto'});
+  out.rows.forEach(r=>{ r.source='hytek-backup'; });
+  return {...out, dbName:db.name, events:tb.events.length};
+};
 const groupKey=r=>[r.event_code,r.is_relay,r.division||'',r.gender,r.round||'F'].join('|');
 const evMapKey=meetId=>'mmEventMap:'+meetId;
 const loadMap=id=>{ try{ return JSON.parse(localStorage.getItem(evMapKey(id))||'{}'); }catch(e){ return {}; } };
