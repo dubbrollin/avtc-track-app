@@ -16,7 +16,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&display=swap" rel="stylesheet">
 <script src="config.js"></script>
 <script src="shared.js"></script>
-<script src="events.js"></script>
+<script src="events.js"></script><script src="imports.js"></script>
 <style>
   body{background:#f3f4f6}
   .card{background:#fff;border-radius:12px;padding:16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
@@ -1111,6 +1111,7 @@ $('parentForm').addEventListener('submit', async(e)=>{
       doctor_name:$('doctorName').value.trim(), doctor_date:$('physicalDate').value,
       parent1_name:$('parent1Name').value.trim(), parent1_relationship:$('parent1Rel').value,
       parent2_name:$('parent2Name').value.trim()||null, parent2_relationship:$('parent2Rel').value||null,
+      ...(IMPORT?{import_id:IMPORT.id}:{}),   // finishing an athlete the team imported (team, season and email are checked by the database)
       registered_via_email:$('viaEmail').checked,
       athlete_signature:aSig.png, athlete_signature_method:aSig.method,
       parent_signature:pSig.png, parent_signature_method:pSig.method,
@@ -1133,10 +1134,42 @@ $('parentForm').addEventListener('submit', async(e)=>{
       <div class="flex flex-wrap gap-2 mt-2"><button type="button" class="btn bg-blue-600 text-white" id="nextChild">Yes — register another child</button><a class="btn bg-green-600 text-white" href="${payLink}" id="goPayNow">No — take me to the payment portal →</a></div>
       <p class="text-xs text-gray-600 mt-2">The payment portal shows ${esc(teamLabel(teamCode))}'s fee for ${familyDone.length>1?'each child':esc(row.first_name)} and the ways you can pay — card, Zelle, Cash App, Venmo or check, whichever the team accepts.</p></div>`;
     msg.className='text-sm mt-2';
+    if(IMPORT){ msg.innerHTML=`<div class="rounded-lg border-2 border-green-500 bg-green-50 p-3"><p class="font-semibold text-green-800">✓ ${esc(who)} is registered! Your team will review it shortly.</p>
+      <div class="flex flex-wrap gap-2 mt-2"><a class="btn bg-blue-600 text-white" href="parent.html">Back to my dashboard →</a><a class="btn bg-green-600 text-white" href="${payLink}">Payment portal →</a></div></div>`; IMPORT=null; return; }
     if(wantsAcct) await ensureAccount($('email').value.trim(), p1, msg);
     $('nextChild').onclick=()=>startNextChild(e.target);
   }catch(err){ msg.textContent='Error: '+(err.message||err); msg.className='text-sm mt-2 text-red-600'; }
 });
+
+// ---- Confirm & sign: an athlete the team already imported (imports.js, supabase/2026-11-10-team-imports.sql) ----
+// index.html?import=<id> — the parent is signed in; everything the team sent is filled in. The parent checks it, fills in
+// what's missing (emergency contact, insurance/physical, high-school answers, proof of birth when the rules need it)
+// and signs. The insert carries import_id; the database checks it's this parent's athlete and keeps the team.
+const IMPORT_ID=new URLSearchParams(location.search).get('import'); let IMPORT=null;
+if(IMPORT_ID) (async()=>{
+  const form=$('parentForm'), tabsCard=$('roleTabs').closest('.card');
+  const {data:s}=await sb.auth.getSession();
+  const say=h=>{ form.classList.add('hidden'); form.insertAdjacentHTML('beforebegin',h); };   // hide, don't remove: other code still fills the form's fields
+  if(!s||!s.session){ say(`<div class="card" style="border:2px solid #2563eb;background:#eff6ff"><p class="font-semibold">Sign in first</p><p class="text-sm mt-1">Open your <a class="underline" href="parent.html">Parent Dashboard</a>, sign in (or create an account) with your email, then tap <b>Finish registration</b> there.</p></div>`); return; }
+  try{ IMPORT=await window.getMyImport(sb,IMPORT_ID); }catch(e){}
+  if(!IMPORT){ say(`<div class="card"><p class="font-semibold">Nothing to finish here</p><p class="text-sm mt-1">This athlete's registration is already finished, or isn't connected to the account you're signed in with (${esc(s.session.user.email)}). Go to your <a class="underline" href="parent.html">Parent Dashboard</a> — if your team gave you a code, enter it there.</p></div>`); return; }
+  $('roleTabs').classList.add('hidden');
+  tabsCard.querySelector('h1').textContent=`Finish ${IMPORT.first_name}'s registration`;
+  tabsCard.querySelector('p').innerHTML=`${esc(teamLabel(IMPORT.team_code))} already sent ${esc(IMPORT.first_name)}'s details — they're filled in below. <b>Check them, fill in anything that's blank, and sign at the bottom.</b> About 2 minutes.`;
+  if(window.leagueReady){ try{ await window.leagueReady; }catch(e){} }
+  fillAllTeams();
+  const set=(id,v)=>{ const el=$(id); if(el&&v!=null&&v!=='') el.value=v; };
+  set('teamCode',IMPORT.team_code); $('teamCode').disabled=true;
+  set('gender',IMPORT.gender); set('firstName',IMPORT.first_name); set('lastName',IMPORT.last_name); set('dob',IMPORT.dob);
+  set('address',IMPORT.address); set('city',IMPORT.city); set('zip',IMPORT.zip); set('phone',IMPORT.guardian_phone);
+  set('parent1Name',IMPORT.guardian_name);
+  $('email').value=s.session.user.email; $('email').readOnly=true;
+  $('viaEmail').checked=false; $('viaEmail').closest('label').classList.add('hidden'); $('parentAcctWrap').classList.add('hidden');   // already signed in
+  ['teamCode','dob'].forEach(id=>$(id).dispatchEvent(new Event('change')));   // division, returning-athlete check, proof of birth need
+  $('lastName').dispatchEvent(new Event('input'));
+  const firstBlank=[...form.querySelectorAll('input[required],select[required]')].find(x=>!x.disabled&&!x.value&&x.type!=='file'&&x.type!=='checkbox');
+  if(firstBlank) setTimeout(()=>firstBlank.scrollIntoView({behavior:'smooth',block:'center'}),600);
+})();
 
 // ---- Several children: after one registration goes through, keep the family's info and clear only the athlete ----
 let familyDone=[], familyRegIds=[];
