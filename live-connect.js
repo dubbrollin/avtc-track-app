@@ -238,24 +238,46 @@ function loadMdbReader(){ return mdbLoading||(mdbLoading=new Promise((ok,bad)=>{
 // ---- Meet Manager backup (.zip from File › Backup, or the .mdb itself) -> result rows, all in the browser ----
 // A backup zip holds tfmeets6/<meet>.mdb (+ hybackup.txt), plain deflate. Read the zip's directory, inflate the .mdb with the
 // browser's own DecompressionStream, then the same reader as the live database connection.
-async function mdbFromZip(buf){
+// Names of the files inside a .zip (its directory), and pulling one file out.
+function zipEntries(buf){
   const u8=new Uint8Array(buf), dv=new DataView(buf);
   let eocd=-1; for(let i=u8.length-22;i>=Math.max(0,u8.length-65557);i--){ if(dv.getUint32(i,true)===0x06054b50){ eocd=i; break; } }
   if(eocd<0) throw new Error('That file isn\'t a readable .zip.');
-  const n=dv.getUint16(eocd+10,true); let p=dv.getUint32(eocd+16,true);
+  const n=dv.getUint16(eocd+10,true), list=[]; let p=dv.getUint32(eocd+16,true);
   for(let k=0;k<n;k++){
     if(dv.getUint32(p,true)!==0x02014b50) break;
     const method=dv.getUint16(p+10,true), csize=dv.getUint32(p+20,true), nlen=dv.getUint16(p+28,true), xlen=dv.getUint16(p+30,true), clen=dv.getUint16(p+32,true), off=dv.getUint32(p+42,true);
     const name=new TextDecoder().decode(u8.subarray(p+46,p+46+nlen)); p+=46+nlen+xlen+clen;
-    if(!/\.mdb$/i.test(name)) continue;
-    const start=off+30+dv.getUint16(off+26,true)+dv.getUint16(off+28,true), data=u8.subarray(start,start+csize);
-    if(method===0) return {name:name.split('/').pop(), buf:data.slice().buffer};
-    if(method!==8) throw new Error('This backup is packed in a way the app can\'t open (zip method '+method+').');
-    if(typeof DecompressionStream==='undefined') throw new Error('This browser can\'t open .zip files — use an up-to-date Chrome or Edge.');
-    const out=await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer();
-    return {name:name.split('/').pop(), buf:out};
+    if(!/\/$/.test(name)) list.push({name, method, csize, off});
   }
-  throw new Error('No Meet Manager database (.mdb) inside that .zip — is it the backup from File › Backup?');
+  return list;
+}
+async function zipRead(buf, e){
+  const u8=new Uint8Array(buf), dv=new DataView(buf);
+  const start=e.off+30+dv.getUint16(e.off+26,true)+dv.getUint16(e.off+28,true), data=u8.subarray(start,start+e.csize);
+  if(e.method===0) return data.slice().buffer;
+  if(e.method!==8) throw new Error('That .zip is packed in a way the app can\'t open (zip method '+e.method+').');
+  if(typeof DecompressionStream==='undefined') throw new Error('This browser can\'t open .zip files — use an up-to-date Chrome or Edge.');
+  return new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer();
+}
+// What kind of Meet Manager zip is this? 'backup' (holds the meet .mdb), 'tm-results' (the "Results for Team Manager"
+// export: TCL01-01.tcl, one team only), or 'other'.
+window.meetZipKind=async function(file){
+  const list=zipEntries(await file.arrayBuffer());
+  if(list.some(e=>/\.mdb$/i.test(e.name))) return 'backup';
+  if(list.some(e=>/\.tcl$/i.test(e.name))) return 'tm-results';
+  return 'other';
+};
+// The text of the first results file (.tcl / .txt / .csv / .sd3) inside a zip — for the results-file upload.
+window.resultsTextFromZip=async function(file){
+  const buf=await file.arrayBuffer(), e=zipEntries(buf).find(x=>/\.(tcl|txt|csv|sd3)$/i.test(x.name));
+  if(!e) throw new Error('No results file inside that .zip.');
+  return {name:e.name.split('/').pop(), text:new TextDecoder().decode(await zipRead(buf,e))};
+};
+async function mdbFromZip(buf){
+  const e=zipEntries(buf).find(x=>/\.mdb$/i.test(x.name));
+  if(!e) throw new Error('No Meet Manager database (.mdb) inside that .zip — is it the backup from File › Backup?');
+  return {name:e.name.split('/').pop(), buf:await zipRead(buf,e)};
 }
 // file: File (.zip or .mdb). Returns {rows, needMap, unmatched, dbName, events}. Uses the event-type choices saved for this meet on this computer.
 window.resultsFromMeetBackup=async function(file, regs, meetId){
