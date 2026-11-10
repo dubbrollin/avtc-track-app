@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#001C3B"><link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="VYC Track"><meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>FAQ</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css?v=b1">
+<script src="theme.js?v=b2"></script>
+<style>
+.intro{background:var(--act);background-image:repeating-linear-gradient(100deg,rgba(255,255,255,.09) 0 2px,transparent 2px 46px);color:#fff;border-radius:10px;padding:18px 18px 16px;margin-bottom:14px}
+.intro h1{color:#fff!important;font-size:1.9rem}
+.intro p{color:#DCE9FA;margin-top:4px}
+.intro a{color:#fff;text-decoration:underline}
+.search{position:relative;margin-top:12px}
+.search input{width:100%;border:0;border-radius:8px;padding:11px 12px 11px 38px;font-size:1rem;color:var(--ink)}
+.search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted)}
+.jump{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.jump a{background:#fff;border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:.85rem;font-weight:600;color:var(--navy);text-decoration:none}
+.jump a:hover{border-color:var(--act);color:var(--act)}
+h2.cat{font-size:1.15rem;margin:18px 0 8px;scroll-margin-top:80px}
+details.q{background:#fff;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;scroll-margin-top:80px}
+details.q>summary{list-style:none;cursor:pointer;padding:13px 16px;font-weight:600;color:var(--navy);display:flex;gap:12px;align-items:center}
+details.q>summary::-webkit-details-marker{display:none}
+details.q>summary::after{content:'+';margin-left:auto;font-size:1.3rem;line-height:1;color:var(--act);font-weight:400;flex:none}
+details.q[open]>summary::after{content:'−'}
+details.q .a{padding:0 16px 14px;font-size:.95rem;line-height:1.55;color:#253348}
+details.q .a p+p,details.q .a p+ul,details.q .a ul+p{margin-top:6px}
+details.q .a ul{list-style:disc;padding-left:1.2rem}
+details.q .a a{color:var(--act);text-decoration:underline}
+table.div{border-collapse:collapse;margin-top:6px;font-size:.9rem}
+table.div td,table.div th{border:1px solid var(--line);padding:4px 10px;text-align:left}
+table.div th{background:var(--soft)}
+.ui{font-weight:600;color:var(--navy);background:var(--soft);border:1px solid var(--line);border-radius:5px;padding:0 5px}
+#none{display:none;background:#fff;border:1px dashed var(--field);border-radius:10px;padding:16px;text-align:center;color:var(--muted)}
+.foot{font-size:.9rem;color:var(--muted);text-align:center;margin:18px 0 8px}
+.foot a{color:var(--act);text-decoration:underline}
+.hide{display:none!important}
+</style>
+</head><body class="text-gray-900"><header class="topnav"><div class="topnav-inner">
+  <a class="brand" href="home.html">VYC <b>Track &amp; Field</b></a>
+  <nav>
+    <a href="home.html">Home</a>
+    <a href="index.html">Register</a>
+    <a href="coach.html">Coach Dashboard</a>
+    <a href="meets-admin.html?view=timer">Timer</a>
+    <a href="parent.html">Parent Dashboard</a>
+    <a href="schedule.html">Schedule</a>
+    <a href="team.html">Teams</a>
+    <a href="results.html">Results</a>
+    <a href="howto.html">How-To</a>
+    <a href="faq.html">FAQ</a>
+  </nav>
+</div></header>
+<main class="max-w-3xl mx-auto p-4">
+  <div class="intro">
+    <h1>Frequently Asked Questions</h1>
+    <p>Quick answers for parents, coaches and timers. For step-by-step walk-throughs, see the <a href="howto.html">How-To guides</a>.</p>
+    <label class="search"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Search — e.g. fee, password, backup" aria-label="Search questions"></label>
+  </div>
+
+  <nav class="jump" aria-label="Topics">
+    <a href="#c-account">Account &amp; sign-in</a><a href="#c-reg">Registration</a><a href="#c-fees">Fees &amp; payments</a>
+    <a href="#c-meets">Meets &amp; results</a><a href="#c-app">App &amp; alerts</a><a href="#c-coach">Coaches &amp; team admins</a><a href="#c-timer">Timers</a>
+  </nav>
+  <div id="none">No questions match that. Try another word, or browse the <a class="underline" href="howto.html">How-To guides</a>.</div>
+
+  <section data-cat><h2 class="cat" id="c-account">Account &amp; sign-in</h2>
+    <details class="q"><summary>How do I sign in? Is there a magic link?</summary><div class="a">
+      <p>No magic link — sign in with your email and password, or tap <span class="ui">Continue with Google</span>. First time? Choose <span class="ui">First time? Create password</span>.</p></div></details>
+    <details class="q"><summary>It says "Wrong email/password." What do I do?</summary><div class="a">
+      <p>Usually it means you haven't set a password yet. Tap <span class="ui">First time? Create password</span> with the same email you registered with. If you signed up with Google, use <span class="ui">Continue with Google</span> instead.</p></div></details>
+    <details class="q"><summary>I never got the confirmation email.</summary><div class="a">
+      <p>Check your spam or promotions folder, then tap <span class="ui">Send it again</span> on the sign-in screen. The link must be opened before you can sign in.</p></div></details>
+    <details class="q"><summary>Which email should I use?</summary><div class="a">
+      <p>The same email you put on your athlete's registration. That's how your dashboard finds your athletes — and how imported athletes link to you automatically.</p></div></details>
+    <details class="q"><summary>Can I look around before making an account?</summary><div class="a">
+      <p>Yes. On the sign-in box, use <span class="ui">Look around without an account</span> to see the app as a coach, team admin, parent or timer. It's view-only.</p></div></details>
+  </section>
+
+  <section data-cat><h2 class="cat" id="c-reg">Registration</h2>
+    <details class="q"><summary>What do I need before I start registering?</summary><div class="a">
+      <ul><li>Proof of birth (birth certificate, state ID, passport or similar) as a photo or PDF — new athletes and transfers only</li>
+      <li>Insurance carrier</li><li>Date of the athlete's physical and the doctor's name</li><li>An emergency contact</li></ul>
+      <p>You'll sign the athlete agreement, code of conduct and parent consent on screen. <a href="howto.html#register">Step-by-step guide</a></p></div></details>
+    <details class="q"><summary>Which division is my athlete in?</summary><div class="a">
+      <p>It's based on age on December 31 of the season year (season year minus birth year). The form fills it in for you.</p>
+      <table class="div"><tr><th>Division</th><th>Ages</th></tr><tr><td>Sub-Gremlin</td><td>5–6</td></tr><tr><td>Gremlin</td><td>7–8</td></tr><tr><td>Bantam</td><td>9–10</td></tr><tr><td>Juniors</td><td>11–12</td></tr><tr><td>Youth</td><td>13–14</td></tr><tr><td>Intermediates</td><td>15–18</td></tr></table>
+      <p>Athletes compete only in their own division — no moving up or down.</p></div></details>
+    <details class="q"><summary>Does my returning athlete need proof of birth again?</summary><div class="a">
+      <p>Not if they're returning to the same team. Enter the same name and birth date as last season and you'll see <span class="ui">✓ Returning athlete… No proof of birth needed</span>. Athletes switching teams count as new and must upload it.</p></div></details>
+    <details class="q"><summary>How recent does the physical need to be?</summary><div class="a">
+      <p>It must be dated on or after May 30 of the year before the season.</p></div></details>
+    <details class="q"><summary>Can a high school athlete run VYC?</summary><div class="a">
+      <p>No. Athletes running on a high school track team (CIF or City) can't register for VYC. The form asks this for athletes 13 and older.</p></div></details>
+    <details class="q"><summary>What do the statuses on my dashboard mean?</summary><div class="a">
+      <ul><li><span class="ui">Awaiting team review</span> — your team admin hasn't checked it yet.</li>
+      <li><span class="ui">Team reviewed — awaiting certification</span> — approved by the team; the Conference President checks it next.</li>
+      <li><span class="ui">Certified</span> — all set. Only certified athletes can be entered in meets.</li>
+      <li><span class="ui">Rejected</span> — something needs fixing; contact your team admin.</li></ul></div></details>
+    <details class="q"><summary>My team says they already registered my athlete. Do I have to fill out everything again?</summary><div class="a">
+      <p>No. Sign in to your <a href="parent.html">Parent Dashboard</a>. If the team used your email, your athlete is already waiting; otherwise enter the 6-letter code from your team plus your athlete's birthday. Tap <span class="ui">Finish registration →</span> — the form is pre-filled, so you just check it, fill any blanks and sign. <a href="howto.html#import">Guide</a></p></div></details>
+    <details class="q"><summary>My code doesn't work.</summary><div class="a">
+      <p>Check that the birthday matches exactly what your team has on file, and that you typed the 6-letter code correctly (dashes and capital letters don't matter). If it still fails, ask your team admin to check or add your email.</p></div></details>
+    <details class="q"><summary>What happens if we register late?</summary><div class="a">
+      <p>Registrations after the league's certification date are marked late, and the team is charged a late fee. Once registration closes for the season, an athlete can only be added with a late pass approved by the league. Athletes your team imported before the certification date count as on time, even if you finish the form later.</p></div></details>
+    <details class="q"><summary>My athlete is switching teams. What's different?</summary><div class="a">
+      <p>Register on the new team as a new athlete and upload proof of birth. Before certification, the former team confirms good standing, the new team accepts the athlete, and the Commissioner approves. Valley United Striders athletes return to last season's team unless that team approves the move.</p></div></details>
+    <details class="q"><summary>I have more than one child.</summary><div class="a">
+      <p>After submitting, tap <span class="ui">Yes — register another child</span>. Your family details carry over. Some teams also give a sibling discount on the fee.</p></div></details>
+  </section>
+
+  <section data-cat><h2 class="cat" id="c-fees">Fees &amp; payments</h2>
+    <details class="q"><summary>How much is the fee?</summary><div class="a">
+      <p>Each team sets its own fee. You'll see it under your athlete on the Parent Dashboard. If it isn't posted yet, your team will let you know.</p></div></details>
+    <details class="q"><summary>How can I pay?</summary><div class="a">
+      <p>Depending on your team: card (secure Stripe checkout), a payment plan with automatic payments, or Zelle, Cash App, Venmo, check or cash. For those, send the money and tap <span class="ui">I sent it</span> so the team can confirm it. <a href="howto.html#pay">Guide</a></p></div></details>
+    <details class="q"><summary>My payment-plan card failed.</summary><div class="a">
+      <p>Your fee box will show <span class="ui">Update my card</span>. Tap it to add a new card; the plan carries on.</p></div></details>
+    <details class="q"><summary>I paid but it still says I owe.</summary><div class="a">
+      <p>Card payments update right away. For Zelle, Cash App, Venmo, check or cash, it shows <span class="ui">Payment sent — awaiting team confirmation</span> until your team marks it received. Contact your team admin if it's been a while.</p></div></details>
+  </section>
+
+  <section data-cat><h2 class="cat" id="c-meets">Meets &amp; results</h2>
+    <details class="q"><summary>How do I tell the coaches whether we're coming?</summary><div class="a">
+      <p>On your dashboard under <span class="ui">Every meet this season</span>, tap <span class="ui">Coming</span> or <span class="ui">Missing</span>. The deadline is <b>Thursday 8 PM</b> before the meet. Later answers are late adds and run at the end of each heat.</p></div></details>
+    <details class="q"><summary>Can I choose my athlete's events?</summary><div class="a">
+      <p>If your team allows it, you can pick 1–3 preferred events under <span class="ui">details</span>. Coaches make the final entries.</p></div></details>
+    <details class="q"><summary>How many events can an athlete enter?</summary><div class="a">
+      <p>Sub-Gremlin and Gremlin: 3 per meet. Bantam, Juniors and Youth: 4, and the 4th must include a relay. Intermediates: 4.</p></div></details>
+    <details class="q"><summary>What time do meets start?</summary><div class="a">
+      <p>Field events start at 8:30 AM and the first race (3000m) at 8:45 AM. See every date and location on the <a href="schedule.html">Schedule</a>.</p></div></details>
+    <details class="q"><summary>Where do I see results?</summary><div class="a">
+      <p>On <a href="results.html">Results</a>: Live (meet day, refreshes about every 30 seconds), Meet Results, Season Rankings and All-Time Records. Your own athlete's bests are on your dashboard under <span class="ui">Season bests</span>.</p></div></details>
+    <details class="q"><summary>My athlete ran in a mixed race. Why is their place different?</summary><div class="a">
+      <p>Mixed races are filed under each runner's own division and gender, so the place shown is among their own group. You'll also see "ran in the mixed race, Nth overall".</p></div></details>
+    <details class="q"><summary>Why do results say "🔒 Results locked"?</summary><div class="a">
+      <p>The league can lock a team's results while fees are unpaid. Contact your team admin.</p></div></details>
+    <details class="q"><summary>Do I have to volunteer?</summary><div class="a">
+      <p>Every VYC family is asked to volunteer at each meet. Pick a job from the <span class="ui">Volunteers</span> tab on your dashboard. Jobs still open by Thursday 8 PM are assigned automatically.</p></div></details>
+  </section>
+
+  <section data-cat><h2 class="cat" id="c-app">App &amp; alerts</h2>
+    <details class="q"><summary>Is there an app to download?</summary><div class="a">
+      <p>Yes — install it straight from the site. Android/Chrome: tap <span class="ui">Install app</span> on <a href="home.html">Home</a>. iPhone: open the site in Safari, tap Share → <span class="ui">Add to Home Screen</span>.</p></div></details>
+    <details class="q"><summary>How do I get message notifications on my phone?</summary><div class="a">
+      <p>Open team messages, tap <span class="ui">🔔 My alerts</span>, turn on <span class="ui">Notify this device</span> and allow notifications. You can also choose email or text alerts. <a href="howto.html#alerts">Guide</a></p></div></details>
+    <details class="q"><summary>I'm on iPhone and I'm not getting notifications.</summary><div class="a">
+      <p>iPhone only sends notifications to the Home Screen app. Add the site to your Home Screen from Safari, open it from that icon, then turn on <span class="ui">Notify this device</span> again.</p></div></details>
+    <details class="q"><summary>I don't see Team messages, Livestream, Photos or Store.</summary><div class="a">
+      <p>Those are team extras your team turns on. If your team doesn't have them, they won't appear.</p></div></details>
+  </section>
+
+  <section data-cat><h2 class="cat" id="c-coach">Coaches &amp; team admins</h2>
+    <details class="q"><summary>What do I need to coach?</summary><div class="a">
+      <p>A current background check (good for 2 years, or 3 for USATF) and SafeSport. Head Coaches must be 21 or older. Sign up on <a href="index.html">Register</a> → <span class="ui">Coach</span>. <a href="howto.html#coach-signup">Guide</a></p></div></details>
+    <details class="q"><summary>Who approves my coach account?</summary><div class="a">
+      <p>Your team admin or a site admin approves coaches. Team admins are approved by a site admin or the team's existing team admin.</p></div></details>
+    <details class="q"><summary>Why can't I see all of my athletes' details?</summary><div class="a">
+      <p>Team admins see everything. Other coaches see names, divisions and status; Division Coaches see only their own division.</p></div></details>
+    <details class="q"><summary>Who certifies athletes?</summary><div class="a">
+      <p>The team admin marks each athlete <span class="ui">✓ Team reviewed</span>, then a Conference President certifies. The Commissioner approves transfers and late additions.</p></div></details>
+    <details class="q"><summary>Why are my meet entries locked?</summary><div class="a">
+      <p>Entries stay locked until the league Treasurer confirms your team's certification fees. Only certified athletes can be entered.</p></div></details>
+    <details class="q"><summary>We registered our athletes in another system. Can we move them over?</summary><div class="a">
+      <p>Yes. Use <span class="ui">Import athletes</span> under Team admin with a Team Manager roster (.zip or .tcl) or a CSV/Excel export. Parents get a code to finish a short form. <a href="howto.html#import-athletes">Guide</a></p></div></details>
+    <details class="q"><summary>What are the paid extras?</summary><div class="a">
+      <p>$99 per team per season: Team Messenger, online payments and tracking, live results, livestream, photo gallery and team store. The team page and volunteer duties are always free.</p></div></details>
+    <details class="q"><summary>Can we get the Meet Manager backup from a meet we visited?</summary><div class="a">
+      <p>Yes. Coaches and team admins of every team at the meet can download it from <span class="ui">Meet Manager backups</span> or <span class="ui">Backup ⬇</span> in <span class="ui">Our schedule</span>.</p></div></details>
+  </section>
+
+  <section data-cat><h2 class="cat" id="c-timer">Timers</h2>
+    <details class="q"><summary>Do I still need to upload the backup if results went up live?</summary><div class="a">
+      <p>Yes — always. After the meet, File › Backup in Meet Manager and upload the <b>Tfmm6Bkup….zip</b>. <a href="howto.html#backup-upload">Guide</a></p></div></details>
+    <details class="q"><summary>My upload says "That's a Team Manager export."</summary><div class="a">
+      <p>You picked a Team Manager results or entries file. Upload the Meet Manager backup instead (File › Backup in Meet Manager).</p></div></details>
+    <details class="q"><summary>We fixed results after uploading. What now?</summary><div class="a">
+      <p>Upload the newer backup. It replaces that meet's results completely, so the latest backup is always what's posted.</p></div></details>
+    <details class="q"><summary>Can I type in a result by hand?</summary><div class="a">
+      <p>No. Results only come from Meet Manager — the live connection, a results file, or the backup.</p></div></details>
+    <details class="q"><summary>Something was posted by mistake.</summary><div class="a">
+      <p>Ask your team admin to remove it. Only a site admin can remove a backup.</p></div></details>
+  </section>
+
+  <p class="foot">Didn't find it? Try the <a href="howto.html">How-To guides</a>, ask your team admin, or see league rules at <a href="https://valleyconference.org/" target="_blank" rel="noopener">valleyconference.org</a>.</p>
+</main>
+<script>
+(function(){
+  var qs=[].slice.call(document.querySelectorAll('details.q')), cats=[].slice.call(document.querySelectorAll('[data-cat]'));
+  qs.forEach(function(d,i){ if(!d.id) d.id='q'+(i+1); });
+  var input=document.getElementById('q'), none=document.getElementById('none'), jump=document.querySelector('.jump');
+  input.addEventListener('input',function(){
+    var t=input.value.trim().toLowerCase(), any=false;
+    qs.forEach(function(d){ var hit=!t||d.textContent.toLowerCase().indexOf(t)>-1; d.classList.toggle('hide',!hit); if(t) d.open=hit; else d.open=false; if(hit) any=true; });
+    cats.forEach(function(c){ c.classList.toggle('hide', !c.querySelector('details.q:not(.hide)')); });
+    none.style.display=any?'none':'block'; jump.classList.toggle('hide',!!t);
+  });
+  var h=location.hash.slice(1), el=h&&document.getElementById(h); if(el&&el.matches('details.q')) el.open=true;
+})();
+</script>
+</body></html>

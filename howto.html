@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#001C3B"><link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="VYC Track"><meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>How-To Guides</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css?v=b1">
+<script src="theme.js?v=b2"></script>
+<style>
+.intro{background:var(--act);background-image:repeating-linear-gradient(100deg,rgba(255,255,255,.09) 0 2px,transparent 2px 46px);color:#fff;border-radius:10px;padding:18px 18px 16px;margin-bottom:14px}
+.intro h1{color:#fff!important;font-size:1.9rem}
+.intro p{color:#DCE9FA;margin-top:4px}
+.intro a{color:#fff;text-decoration:underline}
+.roles{display:flex;flex-wrap:wrap;gap:4px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:5px;margin-bottom:14px;position:sticky;top:64px;z-index:5}
+.roles button{border:0;border-radius:7px;padding:9px 13px;font-weight:600;font-size:.92rem;background:transparent;color:var(--muted);cursor:pointer}
+.roles button:hover{background:var(--act-soft);color:var(--act)}
+.roles button[aria-selected="true"]{background:var(--act);color:#fff}
+.sect{display:none}.sect.on{display:block}
+.sect>p.lead{color:var(--muted);margin:0 0 10px;font-size:.95rem}
+details.g{background:#fff;border:1px solid var(--line);border-radius:10px;margin-bottom:10px;box-shadow:0 1px 2px rgba(16,32,56,.06);scroll-margin-top:130px}
+details.g>summary{list-style:none;cursor:pointer;padding:14px 16px;display:flex;align-items:center;gap:12px;font-weight:700;color:var(--navy)}
+details.g>summary::-webkit-details-marker{display:none}
+details.g>summary::after{content:'';margin-left:auto;width:9px;height:9px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);transition:transform .15s;flex:none}
+details.g[open]>summary::after{transform:rotate(-135deg)}
+details.g>summary small{display:block;font-weight:400;color:var(--muted);font-size:.85rem;margin-top:2px}
+.ic{width:36px;height:36px;border-radius:9px;background:var(--act-soft);color:var(--act);display:grid;place-items:center;flex:none;font-size:18px}
+.body{padding:0 16px 16px 64px;font-size:.95rem;line-height:1.55}
+@media (max-width:560px){.body{padding:0 14px 14px 14px}}
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:0}
+ol.steps>li{counter-increment:s;position:relative;padding:0 0 12px 38px}
+ol.steps>li::before{content:counter(s);position:absolute;left:0;top:0;width:26px;height:26px;border-radius:50%;background:var(--navy);color:#fff;font-weight:700;font-size:.8rem;display:grid;place-items:center}
+ol.steps ul{list-style:disc;padding-left:1.1rem;margin-top:4px}
+.ui{font-weight:600;color:var(--navy);background:var(--soft);border:1px solid var(--line);border-radius:5px;padding:0 5px;white-space:nowrap}
+.tip{background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:9px 12px;font-size:.88rem;margin-top:6px}
+.tip.ok{background:var(--ok-bg);color:var(--ok)}
+.body a{color:var(--act);text-decoration:underline}
+.foot{font-size:.9rem;color:var(--muted);text-align:center;margin:18px 0 8px}
+.foot a{color:var(--act);text-decoration:underline}
+</style>
+</head><body class="text-gray-900"><header class="topnav"><div class="topnav-inner">
+  <a class="brand" href="home.html">VYC <b>Track &amp; Field</b></a>
+  <nav>
+    <a href="home.html">Home</a>
+    <a href="index.html">Register</a>
+    <a href="coach.html">Coach Dashboard</a>
+    <a href="meets-admin.html?view=timer">Timer</a>
+    <a href="parent.html">Parent Dashboard</a>
+    <a href="schedule.html">Schedule</a>
+    <a href="team.html">Teams</a>
+    <a href="results.html">Results</a>
+    <a href="howto.html">How-To</a>
+    <a href="faq.html">FAQ</a>
+  </nav>
+</div></header>
+<main class="max-w-3xl mx-auto p-4">
+  <div class="intro">
+    <h1>How-To Guides</h1>
+    <p>Step-by-step help for parents, coaches, team admins and meet timers. Pick who you are, then open a guide. Quick answers are on the <a href="faq.html">FAQ</a>.</p>
+  </div>
+
+  <div class="roles" role="tablist">
+    <button role="tab" data-r="parents" aria-selected="true">Parents</button>
+    <button role="tab" data-r="coaches" aria-selected="false">Coaches &amp; Team Admins</button>
+    <button role="tab" data-r="timers" aria-selected="false">Timers &amp; Host Teams</button>
+  </div>
+
+  <!-- ===================== PARENTS ===================== -->
+  <section class="sect on" id="parents" role="tabpanel">
+    <p class="lead">Everything a parent does happens on two pages: <b>Register</b> (once a season per athlete) and your <b>Parent Dashboard</b> (all season long).</p>
+
+    <details class="g" id="account"><summary><span class="ic">🔑</span><span>Create your account and sign in<small>Email + password, or Google</small></span></summary><div class="body">
+      <ol class="steps">
+        <li>Go to <a href="home.html">Home</a> and find <span class="ui">Already registered? Sign in</span>.</li>
+        <li>First time here? Enter your email, choose <span class="ui">First time? Create password</span> and pick a password (6+ characters). Or tap <span class="ui">Continue with Google</span>.</li>
+        <li>Open the confirmation email we send and click the link. Not there? Check spam, or tap <span class="ui">Send it again</span>.</li>
+        <li>Sign in. Parents land on the <a href="parent.html">Parent Dashboard</a>; coaches and team admins land on the Coach Dashboard.</li>
+      </ol>
+      <p class="tip ok">Tip: registering your athlete can create your login for you — leave <span class="ui">Create a parent dashboard login…</span> ticked on the form.</p>
+    </div></details>
+
+    <details class="g" id="register"><summary><span class="ic">✏️</span><span>Register your athlete<small>About 10 minutes the first time</small></span></summary><div class="body">
+      <ol class="steps">
+        <li>Open <a href="index.html">Register</a> and stay on the <span class="ui">Parent / Athlete</span> tab.</li>
+        <li>Pick your <b>team</b>, then the athlete's gender. Enter the athlete's name and date of birth — the <b>division</b> fills in by itself.
+          <ul><li>Returning athlete? Start typing the last name and tap <span class="ui">Yes, this is my athlete</span> to reuse last season's details.</li></ul></li>
+        <li>Fill in address, phone, email and an emergency contact, and answer the returning / last-season-team questions.</li>
+        <li><b>Proof of birth</b>: choose the document type and upload a photo or PDF. Returning athletes on the same team usually skip this — you'll see <span class="ui">✓ Returning athlete… No proof of birth needed</span>.</li>
+        <li><b>Insurance &amp; Medical</b>: insurance carrier, date of the physical exam and the doctor's name.</li>
+        <li><b>Parent / Guardian</b>: Parent 1 is required, Parent 2 is optional.</li>
+        <li>Read and check the Athlete's Agreement, Code of Conduct and Parent/Guardian Consent. Sign with <span class="ui">Draw</span> or <span class="ui">Type name</span>.</li>
+        <li>Tap <span class="ui">Submit registration</span>. Then choose <span class="ui">Yes — register another child</span> (keeps your family details) or go to the payment portal.</li>
+      </ol>
+      <p class="tip">Athletes 13 and older who run for a high school track team can't register for VYC.</p>
+    </div></details>
+
+    <details class="g" id="import"><summary><span class="ic">🔗</span><span>Your team already sent your athlete? Finish in 2 minutes<small>For athletes the team moved over from another system</small></span></summary><div class="body">
+      <ol class="steps">
+        <li>Sign in to the <a href="parent.html">Parent Dashboard</a>.</li>
+        <li>If the team used your email, you'll see <span class="ui">Your team already sent…</span> right away. Skip to step 4.</li>
+        <li>Otherwise open <span class="ui">Got a code from your team?</span>, type the 6-letter code from your team's message and your athlete's date of birth, and tap <span class="ui">Connect</span>.</li>
+        <li>Tap <span class="ui">Finish registration →</span>. The form opens already filled in — check it, fill any blanks (emergency contact, insurance, physical), and sign.</li>
+      </ol>
+      <p class="tip ok">If your team sent your athlete before the league's certification date, it counts as on time — even if you finish later.</p>
+    </div></details>
+
+    <details class="g" id="pay"><summary><span class="ic">💳</span><span>Pay your team fee<small>Card, payment plan, Zelle, Cash App, Venmo, check or cash</small></span></summary><div class="body">
+      <ol class="steps">
+        <li>On the <a href="parent.html">Parent Dashboard</a>, look at the fee box under your athlete (or open <a href="pay.html">Pay Team Fee</a>).</li>
+        <li>Choose how to pay — the choices depend on your team:
+          <ul>
+            <li><span class="ui">Pay $… by card</span> — secure Stripe checkout, money goes straight to the team.</li>
+            <li><b>Payment plan</b> — a first payment today, then automatic payments on the schedule shown.</li>
+            <li><span class="ui">Other ways to pay</span> — send by Zelle, Cash App, Venmo or check/cash, then tap <span class="ui">I sent it</span>.</li>
+          </ul></li>
+        <li>The box shows <span class="ui">Paid in full ✓</span> when the team has it, then disappears.</li>
+      </ol>
+      <p class="tip">If your team hasn't turned on online payments, the box shows the amount and says your team will tell you how and when to pay.</p>
+    </div></details>
+
+    <details class="g" id="status"><summary><span class="ic">✅</span><span>Track your athlete's approval<small>Team review, then league certification</small></span></summary><div class="body">
+      <ol class="steps">
+        <li><span class="ui">Awaiting team review</span> — your team admin hasn't looked yet.</li>
+        <li><span class="ui">Team reviewed — awaiting certification</span> — the team approved it; now the Conference President checks it.</li>
+        <li><span class="ui">Certified</span> — done. Only certified athletes can be entered in meets.</li>
+      </ol>
+      <p class="tip">If you see <span class="ui">Rejected</span>, contact your team admin — it's usually a missing or unreadable document.</p>
+    </div></details>
+
+    <details class="g" id="meets"><summary><span class="ic">📅</span><span>Tell the coaches who's coming to a meet<small>Deadline: Thursday 8 PM before the meet</small></span></summary><div class="body">
+      <ol class="steps">
+        <li>On the Parent Dashboard, find <span class="ui">Every meet this season</span>.</li>
+        <li>Tap <span class="ui">Coming</span> or <span class="ui">Missing</span> for each athlete and meet. Use <span class="ui">details</span> to add a note or, if your team allows it, pick the events you'd like.</li>
+        <li>Change your mind? Use <span class="ui">Update answer</span> any time before the deadline.</li>
+      </ol>
+      <p class="tip">Coaches make the final event entries. Answers after Thursday 8 PM are late adds and run at the end of each heat.</p>
+    </div></details>
+
+    <details class="g" id="volunteer"><summary><span class="ic">🙋</span><span>Sign up to volunteer at a meet<small>Every family is asked to help at each meet</small></span></summary><div class="body">
+      <ol class="steps">
+        <li>On your dashboard, open the <span class="ui">Volunteers</span> tab or tap <span class="ui">Pick a spot →</span> on the reminder.</li>
+        <li>Choose an open job and save. Jobs still open by Thursday 8 PM are assigned automatically.</li>
+      </ol>
+    </div></details>
+
+    <details class="g" id="results"><summary><span class="ic">🏅</span><span>See results and season bests</span></summary><div class="body">
+      <ol class="steps">
+        <li>Your dashboard's <span class="ui">Season bests</span> shows each event's best mark — <span class="ui">NEW BEST</span> and <span class="ui">Q</span> (qualifying) badges included — and updates after every meet.</li>
+        <li>For full meet results, rankings and records, open <a href="results.html">Results</a>. On meet day the <span class="ui">🔴 Live</span> tab refreshes about every 30 seconds.</li>
+      </ol>
+    </div></details>
+
+    <details class="g" id="alerts"><summary><span class="ic">🔔</span><span>Install the app and get message alerts on your phone</span></summary><div class="body">
+      <ol class="steps">
+        <li><b>Install the app.</b> Android / Chrome: on <a href="home.html">Home</a> tap <span class="ui">Install app</span>. iPhone: open the site in <b>Safari</b>, tap <b>Share</b> → <span class="ui">Add to Home Screen</span>, then open it from the new icon.</li>
+        <li>In your team messages, tap <span class="ui">🔔 My alerts</span>.</li>
+        <li>Turn on <span class="ui">Notify this device</span> and allow notifications when your phone asks. You can also choose <span class="ui">Email me</span> or <span class="ui">Text me</span>.</li>
+      </ol>
+      <p class="tip">On iPhone, alerts only work from the Home Screen app — not from a Safari tab. Team messages are available when your team has the paid extras on.</p>
+    </div></details>
+  </section>
+
+  <!-- ===================== COACHES ===================== -->
+  <section class="sect" id="coaches" role="tabpanel">
+    <p class="lead">Coaches work from the <b>Coach Dashboard</b>. Team admins also get <span class="ui">Team admin: roster &amp; intake</span> for the roster, coaches, payments and imports.</p>
+
+    <details class="g" id="coach-signup"><summary><span class="ic">🧢</span><span>Sign up as a coach or team admin<small>Background check + SafeSport required</small></span></summary><div class="body">
+      <ol class="steps">
+        <li>Open <a href="index.html">Register</a> and pick the <span class="ui">Coach</span> or <span class="ui">Team Admin</span> tab.</li>
+        <li>Choose your team and coach type (Head Coach must be 21+), and enter your background check and SafeSport dates. Need a check? Use <span class="ui">Start your VYC background check →</span>.</li>
+        <li>Submit and wait for approval. Your team admin (or a site admin) approves coaches; a site admin approves team admins.</li>
+      </ol>
+    </div></details>
+
+    <details class="g" id="review"><summary><span class="ic">🗂️</span><span>Review your team's registrations<small>Team admins</small></span></summary><div class="body">
+      <ol class="steps">
+        <li>On the Coach Dashboard tap <span class="ui">Team admin: roster &amp; intake</span> → <span class="ui">Roster &amp; intake</span>.</li>
+        <li>Filter to <span class="ui">Needs team review</span>. For each athlete, open <span class="ui">View proof of birth</span> and <span class="ui">Details</span>.</li>
+        <li>Tap <span class="ui">✓ Team reviewed</span> if it's right, or <span class="ui">Reject</span> if something's wrong. The Conference President then certifies.</li>
+        <li>Transfers: use the <span class="ui">Transfer requests</span> card — tap <span class="ui">✓ We accept this athlete</span>. The former team and the Commissioner also sign off.</li>
+      </ol>
+      <p class="tip ok">Need files? <span class="ui">Export CSV</span>, <span class="ui">Hy-Tek roster</span> and <span class="ui">Download forms PDF</span> are on the same tab.</p>
+    </div></details>
+
+    <details class="g" id="import-athletes"><summary><span class="ic">📥</span><span>Import athletes you registered somewhere else<small>Team Manager roster, CSV or Excel</small></span></summary><div class="body">
+      <ol class="steps">
+        <li>Go to <span class="ui">Team admin: roster &amp; intake</span> → <span class="ui">Import athletes</span>.</li>
+        <li>Upload a Team Manager roster export (.zip or .tcl) or a CSV / Excel file from the other app.</li>
+        <li>For CSV/Excel, check that each column is matched correctly, preview, then import. Athletes already on your roster are skipped.</li>
+        <li>Each family gets a 6-letter code. Use <span class="ui">Copy message</span> to text or email it, or <span class="ui">Download the codes (CSV)</span> for all of them.</li>
+        <li>Parents sign in, connect with the code (or automatically by email) and finish a short form. Finished athletes move to your normal review list.</li>
+      </ol>
+      <p class="tip">Team Manager files have no parent contact info, so add a parent's email with <span class="ui">Add parent email</span> to link them automatically.</p>
+    </div></details>
+
+    <details class="g" id="team-payments"><summary><span class="ic">💵</span><span>Set up team fees and payments<small>Team admins</small></span></summary><div class="body">
+      <ol class="steps">
+        <li>Open <span class="ui">Team admin: roster &amp; intake</span> → <span class="ui">Payments</span>.</li>
+        <li>Set the fee per athlete, any sibling discount and what the fee covers.</li>
+        <li>For cards: <span class="ui">Set up Stripe for this team</span> (Stripe charges about 2.9% + 30¢ and deposits to your bank). Optionally add a payment plan.</li>
+        <li>Add your Zelle, Cash App, Venmo and check/cash details. When parents tap <span class="ui">I sent it</span>, mark it <span class="ui">Received ✓</span>.</li>
+        <li>Use <span class="ui">Record payment</span>, <span class="ui">Adjust</span> or <span class="ui">Waive</span> for anything handled in person.</li>
+      </ol>
+      <p class="tip">Card payments, plans and tracking are part of the team's paid extras.</p>
+    </div></details>
+
+    <details class="g" id="entries"><summary><span class="ic">🏃</span><span>Enter athletes into a meet<small>Like Team Manager's "Entry by Event"</small></span></summary><div class="body">
+      <ol class="steps">
+        <li>On the Coach Dashboard open <span class="ui">Meet registration &amp; results</span> and pick the meet.</li>
+        <li>Choose a division, click an event and tick the athletes. Parent answers (<span class="ui">✓ yes</span>) and each athlete's best show beside the names.</li>
+        <li>Relays: <span class="ui">New Relay</span>, then fill legs 1–4 (plus up to 4 alternates), or try <span class="ui">Find Best Relay</span>.</li>
+        <li>Finish before the meet's <b>Entries close</b> time.</li>
+      </ol>
+      <p class="tip">Limits per meet: Sub-Gremlin &amp; Gremlin 3 events; Bantam, Juniors &amp; Youth 4 (the 4th must include a relay); Intermediates 4. Only certified athletes can be entered, and entries stay locked until the league confirms your team's certification fees.</p>
+    </div></details>
+
+    <details class="g" id="coach-volunteers"><summary><span class="ic">📋</span><span>Set up meet volunteer jobs<small>Host teams</small></span></summary><div class="body">
+      <ol class="steps">
+        <li>On the Coach Dashboard open <span class="ui">Meet volunteers</span>.</li>
+        <li>List the jobs for your meet — as one list, per division, by time shift or custom rows.</li>
+        <li>Visiting teams claim the open duties first come, first served. Anything still open by Thursday 8 PM is assigned automatically.</li>
+      </ol>
+    </div></details>
+
+    <details class="g" id="livestream"><summary><span class="ic">📺</span><span>Add a livestream</span></summary><div class="body">
+      <ol class="steps">
+        <li>Start a YouTube Live and set it to <b>Unlisted</b>.</li>
+        <li>In YouTube tap Share and copy the link.</li>
+        <li>On the Coach Dashboard's <span class="ui">Livestream</span> card tap <span class="ui">＋ Add a livestream</span>, paste the link and tap <span class="ui">Add livestream</span>. The replay stays after you end it.</li>
+      </ol>
+    </div></details>
+
+    <details class="g" id="backups-download"><summary><span class="ic">💾</span><span>Download a meet's Meet Manager backup<small>For your own files</small></span></summary><div class="body">
+      <ol class="steps">
+        <li>On the Coach Dashboard open <span class="ui">Meet Manager backups</span>, or tap <span class="ui">Backup ⬇</span> next to a meet in <span class="ui">Our schedule</span>.</li>
+        <li>Every team at that meet can download it.</li>
+      </ol>
+    </div></details>
+  </section>
+
+  <!-- ===================== TIMERS ===================== -->
+  <section class="sect" id="timers" role="tabpanel">
+    <p class="lead">Timers work from the <a href="meets-admin.html?view=timer">Timer</a> page. Results only ever come from Meet Manager — there's no typing results by hand.</p>
+
+    <details class="g" id="before"><summary><span class="ic">🧰</span><span>Before meet day</span></summary><div class="body">
+      <ol class="steps">
+        <li>Use Chrome or Edge on the timing laptop and sign in with your timer account.</li>
+        <li>On the Timer page tap <span class="ui">Download entries (Hy-Tek)</span>.</li>
+        <li>In Meet Manager: File › Import › Semi-Colon Delimited Entries. Open Meet Manager in <b>multi-user mode</b>.</li>
+        <li>Practice the connection with <span class="ui">Test only</span> so nothing posts publicly.</li>
+      </ol>
+    </div></details>
+
+    <details class="g" id="live"><summary><span class="ic">🔴</span><span>Send results live during the meet</span></summary><div class="body">
+      <ol class="steps">
+        <li>On the Timer page choose <span class="ui">Fully automatic: connect to the Meet Manager database</span> and pick the meet's .mdb file (or use <span class="ui">One key per event</span> with F12).</li>
+        <li>Look for <span class="ui">● Connected</span> / <span class="ui">● Watching</span>. The page checks every 30 seconds — leave it open.</li>
+        <li>Re-sending an event replaces it; nothing is doubled.</li>
+        <li>No live connection? Export a semicolon-delimited results file and use <span class="ui">Upload the results file</span> → <span class="ui">Save these results</span>.</li>
+      </ol>
+      <p class="tip">Live results are a host-team paid extra. League-run meets are always live.</p>
+    </div></details>
+
+    <details class="g" id="backup-upload"><summary><span class="ic">💾</span><span>Upload the Meet Manager backup — every meet<small>Required, even if results went up live</small></span></summary><div class="body">
+      <ol class="steps">
+        <li>When the meet is over, send final results and tap <b>Stop</b>.</li>
+        <li>In Meet Manager: File › Backup. This makes a file named like <b>Tfmm6Bkup….zip</b>.</li>
+        <li>Upload that .zip in the meet's backup box. Results inside it are posted automatically.</li>
+        <li>Fixed something later? Upload the newer backup — it replaces the whole meet's results.</li>
+      </ol>
+      <p class="tip">Upload the Meet Manager <b>backup</b>, not a Team Manager results or entries export — those are refused. Meets with no backup show <span class="ui">⚠️ Backup needed</span>.</p>
+    </div></details>
+
+    <details class="g" id="mixed"><summary><span class="ic">🔀</span><span>Mixed races (combined divisions)</span></summary><div class="body">
+      <p>Run mixed races in Meet Manager as usual. When results post, each runner is filed under their own division and gender and placed among them. Parents see "ran in the mixed race, Nth overall". Relays aren't re-filed.</p>
+    </div></details>
+
+    <details class="g" id="mistake"><summary><span class="ic">↩️</span><span>Posted something by mistake?</span></summary><div class="body">
+      <p>Ask your team admin to remove it. If a new upload would change results already posted, you'll be asked <span class="ui">Yes, replace them with this file</span> or <span class="ui">No, keep what's posted</span>. Only a site admin can remove a backup.</p>
+    </div></details>
+  </section>
+
+  <p class="foot">Still stuck? Check the <a href="faq.html">FAQ</a>, ask your team admin, or see league rules at <a href="https://valleyconference.org/" target="_blank" rel="noopener">valleyconference.org</a>.</p>
+</main>
+<script>
+(function(){
+  var tabs=[].slice.call(document.querySelectorAll('.roles button'));
+  function show(r,scroll){
+    if(!document.getElementById(r)) r='parents';
+    tabs.forEach(function(b){ b.setAttribute('aria-selected', b.dataset.r===r?'true':'false'); });
+    [].forEach.call(document.querySelectorAll('.sect'),function(s){ s.classList.toggle('on', s.id===r); });
+    if(scroll) try{ history.replaceState(null,'','#'+r); }catch(e){}
+  }
+  tabs.forEach(function(b){ b.addEventListener('click',function(){ show(b.dataset.r,true); }); });
+  // #parents / #coaches / #timers picks a tab; #<guide-id> opens that guide on its tab.
+  var h=decodeURIComponent(location.hash.slice(1)), el=h&&document.getElementById(h);
+  if(el && el.matches('details.g')){ show(el.closest('.sect').id); el.open=true; setTimeout(function(){ el.scrollIntoView({block:'start'}); },50); }
+  else show(h||'parents');
+})();
+</script>
+</body></html>
