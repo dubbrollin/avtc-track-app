@@ -259,7 +259,7 @@ function usatfPill(c){
 if(!c.usatf_certified) return '';
 const when=c.usatf_registry_checked_at?' · checked '+String(c.usatf_registry_checked_at).slice(0,10):'';
 const reg=c.usatf_registry_detail&&c.usatf_registry_detail.coaches_registry&&c.usatf_registry_detail.coaches_registry.found?' · on Coaches Registry':'';
-const m={verified:['ok','USATF background screen verified'],not_current:['bad','USATF: not on Safe Sport list'],not_found:['bad','USATF: not found'],error:['warn','USATF check failed — retry']}[c.usatf_registry_status]||['warn','USATF: not checked yet'];
+const m={verified:['ok','USATF background screen verified'],not_current:['bad','Non-compliant — not on USATF Safe Sport list'],not_found:['bad','Non-compliant — not found on USATF Safe Sport list'],error:['warn','USATF check failed — retry']}[c.usatf_registry_status]||['warn','USATF: not checked yet'];
 return `<div class="mt-1"><span class="pill ${m[0]}" title="Searched USATF's public Safe Sport Compliance list${reg}${when}">${m[1]}</span><div class="text-xs text-gray-500">${reg.slice(3)}${when}</div></div>`;
 }
 async function checkUsatf(c){

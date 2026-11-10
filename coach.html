@@ -322,7 +322,7 @@ sb.auth.onAuthStateChange(async(_e,session)=>{
 function bgStatus(c){
   if(c.usatf_certified){
     if(c.usatf_registry_status==='verified') return {label:'USATF background screen verified — current', cls:'bg-green-100 text-green-800'};
-    if(c.usatf_registry_status==='not_current'||c.usatf_registry_status==='not_found') return {label:'Not on USATF\'s Safe Sport Compliance list — background check not verified', cls:'bg-red-100 text-red-800'};
+    if(c.usatf_registry_status==='not_current'||c.usatf_registry_status==='not_found') return {label:'Non-compliant — not on USATF\'s Safe Sport Compliance list', cls:'bg-red-100 text-red-800'};
     if(!c.usatf_cert_date) return {label:'USATF — no date on file', cls:'bg-yellow-100 text-yellow-800'};
     const years=CFG.SEASON_YEAR - new Date(c.usatf_cert_date).getFullYear();
     return years>3 ? {label:'USATF cert expired (3yr) — flagged', cls:'bg-red-100 text-red-800'} : {label:'USATF cert current', cls:'bg-green-100 text-green-800'};
@@ -656,7 +656,7 @@ function renderCoaches(){
       <div class="flex flex-wrap items-center gap-2">
         <div class="flex-1 min-w-0">
           <div class="font-bold">${esc(c.first_name||c.name)} ${esc(c.last_name||'')} <span class="text-gray-500 font-normal text-sm">${esc(c.email)} · ${esc(roleLabel(c))}</span></div>
-          <div class="text-xs text-gray-500">${c.usatf_certified?'USATF certified':'Background check: '+(c.background_check_date?fmtDate(c.background_check_date):'no date on file')}</div>
+          <div class="text-xs text-gray-500">${c.usatf_certified?(c.usatf_registry_status==='verified'?'USATF certified':'Says USATF certified — USATF does not confirm it'):'Background check: '+(c.background_check_date?fmtDate(c.background_check_date):'no date on file')}</div>
         </div>
         <span class="pill ${st.cls}">${st.label}</span>
         <span class="pill ${c.approved?'bg-green-600 text-white':'bg-gray-200'}">${c.approved?'Approved':'Pending approval'}</span>
