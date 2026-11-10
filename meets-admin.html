@@ -70,6 +70,7 @@
     </div>
 
     <div id="meets" class="mt-4"></div>
+    <div id="pastBackups" class="mt-4"></div>
   </div>
 </div><!-- /mainCol -->
 
@@ -228,9 +229,22 @@ async function buildEvents(meetId){
   return error;
 }
 
+// Earlier seasons' meets are locked for results, but their Meet Manager backups can still be added and downloaded here.
+async function pastBackups(season){
+  const box=$('pastBackups'); if(!box) return;
+  const {data}=await sb.from('meets').select('id,name,meet_date,season_year,status').lt('season_year',season).order('meet_date',{ascending:false});
+  const past=(data||[]).filter(m=>m.status!=='archived'); if(!past.length){ box.innerHTML=''; return; }
+  box.innerHTML=`<div class="bg-white rounded-xl shadow p-4"><h2 class="font-bold">Meet Manager backups — earlier seasons</h2>
+    <p class="text-xs text-gray-600 mb-2">Results for these meets are locked, but you can still upload or download each meet's Meet Manager backup.</p>
+    ${past.map(m=>`<div class="border-t py-2"><div class="flex flex-wrap items-center gap-2"><div class="flex-1 text-sm"><b>${escH(m.name)}</b> <span class="text-gray-500">${fmtDate(m.meet_date)} · ${m.season_year}</span></div>
+      <button class="btn bg-gray-200 text-sm" data-pbk="${m.id}">Meet Manager backup</button></div><div id="bk-${m.id}" class="mt-2"></div></div>`).join('')}</div>`;
+  box.querySelectorAll('[data-pbk]').forEach(b=>b.onclick=()=>{ const m=past.find(x=>x.id===b.dataset.pbk); const el=$('bk-'+m.id); if(el.innerHTML){ el.innerHTML=''; return; } backupBox(m); });
+}
+
 async function load(){
   if(window.eventsReady) await window.eventsReady;   // the standard event list (Site Admin > League Setup) must be in before meets are built
   const season=await window.currentSeason();
+  pastBackups(+season);
   const {data}=await sb.from('meets').select('*').eq('season_year',season).order('meet_date',{ascending:false}); meets=data||[];
   if(TIMER){ meets=meets.filter(m=>m.status!=='archived');
     $('meets').innerHTML=meets.map(m=>`<div class="bg-white rounded-xl shadow p-4 mb-3">

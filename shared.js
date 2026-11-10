@@ -266,6 +266,22 @@ window.downloadMeetBackup = async function(sb, path, name){
   if(error||!data){ alert('Could not download the backup: '+(error?error.message:'no link')); return; }
   const a=document.createElement('a'); a.href=data.signedUrl; a.download=name||''; document.body.appendChild(a); a.click(); a.remove();
 };
+// ---- "Meet Manager backups" card (Coach Dashboard): every meet backup this coach's team can download, any season, newest first.
+// The database only returns meets the team was at (or league-wide meets), so nothing is filtered here.
+window.mountMeetBackups = async function(el, opts){
+  if(!el) return; const sb=opts.sb;
+  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  el.innerHTML='<p class="text-sm text-gray-500">Loading…</p>';
+  const {data,error}=await sb.from('meet_backups').select('meet_id,path,file_name,size_bytes,uploaded_at,meets(name,meet_date,season_year)').order('uploaded_at',{ascending:false}).limit(200);
+  if(error){ el.innerHTML='<p class="text-sm text-red-700">Couldn\'t load the backups: '+esc(error.message)+'</p>'; return; }
+  const seen=new Set(), list=(data||[]).filter(b=>!seen.has(b.meet_id)&&seen.add(b.meet_id));   // newest backup per meet
+  list.sort((a,b)=>String((b.meets||{}).meet_date||'').localeCompare(String((a.meets||{}).meet_date||'')));
+  if(!list.length){ el.innerHTML='<p class="text-sm text-gray-500">No Meet Manager backups yet. After each meet, the team that posts the results uploads the backup, and it shows here for every team that was at the meet.</p>'; return; }
+  const day=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';
+  el.innerHTML=`<ul>${list.map(b=>`<li class="py-2" style="border-top:1px solid #eef0f3"><div class="flex items-center gap-2"><div class="flex-1 min-w-0"><b>${esc((b.meets||{}).name||'Meet')}</b> <span class="text-gray-500">${esc(day((b.meets||{}).meet_date))}</span><div class="text-xs text-gray-500 truncate">${esc(b.file_name)}</div></div>
+    <a href="#" class="font-semibold text-sm" style="color:var(--act,#1764c8)" data-bk="${esc(b.path)}" data-name="${esc(b.file_name)}">Download ⬇</a></div></li>`).join('')}</ul>`;
+  el.querySelectorAll('[data-bk]').forEach(a=>a.onclick=e=>{ e.preventDefault(); window.downloadMeetBackup(sb,a.dataset.bk,a.dataset.name); });
+};
 // ---- "Our schedule" box on the Coach and Parent dashboards (like a team's season calendar on Athletic.net):
 // only the meets the team is at this season — date, where they're going (or home meet), who they're up against, the school
 // with directions, and Results → once results are posted. The league-wide schedule is schedule.html.
