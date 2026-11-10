@@ -187,7 +187,8 @@ window.buildRowsFromMeetManager=function(tb, opts){
     const std=STD().find(x=>x.code===g.code&&!!x.relay===!!g.relay);
     const lo=col(e,['low_age']), hi=col(e,['high_age']);
     evs[col(e,['event_ptr'])]={ code:g.code, relay:!!g.relay, field:std?!!std.field:/^(LJ|HJ|TJ|PV|SP|JT|DT|HT)$/.test(g.code), name:std?std.name:g.code, meas:col(e,['res_meas']),
-      gender:genderFrom(col(e,['event_gender','event_sex'])), division:divFromText(divs[col(e,['div_no'])])||(lo!=null&&hi!=null?divFromAges(+lo,+hi):null) };
+      gender:genderFrom(col(e,['event_gender','event_sex'])), // Mixed races are set up as division "ALL", ages 0-109: no event division — each result takes the athlete's own (below).
+      division:divFromText(divs[col(e,['div_no'])])||(lo!=null&&hi!=null&&!(+lo<=1&&+hi>=99)?divFromAges(+lo,+hi):null) };
   });
   const STAT={D:'DQ',Q:'DQ',N:'DNF',F:'FS'};
   // One row per scored round of an entry: finals from the Fin_* columns, prelims from the Pre_* columns.
