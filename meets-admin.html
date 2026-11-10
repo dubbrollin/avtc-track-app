@@ -90,7 +90,7 @@
       </ol>
 
       <h3><span class="n">2</span>Connect for live results</h3>
-      <p class="text-xs" style="color:#92400e">Live results are a <b>paid team extra</b> of the host team. If the host team doesn't have them, the meet's Upload results box says so — skip to step 4 and upload the file after the meet.</p>
+      <p class="text-xs" style="color:#92400e">Live results are a <b>paid team extra</b> of the host team (the Invitational and the league's Open, League and IEC meets are always live). If the host team doesn't have them, the meet's Upload results box says so — skip to step 4 and upload the file after the meet.</p>
       <p>On meet day, click <b>Upload results</b> on today's meet, then pick <b>one</b> of these:</p>
       <div class="opt bg-red-50 border border-red-200">
         <p class="font-bold text-red-800">A. Fully automatic (recommended)</p>
@@ -364,10 +364,10 @@ async function act(a,id){
 async function resultsPanel(m){
   const p=$('panel-'+m.id);
   const {count}=await sb.from('results').select('*',{count:'exact',head:true}).eq('meet_id',m.id);
-  // Live results (posting during the meet) are a Paid extra of the HOST team. Meets with no host team (league-run) keep them.
-  // Uploading the results file after the meet is always free.
+  // Live results (posting during the meet) are a Paid extra of the HOST team. Always live: the Invitational and meets with no
+  // host team (league-run Open, League, IEC). Uploading the results file after the meet is always free.
   let liveOk=true; const hostName=((window.VYC_TEAMS||[]).find(t=>t.code===m.host_team_code)||{}).name||m.host_team_code;
-  if(m.host_team_code){ try{ const {data:x}=await sb.from('team_messaging').select('enabled').eq('team_code',m.host_team_code).maybeSingle(); liveOk=!!(x&&x.enabled); }catch(e){ liveOk=false; } }
+  if(m.host_team_code&&!m.is_invitational){ try{ const {data:x}=await sb.from('team_messaging').select('enabled').eq('team_code',m.host_team_code).maybeSingle(); liveOk=!!(x&&x.enabled); }catch(e){ liveOk=false; } }
   p.innerHTML=`${liveOk?`<div id="live-${m.id}"></div>`:`<div class="rounded p-3 mb-2" style="border:1px solid #f59e0b;background:#fffbeb"><p class="text-sm"><span class="text-xs font-semibold rounded-full px-2 py-0.5 bg-amber-100 text-amber-800">Paid team extra</span> <b>Live results aren't switched on for this meet.</b> Posting results live during a meet is part of the host team's paid team extras, and ${escH(hostName)} doesn't have them switched on. Upload the results file below once the meet is over. (The league site admin switches paid extras on in Site Admin → Paid Extras.)</p></div>`}<div class="border rounded p-3 bg-purple-50">
     <p class="text-sm mb-2"><b>${count||0}</b> results stored for this meet. <a class="underline" href="results.html?meet=${m.id}" target="_blank">View</a></p>
     <p class="text-sm font-semibold">Upload the results file</p>
