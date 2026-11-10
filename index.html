@@ -724,20 +724,23 @@ function fillAllTeams(){
   sels.forEach((sel,i)=>{ sel.innerHTML='<option value="">Select…</option>'+act.map(lab).join(''); sel.value=keep[i]||''; });
 }
 fillAllTeams(); if(window.leagueReady) window.leagueReady.then(fillAllTeams);
-// Late-registration notice: after the season's certification date every new registration is "late"; two weeks after it,
-// registration is closed unless the Conference President has given the athlete a late pass (checked by the database on submit).
+// Late-registration notice. A registration is on time only if it is COMPLETED (every document uploaded and both signatures —
+// the form won't submit without them) on or before the certification date; starting it earlier doesn't count. After the date
+// it is "late"; after the closing date (late_cutoff: the 2nd meet) it needs a late pass (both checked by the database on submit).
 (async()=>{ try{
   const season=await window.currentSeason();
-  const {data}=await sb.from('app_settings').select('value').eq('key','certification_date_'+season).maybeSingle();
+  const [{data},{data:cutRaw}]=await Promise.all([
+    sb.from('app_settings').select('value').eq('key','certification_date_'+season).maybeSingle(),
+    sb.rpc('late_cutoff',{p_season:season})]);
   const cd=data&&data.value; if(!cd) return;
   const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
-  const plus=(d,n)=>{ const x=new Date(d+'T12:00:00'); x.setDate(x.getDate()+n); return x; };
-  const nice=d=>d.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-  const cut=plus(cd,14).toISOString().slice(0,10);
+  const nice=d=>new Date(String(d).slice(0,10)+'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  const cut=cutRaw?String(cutRaw).slice(0,10):null;
+  const closes=cut?` Registration closes after ${nice(cut)}.`:'';
   const el=document.getElementById('lateNotice'); el.classList.remove('hidden');
-  if(today<=cd) el.innerHTML=`<div class="card" style="background:#fffbeb;border:1px solid #f59e0b"><p class="text-sm"><b>Register by ${nice(plus(cd,0))}.</b> Rosters are certified on that date — registrations after it are late, and registration closes after ${nice(plus(cd,14))}.</p></div>`;
-  else if(today<=cut) el.innerHTML=`<div class="card" style="background:#fffbeb;border:1px solid #f59e0b"><p class="text-sm"><b>Late registration.</b> Rosters were certified on ${nice(plus(cd,0))}, so this registration will be marked late. Registration closes after ${nice(plus(cd,14))}.</p></div>`;
-  else el.innerHTML=`<div class="card" style="background:#fef2f2;border:1px solid #dc2626"><p class="text-sm"><b>Registration for the ${season} season is closed</b> (it closed ${nice(plus(cd,14))}). A late registration can only be allowed by your Conference President — ask your team, and once the president gives your athlete a late pass you can submit this form.</p></div>`;
+  if(today<=cd) el.innerHTML=`<div class="card" style="background:#fffbeb;border:1px solid #f59e0b"><p class="text-sm"><b>Finish by ${nice(cd)}.</b> Rosters are certified on that date. A registration is on time only if it's <b>completed</b> by then — every document uploaded and both signatures done. Starting earlier doesn't count; anything completed after that date is late.${closes}</p></div>`;
+  else if(!cut||today<=cut) el.innerHTML=`<div class="card" style="background:#fffbeb;border:1px solid #f59e0b"><p class="text-sm"><b>Late registration.</b> Rosters were certified on ${nice(cd)}, so this registration will be marked late.${closes}</p></div>`;
+  else el.innerHTML=`<div class="card" style="background:#fef2f2;border:1px solid #dc2626"><p class="text-sm"><b>Registration for the ${season} season is closed</b> (it closed ${nice(cut)}). A late registration can only be allowed by your Conference President — ask your team, and once the president gives your athlete a late pass you can submit this form.</p></div>`;
 }catch(e){} })();
 
 // ---- signature widget (draw or type cursive) ----

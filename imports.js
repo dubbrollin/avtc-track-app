@@ -146,7 +146,8 @@ window.mountAthleteImport=async function(el, ctx){
     if(!waiting.length&&!done.length){ box.innerHTML='<p class="text-gray-500">Nothing imported yet.</p>'; return; }
     const fam={}; waiting.forEach(x=>(fam[x.family_code]??=[]).push(x));
     const link=c=>new URL('parent.html?code='+c, location.href).href;
-    const message=(c,kids)=>`Hi! ${teamName(team)} has moved registration to the VYC app. To finish ${kids.map(k=>k.first_name).join(' & ')}'s registration (about 2 minutes), open ${link(c)} , sign in or create an account, and enter code ${c} with ${kids.length>1?'one of your athletes\'':'your athlete\'s'} birthday.`;
+    const dl=await window.certDeadline(sb);
+    const message=(c,kids)=>`Hi! ${teamName(team)} has moved registration to the VYC app. To finish ${kids.map(k=>k.first_name).join(' & ')}'s registration (about 2 minutes), open ${link(c)} , sign in or create an account, and enter code ${c} with ${kids.length>1?'one of your athletes\'':'your athlete\'s'} birthday.${dl&&!dl.passed?` Please finish by ${dl.nice} — registrations completed after that date are late, even if started earlier.`:''}`;
     box.innerHTML=`<p class="text-xs text-gray-600 mb-2"><b>${waiting.length}</b> athlete${waiting.length===1?'':'s'} waiting in ${Object.keys(fam).length} famil${Object.keys(fam).length===1?'y':'ies'} · <b>${done.length}</b> finished. Send each family its message (text or email). A parent whose email is listed can also just sign in with that email.
       ${waiting.length?' <a href="#" id="impCsv" class="underline">Download the codes (CSV)</a>':''}</p>
       ${Object.entries(fam).map(([c,kids])=>`<div class="border rounded p-2 mb-2"><div class="flex flex-wrap items-center gap-2"><b class="font-mono text-base tracking-widest">${esc(c)}</b>
@@ -171,6 +172,16 @@ window.mountAthleteImport=async function(el, ctx){
   list();
 };
 
+// Certification date = the on-time deadline. A registration is on time only if it is COMPLETED (documents + signatures,
+// i.e. submitted) by this date; starting early or being imported early doesn't count.
+window.certDeadline=async function(sb){ try{
+  const season=await window.currentSeason();
+  const {data}=await sb.from('app_settings').select('value').eq('key','certification_date_'+season).maybeSingle();
+  const v=data&&data.value; if(!v) return null;
+  return {iso:v, nice:new Date(v+'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}),
+    passed:new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'})>v};
+}catch(e){ return null; } };
+
 // ---------- Parent Dashboard: link with a code + finish registration ----------
 window.mountParentImports=async function(el, ctx){
   const sb=ctx.sb; if(!el) return;
@@ -178,7 +189,9 @@ window.mountParentImports=async function(el, ctx){
   const {data,error}=await sb.rpc('my_imports');
   if(error){ el.innerHTML=''; return; }   // not switched on yet
   const rows=data||[];
+  const dl=rows.length?await window.certDeadline(sb):null;
   const finishList=rows.length?`<div class="rounded-lg p-3 mb-3" style="border:2px solid #2563eb;background:#eff6ff"><p class="font-semibold">Your team already sent ${rows.length===1?'this athlete':'these athletes'} — finish the registration (about 2 minutes each):</p>
+    ${dl&&!dl.passed?`<p class="text-sm text-amber-800 mt-1"><b>Finish by ${esc(dl.nice)}</b> to be on time. A registration counts as on time only when it's completed — every document uploaded and both signatures — by that date.</p>`:''}
     ${rows.map(r=>`<div class="flex flex-wrap items-center gap-2 mt-2"><span class="flex-1"><b>${esc(r.first_name)} ${esc(r.last_name)}</b> <span class="text-gray-600 text-sm">· ${esc(teamName(r.team_code))}</span></span><a class="btn bg-blue-600 text-white text-sm" href="index.html?import=${encodeURIComponent(r.id)}">Finish registration →</a></div>`).join('')}</div>`:'';
   el.innerHTML=finishList+`<details ${code&&!rows.length?'open':''} class="mb-3"><summary class="cursor-pointer text-sm font-semibold">Got a code from your team?</summary>
     <p class="text-xs text-gray-600 mt-1">If your team moved your athlete's registration into this app, they gave you a 6-letter code. Enter it with your athlete's birthday to connect them to this account.</p>

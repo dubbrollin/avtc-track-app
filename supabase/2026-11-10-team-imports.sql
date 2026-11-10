@@ -6,8 +6,8 @@
 --   code + the athlete's birthday. Then they finish a short confirm-and-sign version of the registration form
 --   (everything the team sent is filled in). That insert is an ordinary registration with import_id set, so comp
 --   numbers, fees, transfer checks, proof-of-birth rules and certification all work as usual.
---   On-time rule (Riley 2026-11-10): an athlete the team imported on or before the certification date counts as on
---   time even if the parent finishes later — reg_late_check uses the import date.
+--   On-time rule (Riley 2026-11-10, revised same day): only COMPLETION counts. An imported athlete is on time only if the
+--   parent finishes (documents + signatures) by the certification date; the import date does not count.
 begin;
 
 create table if not exists public.reg_imports (
@@ -190,13 +190,9 @@ create or replace function public.reg_late_check()
 returns trigger language plpgsql security definer set search_path to 'public' as $$
 declare s integer := coalesce(new.season_year, public.current_season());
   cd date := public.certification_date(coalesce(new.season_year, public.current_season()));
-  cutoff date; today date := (now() at time zone 'America/Los_Angeles')::date; p record; idate date;
+  cutoff date; today date := (now() at time zone 'America/Los_Angeles')::date; p record;
 begin
   new.late_pass_id := null;
-  if new.import_id is not null then
-    select (imported_at at time zone 'America/Los_Angeles')::date into idate from public.reg_imports where id = new.import_id;
-    if idate is not null and idate < today then today := idate; end if;
-  end if;
   if cd is null or today <= cd then new.is_late := false; return new; end if;
   new.is_late := true;
   cutoff := public.late_cutoff(s);
