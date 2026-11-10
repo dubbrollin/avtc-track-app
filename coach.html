@@ -234,6 +234,7 @@
               <a href="coach.html?view=roster&tab=messaging" class="btn bg-gray-800 text-white inline-block">Paid extras →</a>
               <a href="coach.html?view=roster&tab=volunteers" class="btn bg-gray-800 text-white inline-block">Meet volunteers →</a>
             </div>
+            <div id="taStripeNotice"></div>
             <div id="taCoachNotice"></div>
             <p class="text-xs text-gray-500 mt-2">Uploading meet results and setting up meets happens on the <a class="underline" href="admin.html?tab=meetadmin">Meet Admin tab of the Admin page</a>.</p>
           </div>
@@ -362,6 +363,7 @@ async function loadMe(){
   window.mountMessenger($('msgMount'),{sb,team:myCoach.team_code, onUnread:n=>{ const b=document.getElementById('msgBadge'); if(b){ b.textContent=n||''; b.style.display=n?'':'none'; } const a=document.getElementById('msgAlert'); if(a){ a.classList.toggle('hidden',!n); a.textContent=n?`🔔 You have ${n} new message${n>1?'s':''} — tap here to read ${n>1?'them':'it'} ↓`:''; } }}).then(st=>{ if(st==='none') return; $('msgCard').classList.remove('hidden'); if(location.hash==='#messages') $('msgCard').scrollIntoView({block:'start'}); }).catch(()=>{});
   // Livestream (part of the Paid extras): hidden when the team doesn't have them.
   window.Livestream.mount($('liveMount'),{sb,team:myCoach.team_code}).then(st=>{ if(st==='on') $('liveCard').classList.remove('hidden'); }).catch(()=>{});
+  if(isFullAccess(myCoach)&&window.stripeSetupNotice) window.stripeSetupNotice(sb,myCoach.team_code).then(h=>{ if($('taStripeNotice')) $('taStripeNotice').innerHTML=h; });
   $('notCoachBox').style.display='none'; $('coachApp').style.display='block';
   const team=window.VYC_TEAMS.find(t=>t.code===myCoach.team_code);
   $('teamLabel').textContent = (team ? `— ${team.name}${team.conference?' ('+team.conference+')':''} · ${roleLabel(myCoach)}${myCoach.is_admin?' · Site admin':myCoach.team_admin?' · Team admin':''}` : `— ${roleLabel(myCoach)}`);

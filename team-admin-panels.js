@@ -151,23 +151,35 @@ window.mountParentSignup=async function(el, ctx){
 <table class="tapt"><thead><tr><th>Team</th><th>Can parents pick events?</th><th>How many events may they choose?</th><th></th></tr></thead><tbody>${list.map(t=>{ const row=ts[t.code]||{}, on=!!row.parent_entry_enabled&&row.team_code, n=Math.min(3,Math.max(1,+row.parent_event_picks||2));
   return `<tr data-team="${esc(t.code)}"><td>${esc(t.name)}</td><td><span class="tappill ${on?'ok':'warn'}">${on?'YES — they say if coming + pick events':'NO — they only say if coming'}</span>${row.team_code?`<div class="text-xs text-gray-400">${esc(row.updated_by||'')} ${esc(String(row.updated_at||'').slice(0,10))}</div>`:''}</td>
   <td>${on?`<select data-picks>${[1,2,3].map(k=>`<option value="${k}" ${k===n?'selected':''}>${k} event${k>1?'s':''}</option>`).join('')}</select>`:'<span class="text-xs text-gray-400">—</span>'}</td>
-  <td><button ${btn('lite',`data-pe="${on?'off':'on'}"`)}>${on?'Switch to: only ask if coming':'Switch to: let parents pick events'}</button></td></tr>`; }).join('')||'<tr><td colspan="4" class="text-gray-500">No team.</td></tr>'}</tbody></table></div>`;
+  <td><button ${btn('lite',`data-pe="${on?'off':'on'}"`)}>${on?'Switch to: only ask if coming':'Switch to: let parents pick events'}</button></td></tr>`; }).join('')||'<tr><td colspan="5" class="text-gray-500">No team.</td></tr>'}</tbody></table></div>`;
   el.onclick=async e=>{ const pe=e.target.closest('button[data-pe]'); if(!pe) return; const team=pe.closest('tr').dataset.team, on=pe.dataset.pe==='on', tn=teamName(ctx,team);
     if(!confirm(on?`${tn}: parents will say whether their athlete is coming AND pick the events they'd like (you choose how many). The coaches still do the entering.`:`${tn}: parents will ONLY say whether their athlete is coming. The coaches choose the events.`)) return;
     const {error}=await sb.rpc('set_parent_entry',{p_team:team,p_on:on,p_picks:on?2:null}); if(error){ toast(error.message,true); return; } toast('Saved'); window.mountParentSignup(el,ctx); };
   el.onchange=async e=>{ const sel=e.target.closest('select[data-picks]'); if(!sel) return; const team=sel.closest('tr').dataset.team;
     const {error}=await sb.rpc('set_parent_entry',{p_team:team,p_on:true,p_picks:+sel.value}); if(error){ toast(error.message,true); return; } toast(`Parents may pick up to ${sel.value} event${+sel.value>1?'s':''}`); window.mountParentSignup(el,ctx); };
 };
+/* Once a team's paid extras are on, its team admin needs an obvious way to set up Stripe (card payments + payment plans).
+   Returns a notice with a "Set up Stripe" link, or '' when extras are off or Stripe is already active. */
+window.stripeSetupNotice=async function(sb, team){
+  try{
+    const [{data:x},{data:a}]=await Promise.all([sb.from('team_messaging').select('enabled').eq('team_code',team).maybeSingle(),
+      sb.from('team_stripe_accounts').select('status').eq('team_code',team).maybeSingle()]);
+    if(!(x&&x.enabled)||(a&&a.status==='active')) return '';
+    return `<div class="rounded-lg p-2 mt-2 text-sm" style="border:1px solid #f59e0b;background:#fffbeb"><b>Next step: set up Stripe.</b> Your paid extras are on. Connect your team's own Stripe account so parents can pay the team fee by card and use payment plans${a?' (setup was started but isn\'t finished)':''}. <a class="underline font-semibold" style="color:#1764c8" href="coach.html?view=roster&tab=payments">${a?'Finish Stripe setup':'Set up Stripe'} →</a></div>`;
+  }catch(e){ return ''; }
+};
 /* ============================ PAID TEAM EXTRAS: one on/off switch per team (Team Messenger + taking payments online) ============================ */
 window.mountTeamMessaging=async function(el, ctx){
   const sb=ctx.sb; el.classList.add('tap'); el.innerHTML=STYLE+'<p class="text-sm text-gray-500">Loading…</p>';
+  let stripeOn={}; try{ const {data:sa}=await sb.from('team_stripe_accounts').select('team_code,status'); (sa||[]).forEach(r=>stripeOn[r.team_code]=r.status); }catch(e){}
+  const stripeNote=ctx.canPickTeam?'':await window.stripeSetupNotice(sb, ctx.team);
   const [{data:sw,error},{data:ch}]=await Promise.all([sb.from('team_messaging').select('*'), sb.from('msg_channels').select('team_code,audience,archived').eq('season_year',ctx.season)]);
   if(error){ el.innerHTML=STYLE+'<div class="tapcard"><b>Team Messenger isn\'t set up yet.</b><p class="text-xs text-gray-500 mt-1">'+esc(error.message)+'</p></div>'; return; }
   const on={}; (sw||[]).forEach(r=>on[r.team_code]=r);
   const cnt={}; (ch||[]).filter(c=>!c.archived).forEach(c=>{ const k=cnt[c.team_code]??={g:0,d:0}; c.audience==='direct'?k.d++:k.g++; });
   const list=ctx.canPickTeam?(ctx.teams||[]).filter(t=>t.active!==false):(ctx.teams||[]).filter(t=>t.code===ctx.team);
   const nOn=list.filter(t=>on[t.code]&&on[t.code].enabled).length;
-  el.innerHTML=STYLE+`<div class="tapcard"><div class="flex flex-wrap items-center gap-2 mb-1"><h3 class="font-bold flex-1">Paid team extras${ctx.canPickTeam?` <span class="text-sm font-normal text-gray-500">on for ${nOn} of ${list.length} teams</span>`:''}</h3></div>
+  el.innerHTML=STYLE+`<div class="tapcard"><div class="flex flex-wrap items-center gap-2 mb-1"><h3 class="font-bold flex-1">Paid team extras${ctx.canPickTeam?` <span class="text-sm font-normal text-gray-500">on for ${nOn} of ${list.length} teams</span>`:''}</h3></div>${stripeNote}
 <p class="text-sm text-gray-700 mb-2">Everything a team needs to run its season is <b>free</b>: registration, proof-of-birth review, certification, rosters, coach approval, meet entries, "is your athlete coming?" (and letting parents pick events), and posting the team fee so parents see what they owe.</p>
 <p class="text-sm text-gray-700 mb-1">The <b>paid team extras</b> — $99 per team per season — are the things that aren't required to manage the team:</p>
 <ul class="text-sm text-gray-700 mb-2" style="list-style:disc;padding-left:1.25rem">
@@ -179,9 +191,10 @@ window.mountTeamMessaging=async function(el, ctx){
 <li><b>Team store</b> — the team sells its shirts, hoodies and gear on its team page; parents order and pay the team, the team confirms and hands the order over.</li></ul>
 <p class="text-xs text-gray-500 mb-2">Always free, on every team's page: the page itself (about, practice info, coaches, news, schedule) and meet-day volunteer duties.</p>
 <p class="text-xs text-gray-500 mb-2">${ctx.canPickTeam?`Switch a team on once they've paid. Switching off hides the chats (every message is kept) and stops online payments and payment tracking (the records are kept). Coaches and parents never see any of this until their team is on.`:(nOn?`They are ON for your team: the chats are on the <a class="underline" href="coach.html#messages">Coach Dashboard</a> and each parent's dashboard, and online payments are set up on the Payments tab.`:`They are not switched on for your team, so your coaches and parents don't see any of it. To add them, contact the league site admin.`)}</p>
-<table class="tapt"><thead><tr><th>Team</th><th>Paid extras</th><th>Messages in use</th>${ctx.canPickTeam?'<th></th>':''}</tr></thead><tbody>${list.map(t=>{ const r=on[t.code], y=!!(r&&r.enabled), k=cnt[t.code];
+<table class="tapt"><thead><tr><th>Team</th><th>Paid extras</th><th>Messages in use</th><th>Card payments (Stripe)</th>${ctx.canPickTeam?'<th></th>':''}</tr></thead><tbody>${list.map(t=>{ const r=on[t.code], y=!!(r&&r.enabled), k=cnt[t.code];
   return `<tr data-team="${esc(t.code)}"><td>${esc(t.name)}</td><td><span class="tappill ${y?'ok':''}">${y?'ON':'Off'}</span>${r?`<div class="text-xs text-gray-400">${esc(r.updated_by||'')} ${esc(String(r.updated_at||'').slice(0,10))}</div>`:''}</td>
   <td class="text-xs text-gray-600">${k?`${k.g} group${k.g===1?'':'s'}${k.d?` · ${k.d} direct message${k.d===1?'':'s'}`:''}`:'—'}</td>
+  <td>${!y?'<span class="text-xs text-gray-400">—</span>':stripeOn[t.code]==='active'?'<span class="tappill ok">Set up ✓</span>':`<span class="tappill warn">${stripeOn[t.code]?'Setup not finished':'Not set up'}</span>${ctx.canPickTeam?'':' <a class="underline text-xs" style="color:#1764c8" href="coach.html?view=roster&tab=payments">Set up Stripe →</a>'}`}</td>
   ${ctx.canPickTeam?`<td class="whitespace-nowrap"><button ${btn(y?'lite':'grn',`data-msg="${y?'off':'on'}"`)}>${y?'Switch off':'Switch on'}</button>${y?` <button ${btn('lite','data-open')}>See chats</button>`:''}</td>`:''}</tr>`; }).join('')||'<tr><td colspan="4" class="text-gray-500">No team.</td></tr>'}</tbody></table></div>
 <div data-id="msgViewCard" class="tapcard hide"><h3 class="font-bold mb-2" data-id="msgViewTitle"></h3><div data-id="msgView"></div></div>`;
   el.onclick=async e=>{ const o=e.target.closest('button[data-open]');
@@ -189,6 +202,6 @@ window.mountTeamMessaging=async function(el, ctx){
       await window.mountMessenger(el.querySelector('[data-id="msgView"]'),{sb,team,lockTeam:true}); card.scrollIntoView({behavior:'smooth',block:'start'}); return; }
     const b=e.target.closest('button[data-msg]'); if(!b) return; const team=b.closest('tr').dataset.team, go=b.dataset.msg==='on', tn=teamName(ctx,team);
     if(!confirm(go?`Switch the paid team extras ON for ${tn}? Team Messenger appears on their dashboards right away, and they can take and track payments.`:`Switch the paid team extras OFF for ${tn}? Their chats are hidden (every message is kept) and parents can no longer pay through the app.`)) return;
-    const {error}=await sb.rpc('msg_set_enabled',{p_team:team,p_on:go}); if(error){ toast(error.message,true); return; } toast(go?'Switched on':'Switched off'); window.mountTeamMessaging(el,ctx); };
+    const {error}=await sb.rpc('msg_set_enabled',{p_team:team,p_on:go}); if(error){ toast(error.message,true); return; } toast(go?'Switched on — their team admin now sees a "Set up Stripe" link on the Coach Dashboard and Paid extras tab':'Switched off'); window.mountTeamMessaging(el,ctx); };
 };
 })();
