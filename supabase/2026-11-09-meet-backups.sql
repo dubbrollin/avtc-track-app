@@ -66,7 +66,7 @@ create policy "meet backups read" on storage.objects for select to authenticated
 drop policy if exists "meet backups add" on storage.objects;
 create policy "meet backups add" on storage.objects for insert to authenticated
   with check (bucket_id = 'meet-backups' and public.can_upload_results()
-              and exists (select 1 from public.meets m where m.id = public.meet_backup_meet(name)));
+              and exists (select 1 from public.meets m where m.id = public.meet_backup_meet(storage.objects.name)));
 drop policy if exists "meet backups remove" on storage.objects;
 create policy "meet backups remove" on storage.objects for delete to authenticated
   using (bucket_id = 'meet-backups' and public.is_site_admin());
