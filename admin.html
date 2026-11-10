@@ -446,7 +446,7 @@ let cutoff=null;
 try{
   const [{data:st},regs,reqs,passes,{data:co}]=await Promise.all([
     sb.from('app_settings').select('value').eq('key','certification_date_'+SEASON).maybeSingle(),
-    pageAll(()=>sb.from('registrations').select('id,first_name,last_name,gender,division,team_code,status,dob,is_late,proof_path,dob_check_status,dob_check_note,reviewed_by,verified_by,verified_at,created_at,comp_number,hs_track_this_season').eq('season_year',SEASON).in('team_code',confTeams).order('last_name').order('first_name')),
+    pageAll(()=>sb.from('registrations').select('id,first_name,last_name,gender,division,team_code,status,dob,is_late,proof_path,proof_type,proof_type_other,dob_check_status,dob_check_note,reviewed_by,verified_by,verified_at,created_at,comp_number,hs_track_this_season').eq('season_year',SEASON).in('team_code',confTeams).order('last_name').order('first_name')),
     pageAll(()=>{ let q=sb.from('athlete_change_requests').select('*').order('requested_at',{ascending:false}); if(!SITE&&!COMM) q=q.eq('conference',PRES); return q; }),
     pageAll(()=>{ let q=sb.from('late_registration_passes').select('*').eq('season_year',SEASON).order('created_at',{ascending:false}); if(!SITE&&!COMM) q=q.eq('conference',PRES); return q; }),
     sb.rpc('late_cutoff',{p_season:SEASON})]);
@@ -500,7 +500,7 @@ function drawCert(){
 const t=$('cTeam').value, s=$('cStat').value, late=$('cLate').checked, q=$('cQ').value.toLowerCase();
 const L=cRows.filter(r=>(!t||r.team_code===t)&&(!s||r.status===s)&&(!late||r.is_late)&&(!q||(r.first_name+' '+r.last_name).toLowerCase().includes(q)));
 $('cBody').innerHTML=L.map(r=>{ const mine=isPresFor(r.team_code); return `<tr data-id="${r.id}"><td><b>${esc(r.last_name)}</b>, ${esc(r.first_name)} <span class="text-xs text-gray-500">${r.gender==='Girl'?'F':'M'} · ${esc(r.division||'')}${r.comp_number?' · #'+r.comp_number:''}</span>${r.is_late?' <span class="pill bad">Late</span>':''}</td>
-<td>${esc(teamName(r.team_code))}</td><td class="text-xs">${esc(r.dob||'')}<br>${r.proof_path?'ID check: '+esc(r.dob_check_status||''):'Returning — matched last season'}</td>
+<td>${esc(teamName(r.team_code))}</td><td class="text-xs">${esc(r.dob||'')}<br>${r.proof_path?(window.proofTypeLabel(r)?esc(window.proofTypeLabel(r))+' · ':'')+'ID check: '+esc(r.dob_check_status||''):'Returning — matched last season'}</td>
 <td>${statusPill(r.status)}${r.reviewed_by&&r.status==='reviewed'?`<div class="text-xs text-gray-500">by ${esc(r.reviewed_by)}</div>`:''}${r.verified_by?`<div class="text-xs text-gray-500">by ${esc(r.verified_by)}</div>`:''}</td>
 <td class="whitespace-nowrap">${r.proof_path?'<button class="btn lite" data-act="proof">Proof of birth</button> ':''}${mine?(r.status!=='verified'?'<button class="btn grn" data-act="cert">✓ Certify</button> ':'<button class="btn lite" data-act="uncert">Undo certification</button> ')+'<button class="btn lite" data-act="edit">Edit</button>':''}
 <div class="proofBox"></div></td></tr>`; }).join('')||'<tr><td colspan="5" class="p-3 text-gray-500">No athletes match.</td></tr>';

@@ -146,8 +146,24 @@
       <p class="text-xs text-gray-500 mb-1">Upload one of the documents VYC accepts (PDF or photo): birth certificate (or a photocopy), military birth certificate, passport, foreign birth document or green card, school record showing the date of birth, court decree, or a valid California ID card.</p>
       <p class="text-xs text-gray-500 mb-2">VYC rule: your team is responsible for this document being genuine. If the athlete's age is ever questioned during the season, you must produce the <b>original</b> within two weeks or the athlete is suspended until you do.</p>
       <p id="proofReturnHint" class="hidden text-sm text-amber-800 bg-amber-50 border border-amber-300 rounded-lg p-2 mb-2">Returning athlete? Type the athlete's last name above and tap <b>"Yes, this is my athlete"</b> — then proof of birth isn't needed.</p>
+      <p class="text-sm font-semibold mb-1">What kind of document are you uploading? <span class="text-red-600">*</span></p>
+      <div class="proof-types grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2" id="proofTypeBox">
+        <label><input type="radio" name="proofType" value="birth_certificate"><span>Birth certificate</span></label>
+        <label><input type="radio" name="proofType" value="state_id"><span>State-issued ID</span></label>
+        <label><input type="radio" name="proofType" value="passport"><span>Passport</span></label>
+        <label><input type="radio" name="proofType" value="other"><span>Other</span></label>
+      </div>
+      <input type="text" id="proofTypeOther" class="hidden w-full border rounded p-2 mb-2" maxlength="80" placeholder="What is it? (e.g. green card, school record, military birth certificate)">
       <input type="file" id="proofFile" accept="image/*,.pdf" required>
     </div>
+    <style>
+      .proof-types label{display:block;cursor:pointer}
+      .proof-types input{position:absolute;opacity:0;pointer-events:none}
+      .proof-types span{display:flex;align-items:center;justify-content:center;text-align:center;min-height:44px;padding:.4rem .5rem;border:2px solid #d1d5db;border-radius:.5rem;background:#fff;font-size:.875rem;font-weight:600}
+      .proof-types input:checked+span{border-color:#2563eb;background:#eff6ff;color:#1d4ed8}
+      .proof-types input:checked+span::before{content:"✓ "}
+      .proof-types input:focus-visible+span{outline:2px solid #2563eb;outline-offset:2px}
+    </style>
   </div>
 
   <div class="card">
@@ -860,6 +876,10 @@ function lockNewIfTransfer(){
   if(t && ret.checked){ document.querySelector('input[name=returning][value=no]').checked=true; }
   ret.disabled=t; ret.closest('label').style.opacity=t?'.45':''; ret.closest('label').title=t?'Transfers count as new athletes to this team':'';
 }
+// Proof of birth: which kind of document (Birth certificate / State-issued ID / Passport / Other + what it is).
+const PROOF_TYPES={birth_certificate:'Birth certificate',state_id:'State-issued ID',passport:'Passport',other:'Other'};
+function paintProofType(){ const v=(document.querySelector('input[name=proofType]:checked')||{}).value; $('proofTypeOther').classList.toggle('hidden',v!=='other'); }
+document.querySelectorAll('input[name=proofType]').forEach(r=>r.addEventListener('change',()=>{ paintProofType(); if(r.value==='other') $('proofTypeOther').focus(); }));
 function updateProofNeed(){
   updateVus(); lockNewIfTransfer();
   const skip=returningVerified();
@@ -1061,6 +1081,10 @@ $('parentForm').addEventListener('submit', async(e)=>{
     const priorVyc=pCode && pCode!=='__OTHER' ? pCode : null;
     const priorName=!otherTeam?null:priorVyc?(window.VYC_TEAMS.find(t=>t.code===priorVyc)||{}).name||priorVyc:$('priorTeam').value.trim();
     const skipProof=returningVerified();
+    const proofType=skipProof?null:(document.querySelector('input[name=proofType]:checked')||{}).value||null;
+    const proofTypeOther=proofType==='other'?$('proofTypeOther').value.trim():null;
+    if(!skipProof&&!proofType) throw new Error('Please choose what kind of proof of birth you are uploading: birth certificate, state-issued ID, passport, or other.');
+    if(proofType==='other'&&!proofTypeOther) throw new Error('Please say what kind of document the proof of birth is.');
     const file=skipProof?null:$('proofFile').files[0]; if(!skipProof&&!file) throw new Error('Please upload proof of birth.');
     const dob=$('dob').value, age=window.ageOnDec31(dob,CFG.SEASON_YEAR), division=window.divisionFor(age);
     const inHs=(document.querySelector('input[name=inHs]:checked')||{}).value, hsAns=(document.querySelector('input[name=hsTrack]:checked')||{}).value;
@@ -1080,7 +1104,7 @@ $('parentForm').addEventListener('submit', async(e)=>{
       ran_for_other_team: otherTeam||vusMove(), prior_team:vusMove()?teamLabel(lastSeasonTeam()):priorName, prior_team_code:vusMove()?lastSeasonTeam():priorVyc,
       ran_vus_last_season: vusYes(),
       prior_registration_id: pastPick ? pastPick.id : null,
-      proof_path:proofPath,
+      proof_path:proofPath, proof_type:proofType, proof_type_other:proofTypeOther,
       insurance_carrier:$('insuranceCarrier').value.trim(),
       medical_option: $('medicalConditions').value.trim() ? 'conditions':'clear',
       medical_conditions: $('medicalConditions').value.trim()||null,
@@ -1140,7 +1164,7 @@ function clearAthleteFields(form, everything){
   if(!everything) $('lastName').value=keepLast; // siblings usually share a last name — easy to change
   $('divisionShow').value=''; $('priorTeamWrap').classList.add('hidden'); $('priorTeam').classList.add('hidden'); updateVus();
   pastPick=null; autoDismissed=''; $('pastMatches').classList.add('hidden'); $('pastMatches').innerHTML='';
-  athleteSig.clear(); if(everything) parentSig.clear();
+  athleteSig.clear(); if(everything) parentSig.clear(); paintProofType();
   $('parentAcctWrap')&&$('viaEmail')&&$('parentAcctWrap').classList.toggle('hidden',!$('viaEmail').checked);
   updateProofNeed();
 }

@@ -186,6 +186,12 @@ window.mountLoginWidget = function(sb, container, opts){
 // ---- Delete athletes (Coach Dashboard roster + Site Admin > Athletes). Who may: site admins (anyone), team admins (own team,
 // not certified yet), Conference Presidents; the database enforces it. Entries go with the athlete, past results stay but are
 // unlinked, unpaid fees are voided, and the uploaded proof-of-birth file is deleted too. Returns an error message or null.
+// What kind of proof of birth the parent said they uploaded (registrations.proof_type / proof_type_other).
+window.proofTypeLabel = function(r){
+  const t = { birth_certificate:'Birth certificate', state_id:'State-issued ID', passport:'Passport', other:'Other' }[r && r.proof_type];
+  if (!t) return '';
+  return r.proof_type === 'other' && r.proof_type_other ? 'Other: ' + r.proof_type_other : t;
+};
 window.removeAthleteRecords = async function(sb, ids){
   for (let i = 0; i < ids.length; i += 100) {
     const chunk = ids.slice(i, i + 100);

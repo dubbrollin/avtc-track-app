@@ -628,7 +628,7 @@ function render(){
     </div>
     ${r.dob_check_note?`<div class="text-xs mt-1 ${r.dob_check_status==='match'?'text-green-700':'text-red-700'}">${esc(r.dob_check_note)}</div>`:''}
     <div class="flex flex-wrap gap-2 mt-3">
-      ${r.proof_path?`<button class="btn bg-gray-200" onclick="viewProof('${r.id}')">View proof of birth</button>`:'<span class="pill bg-green-100 text-green-800">Returning — verified from last season\'s record (no proof needed)</span>'}
+      ${r.proof_path?`<button class="btn bg-gray-200" onclick="viewProof('${r.id}')">View proof of birth${window.proofTypeLabel(r)?' ('+esc(window.proofTypeLabel(r))+')':''}</button>`:'<span class="pill bg-green-100 text-green-800">Returning — verified from last season\'s record (no proof needed)</span>'}
       <button class="btn bg-gray-200" onclick="details('${r.id}')">Details</button>
       <button class="btn bg-gray-200" onclick="makePdf('${r.id}')">Download forms PDF</button>
       ${r.status==='submitted'||r.status==='rejected'?(clearIn[r.id]&&clearIn[r.id].vus&&!['cleared','not_same'].includes(clearIn[r.id].status)
