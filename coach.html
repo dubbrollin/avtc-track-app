@@ -370,9 +370,11 @@ async function loadMe(){
   $('miSave').onclick=async()=>{ const v=id=>$(id).value.trim()||null; const patch={first_name:v('miFirst'),last_name:v('miLast'),phone:v('miPhone'),usatf_member_number:v('miUsatf')};
     if(!patch.first_name){ $('miMsg').textContent='First name is required.'; $('miMsg').style.color='#b91c1c'; return; }
     patch.name=[patch.first_name,patch.last_name].filter(Boolean).join(' ');
+    if(patch.usatf_member_number) patch.usatf_certified=true; // a USATF member # means they're USATF certified
     $('miSave').disabled=true; const {error}=await sb.from('coaches').update(patch).eq('email',myCoach.email); $('miSave').disabled=false;
     if(error){ $('miMsg').textContent='Could not save: '+error.message; $('miMsg').style.color='#b91c1c'; return; }
-    Object.assign(myCoach,patch); $('miMsg').textContent='Saved ✓'; $('miMsg').style.color='#15803d'; };
+    Object.assign(myCoach,patch); $('miMsg').textContent='Saved ✓'; $('miMsg').style.color='#15803d';
+    if(patch.usatf_certified){ try{ const {data:v}=await sb.functions.invoke('usatf-verify',{body:{email:myCoach.email}}); if(v&&v.status){ myCoach.usatf_registry_status=v.status; myCoach.usatf_registry_checked_at=new Date().toISOString(); const s2=bgStatus(myCoach); $('miMsg').textContent='Saved ✓ — USATF check: '+s2.label; } }catch(e){} } };
   const st=bgStatus(myCoach);
   $('bgStatusLine').innerHTML = `Your background-check status: <span class="pill ${st.cls}">${st.label}</span>`
     + (/current/.test(st.label)?'':window.bgCheckLinkHtml(myCoach.usatf_certified&&myCoach.usatf_registry_status&&myCoach.usatf_registry_status!=='verified'

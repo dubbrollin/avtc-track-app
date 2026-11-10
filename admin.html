@@ -323,7 +323,8 @@ if(b.dataset.act==='edit'||b.dataset.act==='editSave'||b.dataset.act==='editCanc
   const patch={first_name:g('first_name'),last_name:g('last_name'),phone:g('phone'),usatf_member_number:g('usatf_member_number')};
   if(!patch.first_name){ toast('First name is required.',true); return; }
   patch.name=[patch.first_name,patch.last_name].filter(Boolean).join(' ');
-  if(await run(sb.from('coaches').update(patch).eq('email',email0),'Saved')){ Object.assign(c0,patch); tr0.remove(); drawPeople(); }
+  if(patch.usatf_member_number) patch.usatf_certified=true; // a USATF member # means they're USATF certified
+  if(await run(sb.from('coaches').update(patch).eq('email',email0),'Saved')){ Object.assign(c0,patch); tr0.remove(); if(patch.usatf_certified) await checkUsatf(c0); drawPeople(); }
   return; } const email=b.closest('tr').dataset.id, c=coaches.find(x=>x.email===email); const act=b.dataset.act;
 const nm=(c.first_name||c.name||c.email);
 if(act==='usatf'){ b.disabled=true; b.textContent='Checking…'; if(await checkUsatf(c)) toast(`${nm}: ${({verified:'USATF background screen verified',not_current:'not on the Safe Sport list',not_found:'not found on USATF lists',error:'check failed'})[c.usatf_registry_status]||c.usatf_registry_status}`); drawPeople(); return; }
