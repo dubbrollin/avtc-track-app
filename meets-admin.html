@@ -458,18 +458,18 @@ async function resultsPanel(m){
 // Post result rows for a meet: compare with what's posted, ask "are you sure?" if posted results would change, then
 // replace_meet_results (swaps out every event in the rows — safe to repeat) and log the upload. Messages go in pv.
 // Resolves true once saved, false if it failed or the uploader said no (onNo runs then).
-function postResultRows(m, rows, allTeams, fileName, pv, onNo){
+function postResultRows(m, rows, allTeams, fileName, pv, onNo, wholeMeet){
   return new Promise(async done=>{
     const save=async(d,confirmed)=>{
       pv.innerHTML='Saving…';
-      const {data:n,error}=await sb.rpc('replace_meet_results',{p_meet:m.id,p_rows:rows,p_all_teams:allTeams});
+      const {data:n,error}=await sb.rpc('replace_meet_results',{p_meet:m.id,p_rows:rows,p_all_teams:allTeams,...(wholeMeet?{p_whole_meet:true}:{})});
       if(error){ pv.innerHTML=`<span class="text-red-600">${/replace_meet_results/.test(error.message)?'Live upload is not switched on in the database yet — run supabase/2026-10-14-live-results.sql once, then upload again.':escH(error.message)}</span>`; return done(false); }
       const v=await logUpload(m,{file_name:fileName,all_teams:allTeams,rows_in_file:rows.length,added:d.added.length,changed:d.changed.length,removed:d.removed.length,unchanged:d.unchanged.length,confirmed_changes:!!confirmed,changes:changesForLog(d)});
       const what=d.changed.length||d.removed.length?` ${d.changed.length} changed, ${d.removed.length} removed, ${d.added.length} new.`:(d.added.length&&d.unchanged.length?` ${d.added.length} new, ${d.unchanged.length} already posted and unchanged.`:'');
       pv.innerHTML=`Saved ${n??rows.length} results${v?` (upload #${v} for this meet)`:''} — they're live on the Results page now.${what}`;
       done(true);
     };
-    let d; try{ d=diffUpload(await postedResults(m.id),rows,allTeams); }
+    let d; try{ d=diffUpload(await postedResults(m.id),rows,allTeams,wholeMeet); }
     catch(e){ pv.innerHTML=`<span class="text-red-600">Could not check what's already posted (${escH(e.message)}). Nothing was saved — try again.</span>`; return done(false); }
     if(!d.changed.length && !d.removed.length) return save(d,false);   // nothing already posted is altered — no need to ask
     // The new file disagrees with results that are already up: show exactly what differs and ask before replacing.
@@ -530,7 +530,7 @@ async function backupBox(m, opts){
       +(found.needMap.length?` <span class="text-orange-700">${found.needMap.length} kind(s) of event weren't recognized and were left out — upload the results file above for those.</span>`:'')
       +(found.unmatched.length?` <span class="text-gray-600">${found.unmatched.length} athlete(s) not matched to a registration (still posted).</span>`:'')+'</p>';
     msg.appendChild(pv);
-    if(await postResultRows(m,found.rows,true,f.name,pv)) setTimeout(()=>resultsPanel(m),3000);
+    if(await postResultRows(m,found.rows,true,f.name,pv,null,true)) setTimeout(()=>resultsPanel(m),3000);
   };
   return list.length;
 }
@@ -546,16 +546,17 @@ async function postedResults(meetId){
   }
   return all;
 }
-// Only the events in the file count (that's all an upload replaces); with a one-team file only that team's rows in those events.
+// Only the events in the file count (that's all an upload replaces) — except a Meet Manager backup, which replaces the whole meet;
+// with a one-team file only that team's rows in those events.
 // Hand-typed results are never touched by an upload, so they're left out of the comparison too.
-function diffUpload(posted, rows, allTeams){
+function diffUpload(posted, rows, allTeams, wholeMeet){
   // Posted rows from a mixed race were re-filed under the athlete's division + gender; compare by how they were uploaded.
   const asRun=r=>r.raced_gender?{...r,gender:r.raced_gender,division:r.raced_division||null,place:r.raced_place}:r;
   posted=posted.map(asRun);
   const gk=r=>[r.event_code,r.is_relay?1:0,(r.division==='ALL'?'':r.division)||'',r.gender,r.round||'F'].join('|')+(allTeams?'':'|'+(r.team_code||''));
   const ak=r=>gk(r)+'|'+String(r.athlete_name||'').toLowerCase().replace(/[^a-z0-9]/g,'');
   const affected=new Set(rows.map(gk));
-  const old=posted.filter(r=>r.source!=='manual'&&affected.has(gk(r)));
+  const old=posted.filter(r=>r.source!=='manual'&&(wholeMeet||affected.has(gk(r))));
   const byOld={}; old.forEach(r=>(byOld[ak(r)]??=[]).push(r));
   const added=[], changed=[], unchanged=[];
   rows.forEach(r=>{
