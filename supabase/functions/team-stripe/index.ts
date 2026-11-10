@@ -1,7 +1,7 @@
 // Supabase Edge Function: team-stripe
 // A team admin (or site admin) sets up / checks their team's own Stripe account (Stripe Connect, Accounts v2).
 // The team is the merchant: parents' card payments go straight to the team's bank account; the team pays Stripe's
-// fees; VYC's platform account never holds the money.
+// fees; the app business's Stripe account (the connector, not the conference) never holds the money.
 //   { action: "connect", team_code }  → creates the connected account if the team has none, returns a hosted
 //                                        onboarding link (one-time URL; Stripe sends them back to the admin page).
 //   { action: "status",  team_code }  → re-checks whether card payments are active and saves it.

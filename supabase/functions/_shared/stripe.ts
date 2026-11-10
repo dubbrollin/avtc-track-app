@@ -1,5 +1,5 @@
 // Shared helpers for the payment edge functions (team-stripe, fee-checkout, stripe-webhook).
-// Secrets (set with `supabase secrets set`): STRIPE_SECRET_KEY (the VYC platform account's restricted key),
+// Secrets (set with `supabase secrets set`): STRIPE_SECRET_KEY (the app business's Stripe secret key — the connector; VYC has no Stripe account in this),
 // STRIPE_WEBHOOK_SECRET (signing secret of the Connect webhook endpoint), APP_URL (where the app lives).
 import Stripe from "npm:stripe@22.4.0";
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";

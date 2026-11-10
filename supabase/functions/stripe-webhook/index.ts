@@ -4,7 +4,7 @@
 // Events handled: checkout.session.completed, checkout.session.async_payment_succeeded, checkout.session.async_payment_failed,
 //                 invoice.paid, invoice.payment_failed, customer.subscription.deleted, charge.refunded
 // Deploy: npx supabase functions deploy stripe-webhook --no-verify-jwt --use-api --agent no
-// Then in the VYC platform Stripe dashboard: Developers → Webhooks → add endpoint, "Events on Connected accounts",
+// Then in the app business's Stripe dashboard: Developers → Webhooks → add endpoint, "Events on Connected accounts",
 // URL https://<project>.supabase.co/functions/v1/stripe-webhook, pick the events above, and save its signing secret
 // as STRIPE_WEBHOOK_SECRET.
 import Stripe from "npm:stripe@22.4.0";
