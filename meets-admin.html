@@ -392,15 +392,7 @@ async function resultsPanel(m){
     <div id="rprev-${m.id}" class="text-sm mt-2"></div>
     <div id="rhist-${m.id}" class="text-xs mt-2"></div>
     <div id="bk-${m.id}" class="mt-3"></div>
-    <hr class="my-3">
-    <p class="text-sm font-semibold">Add one result by hand</p>
-    <div class="grid grid-cols-2 gap-1 mt-1 text-sm">
-      <select id="ra-${m.id}" class="border rounded p-1 col-span-2"><option value="">Athlete…</option></select>
-      <select id="re-${m.id}" class="border rounded p-1"><option value="">Event…</option></select>
-      <input id="rm-${m.id}" class="border rounded p-1" placeholder="Mark (14.52 / 1:05.3 / 3.45)">
-      <input id="rp-${m.id}" type="number" class="border rounded p-1" placeholder="Place (optional)">
-      <button id="rsave-${m.id}" class="btn bg-purple-600 text-white text-sm">Save result</button>
-    </div>
+    <p class="text-xs text-gray-600 mt-3">Results only come from Meet Manager (the backup, a results file, or the live connection) — the league doesn't allow results typed in by hand.</p>
     ${TIMER?'<p class="text-xs text-gray-500 mt-3">Uploaded something by mistake? Ask a team admin to remove it.</p>':`<hr class="my-3">
     <button id="rdel-${m.id}" class="btn bg-red-100 text-red-700 text-sm">Delete all results for this meet</button>`}
   </div>`;
@@ -409,17 +401,6 @@ async function resultsPanel(m){
   if(rerr) $('rprev-'+m.id).innerHTML='<span class="text-red-600">Could not load the athlete list: '+rerr.message+'</span>';
   if(liveOk) window.mountLiveConnect($('live-'+m.id),{sb,meet:m,getRegs:()=>regs});
   uploadHistory(m); backupBox(m,{post:true,regs});
-  const sa=$('ra-'+m.id); regs.forEach(r=>sa.add(new Option(`${r.last_name}, ${r.first_name} (${r.division} ${r.gender})`,r.id)));
-  sa.onchange=()=>{ const r=regs.find(x=>x.id===sa.value); const se=$('re-'+m.id); se.innerHTML='<option value="">Event…</option>';
-    if(r) eventsFor(r.division,r.gender).filter(e=>!e.relay).forEach(e=>se.add(new Option(e.name,e.code))); };
-  $('rsave-'+m.id).onclick=async()=>{
-    const r=regs.find(x=>x.id===sa.value), code=$('re-'+m.id).value, mark=$('rm-'+m.id).value.trim();
-    if(!r||!code||!mark) return alert('Athlete, event and mark are required.');
-    const ev=STANDARD_EVENTS.find(e=>e.code===code&&!e.relay), isTime=!ev.field;
-    const {error}=await sb.from('results').insert({meet_id:m.id,registration_id:r.id,athlete_name:`${r.first_name} ${r.last_name}`,gender:r.gender,division:r.division,
-      event_code:code,event_name:ev.name,is_relay:false,round:'F',mark,mark_value:markToValue(mark,isTime,'M'),is_time:isTime,place:parseInt($('rp-'+m.id).value)||null,source:'manual'});
-    if(error) return alert(error.message); $('rm-'+m.id).value=$('rp-'+m.id).value=''; resultsPanel(m);
-  };
   if($('rdel-'+m.id)) $('rdel-'+m.id).onclick=async()=>{ if(!confirm(`Delete ALL results for "${m.name}"? This can't be undone.`)) return;
     await sb.from('results').delete().eq('meet_id',m.id); resultsPanel(m); };
   $('rf-'+m.id).onchange=async ev=>{
