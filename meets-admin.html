@@ -131,6 +131,7 @@
       <h3><span class="n">5</span>When the meet is over</h3>
       <ul>
         <li>Send the final results one more time (or upload the final file), then click <b>Stop</b>.</li>
+        <li><b style="color:#b45309">⚠️ Always upload the Meet Manager backup — even if the results went up live.</b> In Meet Manager: <b>File › Backup</b> (the file is named like <i>Tfmm6Bkup…zip</i>), then choose it in the <b>Meet Manager backup</b> box on this meet. The visiting teams download it for their files, and the meet isn't finished until it's there.</li>
         <li>Check the meet's results page with <b>View</b>.</li>
       </ul>
 
@@ -241,6 +242,25 @@ async function pastBackups(season){
   box.querySelectorAll('[data-pbk]').forEach(b=>b.onclick=()=>{ const m=past.find(x=>x.id===b.dataset.pbk); const el=$('bk-'+m.id); if(el.innerHTML){ el.innerHTML=''; return; } backupBox(m,{post:false}); });
 }
 
+// "Backup needed" flag next to every meet that has results (or whose day has passed) but no Meet Manager backup yet —
+// live results don't replace the backup; the visiting teams need the file.
+async function flagMissingBackups(){
+  if(!meets.length) return;
+  const ids=meets.map(m=>m.id), today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
+  const {data:bk,error}=await sb.from('meet_backups').select('meet_id').in('meet_id',ids); if(error) return;
+  const have=new Set((bk||[]).map(b=>b.meet_id));
+  for(const m of meets){
+    if(have.has(m.id)) continue;
+    let due=m.meet_date&&m.meet_date<today;
+    if(!due){ const {count}=await sb.from('results').select('id',{count:'exact',head:true}).eq('meet_id',m.id); due=count>0; }
+    const btn=document.querySelector(`#meets [data-act="results"][data-id="${m.id}"]`);
+    if(!due||!btn||btn.parentElement.querySelector('[data-bkflag]')) continue;
+    const f=document.createElement('span'); f.dataset.bkflag='1'; f.className='text-xs font-bold rounded-full px-2 py-1'; f.style.cssText='background:#fef3c7;color:#92400e;border:1px solid #f59e0b';
+    f.title='Upload the Meet Manager backup (File › Backup) in this meet\'s results panel — even if the results went up live.';
+    f.textContent='⚠️ Backup needed'; btn.parentElement.insertBefore(f,btn);
+  }
+}
+
 async function load(){
   if(window.eventsReady) await window.eventsReady;   // the standard event list (Site Admin > League Setup) must be in before meets are built
   const season=await window.currentSeason();
@@ -254,7 +274,7 @@ async function load(){
       <button class="btn bg-purple-600 text-white text-sm" data-act="results" data-id="${m.id}">Upload results</button>
     </div>
     <div id="panel-${m.id}" class="mt-3"></div></div>`).join('')||`<p class="text-gray-500">No ${season} meets yet.${TIMER?'':' Create the first one above.'} Last season's meets are locked — their results are on the <a class="underline" href="results.html">Results</a> page.</p>`;
-    document.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>act(b.dataset.act,b.dataset.id));
+    document.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>act(b.dataset.act,b.dataset.id)); flagMissingBackups();
     return; }
   $('meets').innerHTML=meets.map(m=>`<div class="bg-white rounded-xl shadow p-4 mb-3">
     <div class="flex flex-wrap items-center gap-2">
@@ -272,7 +292,7 @@ async function load(){
       <button class="btn bg-red-100 text-red-700 text-sm" data-act="archive" data-id="${m.id}">Archive</button>
     </div>
     <div id="panel-${m.id}" class="mt-3"></div></div>`).join('')||`<p class="text-gray-500">No ${season} meets yet.${TIMER?'':' Create the first one above.'} Last season's meets are locked — their results are on the <a class="underline" href="results.html">Results</a> page.</p>`;
-  document.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>act(b.dataset.act,b.dataset.id));
+  document.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>act(b.dataset.act,b.dataset.id)); flagMissingBackups();
 }
 
 async function act(a,id){

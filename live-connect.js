@@ -311,6 +311,7 @@ window.mountLiveConnect=function(host, ctx){
       <button type="button" data-k="folder" class="btn bg-white border text-sm" ${can?'':'disabled'}>One key per event: watch the real-time folder (F12)</button>
     </div>
     <label class="text-xs text-gray-700 flex items-center gap-1"><input type="checkbox" data-k="test"> Test only — show what it reads, don't post anything</label>
+    <p class="text-sm mt-2 rounded p-2" style="border:1px solid #f59e0b;background:#fffbeb;color:#92400e"><b>⚠️ Live results don't replace the backup.</b> When the meet is over, still upload the <b>Meet Manager backup</b> (File › Backup, the <i>Tfmm6Bkup…zip</i>) in the backup box below — the visiting teams need it for their files.</p>
     <details class="text-xs text-gray-600 mt-2"><summary class="cursor-pointer font-semibold">How to set it up</summary>
       <p class="mt-1"><b>Fully automatic (database):</b> Meet Manager must have the meet open in <b>multi-user mode</b> — in single-user mode it locks the file and nothing can read it. Then click the red button and pick this meet's database file — in Meet Manager it's the meet's <b>.mdb</b> file (File &gt; Open shows where it is, for example under C:\\tfmeets6). From then on, every result the timer accepts in Meet Manager shows up on the Live tab by itself. The first time, this page may ask you to say which event is which — once per meet.</p>
       <p class="mt-1"><b>One key per event (needs Meet Manager's Pro option):</b> in Meet Manager go to Run &gt; Web &gt; Log-in, tick <b>Do not upload</b>, and make sure F11/F12 are turned on. Then click the white button and pick the <b>C:\\Realtime</b> folder. Each time the timer opens a finished event in Run and presses <b>F12</b>, it goes live. You can also save a semicolon-delimited results export into that folder any time and it's picked up too.</p>
@@ -326,7 +327,7 @@ window.mountLiveConnect=function(host, ctx){
   const status=html=>{ $k('status').innerHTML=html; };
   async function keepAwake(){ try{ if('wakeLock' in navigator){ wake=await navigator.wakeLock.request('screen'); } }catch(e){} }
   document.addEventListener('visibilitychange',()=>{ if(timer&&!document.hidden) keepAwake(); });
-  function stop(){ clearInterval(timer); timer=null; mode=null; handle=null; try{ wake&&wake.release(); }catch(e){} status('Stopped.'); }
+  function stop(){ clearInterval(timer); timer=null; mode=null; handle=null; try{ wake&&wake.release(); }catch(e){} status('Stopped. <b style="color:#b45309">Last step: upload the Meet Manager backup (File › Backup) in the backup box below — the visiting teams need it.</b>'); }
 
   // Post every event group whose results changed since the last post.
   async function post(rows, from){
