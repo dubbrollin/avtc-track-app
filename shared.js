@@ -124,11 +124,11 @@ window.mountLoginWidget = function(sb, container, opts){
       <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.6l6.7-6.7C35.9 2.5 30.4 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.8 6.1C12.2 13.1 17.6 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.6c-.5 3-2.2 5.5-4.7 7.2l7.3 5.7C43.8 37.9 46.5 31.8 46.5 24.5z"/><path fill="#FBBC05" d="M10.4 19.3C9.8 21 9.5 22.9 9.5 24.9s.3 3.9.9 5.6l-7.8 6.1C1 32.9 0 29 0 24.9s1-8 2.6-11.7l7.8 6.1z"/><path fill="#34A853" d="M24 49c6.4 0 11.8-2.1 15.7-5.7l-7.3-5.7c-2 1.4-4.6 2.2-8.4 2.2-6.4 0-11.8-3.6-13.7-8.8l-7.8 6.1C6.5 43.6 14.6 49 24 49z"/></svg>
       Continue with Google
     </button>
-    <div class="mt-3 pt-3 border-t">
+    ${(window.APP_CONFIG||{}).LOOK_AROUND ? `<div class="mt-3 pt-3 border-t">
       <p class="text-sm font-semibold">Just reviewing? Look around without an account</p>
       <p class="text-xs text-gray-500 mb-2">One tap opens the app the way a real user sees it, with a sample team's data. Everything is view-only; changes are turned off until you sign in with your own account.</p>
       <div class="flex flex-wrap gap-2">${(window.DEMO_LOGINS||[]).map(d=>`<button type="button" class="btn bg-white border text-sm" data-demo="${d.key}">👀 As ${d.label}</button>`).join('')}</div>
-    </div>
+    </div>` : ''}
     <p id="authMsg" class="text-sm mt-2"></p>`;
   const g = sel => container.querySelector(sel);
   const emailEl = g('#authEmail'), passEl = g('#authPass'), msgEl = g('#authMsg');
@@ -193,7 +193,7 @@ window.removeAthleteRecords = async function(sb, ids){
     const { data: gone, error } = await sb.from('registrations').delete().in('id', chunk).select('id');
     if (error) return error.message;
     if ((gone || []).length < chunk.length) return 'Some athletes could not be deleted — you may not have permission for them.';
-    const paths = (regs || []).map(r => r.proof_path).filter(Boolean);
+    const paths = (regs || []).map(r => r.proof_path).filter(p => p && !p.startsWith('test-data/'));
     if (paths.length) { const { error: fe } = await sb.storage.from('proof-of-birth').remove(paths); if (fe) console.warn('proof file cleanup:', fe.message); }
   }
   return null;

@@ -355,10 +355,8 @@ $('pane').innerHTML=`<div class="card">
 <div class="scroll"><table class="t"><thead><tr><th>Comp #</th><th>Athlete</th><th>Team</th><th>Division</th><th>Status</th><th>Actions</th></tr></thead><tbody id="aBody"></tbody></table></div>
 <div class="mt-2"><button class="btn lite hide" id="aMore">Load more</button></div>
 </div>
-<div class="card border border-red-200 ${SITE?'':'hide'}"><h3 class="font-bold text-red-800 mb-1">Test data cleanup</h3>
-<p class="text-sm text-gray-600 mb-2">Removes the last-season roster that was loaded for testing (every athlete tagged ROSTER-2026), plus their meet entries. Real registrations are not touched.</p>
-<button class="btn red" id="aWipe">Delete test roster athletes…</button></div>`;
-$('aGo').onclick=()=>aLoad(true); $('aQ').onkeydown=e=>{ if(e.key==='Enter') aLoad(true); }; ['aTeam','aStat','aDiv'].forEach(i=>$(i).onchange=()=>aLoad(true)); $('aMore').onclick=()=>aLoad(false); $('aWipe').onclick=wipeTest;
+`;
+$('aGo').onclick=()=>aLoad(true); $('aQ').onkeydown=e=>{ if(e.key==='Enter') aLoad(true); }; ['aTeam','aStat','aDiv'].forEach(i=>$(i).onchange=()=>aLoad(true)); $('aMore').onclick=()=>aLoad(false);
 aLoad(true);
 }
 async function aLoad(reset){
@@ -389,13 +387,6 @@ function canDelete(r){ return SITE||isPresFor(r.team_code)||(!!(me&&me.team_admi
 async function deleteAthletes(ids){
 const err=await window.removeAthleteRecords(sb,ids); if(err){ toast(err,true); return false; }
 return true;
-}
-async function wipeTest(){
-const {count}=await sb.from('registrations').select('id',{count:'exact',head:true}).eq('contract_version','ROSTER-2026');
-if(!count){ toast('No test roster athletes found.'); return; }
-const typed=prompt(`This will permanently delete ${count} test roster athletes and their entries.\nType DELETE to confirm.`); if(typed!=='DELETE') return;
-const ids=(await pageAll(()=>sb.from('registrations').select('id').eq('contract_version','ROSTER-2026'))).map(x=>x.id);
-toast('Deleting…'); if(await deleteAthletes(ids)){ toast(`Deleted ${ids.length} test athletes`); aLoad(true); }
 }
 // Who can change what (the database enforces the same rule):
 //  - the Conference President of the athlete's conference: changes anything directly, certifies;
