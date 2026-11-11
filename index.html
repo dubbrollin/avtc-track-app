@@ -65,8 +65,10 @@
 <div class="max-w-3xl mx-auto p-3">
   <div class="card">
     <h1 class="text-xl font-bold">Valley Youth Conference — Registration</h1>
-    <p class="text-sm text-gray-600">Choose what you're registering as. Everyone who wants dashboard access — coaches and parents entering their own athlete into meets — must register below.</p>
-    <div class="flex gap-1 mt-3" id="roleTabs">
+    <p class="text-sm text-gray-600" id="startIntro">Two quick questions to get you started.</p>
+    <!-- Start: who is registering + which team. Parents then create a sign-in and register their athletes inside the Parent Dashboard. -->
+    <div id="startChosen" class="hidden mt-2 text-sm"></div>
+    <div class="flex gap-1 mt-3 hidden" id="roleTabs">
       <div class="roletab active" data-role="parent">Parent / Athlete</div>
       <div class="roletab" data-role="coach">Coach</div>
       <div class="roletab" data-role="admin">Team Admin</div>
@@ -75,8 +77,31 @@
     </div>
   </div>
 
-  <!-- ================= PARENT / ATHLETE FORM ================= -->
-  <form id="parentForm">
+  <div id="startPick" class="card">
+      <h2 class="font-bold text-base mb-2">1. Who's registering?</h2>
+      <div class="rolecards">
+        <label class="rolecard"><input type="radio" name="who" value="parent"><div><b>Parent / Guardian</b><span class="d">Sign up your athlete for the season.</span></div></label>
+        <label class="rolecard"><input type="radio" name="who" value="coach"><div><b>Coach</b><span class="d">Head coach, division coach or event coach.</span></div></label>
+        <label class="rolecard"><input type="radio" name="who" value="admin"><div><b>Team Admin</b><span class="d">You run your team's registrations and coaches.</span></div></label>
+      </div>
+      <div id="startTeamWrap" class="hidden mt-4">
+        <h2 class="font-bold text-base mb-2" id="startTeamQ">2. What team will your athlete be on?</h2>
+        <select id="startTeam"></select>
+      </div>
+      <button type="button" id="startNext" class="btn bg-blue-600 text-white w-full mt-4 hidden">Continue</button>
+      <p id="startMsg" class="text-sm mt-2 text-red-600"></p>
+      <p class="text-xs text-gray-500 mt-3">Meet timer? <a class="underline text-blue-700" href="index.html?role=timer">Register as a timer</a> · Valley United Striders postseason? <a class="underline text-blue-700" href="index.html?role=vus">Postseason form</a></p>
+    </div>
+
+  <!-- ================= PARENT: create a sign-in (step 3), then on to the Parent Dashboard ================= -->
+  <div id="parentAcctCard" class="card hidden">
+    <h2 class="font-bold text-lg mb-1">3. Create your sign-in</h2>
+    <p class="text-sm text-gray-600 mb-3">Use your email and a password (or Google). Next you'll go to your <b>Parent Dashboard</b>, where you register your athlete — and any brothers or sisters.</p>
+    <div id="parentLoginWidget"></div>
+  </div>
+
+  <!-- ================= ATHLETE FORM (opened from the Parent Dashboard: index.html?athlete=1) ================= -->
+  <form id="parentForm" class="hidden">
   <div id="lateNotice" class="hidden"></div>
   <div class="card">
     <h2 class="font-bold text-lg mb-2">Team</h2>
@@ -712,14 +737,79 @@ document.querySelectorAll('#roleTabs .roletab').forEach(t=>t.onclick=()=>{
   t.classList.add('active');
   Object.entries(forms).forEach(([k,f])=>f.classList.toggle('hidden', k!==t.dataset.role));
 });
-{ const r=new URLSearchParams(location.search).get('role'); if(r&&forms[r]) document.querySelector(`#roleTabs .roletab[data-role=${r}]`).click(); }
+
+// ---- Start: "Who's registering?" + "What team?" ----
+// Parents: pick the team, create a sign-in, then register athletes inside the Parent Dashboard (index.html?athlete=1).
+// Coaches / team admins: their own form opens with the team already picked.
+const QS=new URLSearchParams(location.search);
+const ATHLETE_MODE=QS.get('athlete')==='1'||QS.get('another')==='1';
+const PARENT_LEAD={coach:'Coach',admin:'Team Admin',parent:'Parent / Guardian'};
+const hideStart=()=>{ $('startPick').classList.add('hidden'); $('startIntro').classList.add('hidden'); };
+function showChosen(who,team){
+  $('startChosen').innerHTML=`Registering as <b>${esc(PARENT_LEAD[who]||who)}</b>${team?` · <b>${esc(teamLabel(team))}</b>`:''} · <a href="index.html" class="underline font-semibold" style="color:#fff">change</a>`;
+  $('startChosen').classList.remove('hidden');
+}
+const goParentDash=team=>{ location.href='parent.html?team='+encodeURIComponent(team||'')+'&new=1'; };
+document.querySelectorAll('input[name=who]').forEach(r=>r.onchange=()=>{
+  $('startTeamQ').textContent=r.value==='parent'?'2. What team will your athlete be on?':'2. What team are you with?';
+  $('startTeamWrap').classList.remove('hidden'); $('startNext').classList.remove('hidden'); $('startMsg').textContent='';
+});
+$('startNext').onclick=()=>{
+  const who=(document.querySelector('input[name=who]:checked')||{}).value, team=$('startTeam').value;
+  if(!who) return $('startMsg').textContent='Please choose who is registering.';
+  if(!team) return $('startMsg').textContent=who==='parent'?'Please choose the team your athlete will be on.':'Please choose your team.';
+  startWith(who,team);
+};
+function startWith(who,team){
+  hideStart(); showChosen(who,team);
+  if(who==='parent'){
+    if(authSession) return goParentDash(team);   // already signed in: straight to the dashboard
+    // keep the answers in the address so the email-confirm link / Google bring the parent back to this step
+    history.replaceState(null,'','index.html?role=parent&team='+encodeURIComponent(team));
+    $('parentAcctCard').classList.remove('hidden');
+    if(!$('parentLoginWidget').childElementCount) window.mountLoginWidget(sb,$('parentLoginWidget'),{hint:'New here? Enter your email, choose a password and tap <b>First time? Create password</b>. Already have a sign-in? Just tap <b>Sign in</b>.'});
+    return;
+  }
+  document.querySelector(`#roleTabs .roletab[data-role=${who}]`).click();
+  const sel=$(who==='coach'?'cTeam':'aTeam'); if(sel&&team) sel.value=team;
+}
+// a parent who just signed in (password, email link or Google) goes on to the Parent Dashboard
+sb.auth.onAuthStateChange((_e,s)=>{ if(s&&QS.get('role')==='parent'&&!ATHLETE_MODE) goParentDash(QS.get('team')); });
+(async()=>{
+  const r=QS.get('role'), team=QS.get('team')||'';
+  if(window.leagueReady){ try{ await window.leagueReady; }catch(e){} } fillAllTeams();
+  if(QS.get('import')||ATHLETE_MODE) return;   // the athlete form handles itself below
+  if(r==='parent'){ return startWith('parent',team); }
+  if(r&&forms[r]){ hideStart(); if(r==='coach'||r==='admin') showChosen(r,team); document.querySelector(`#roleTabs .roletab[data-role=${r}]`).click();
+    if(team){ const sel=$(r==='coach'?'cTeam':r==='admin'?'aTeam':''); if(sel) sel.value=team; } }
+})();
+
+// ---- Athlete form: opened from the Parent Dashboard (index.html?athlete=1&team=CODE). The parent is signed in already. ----
+if(ATHLETE_MODE) (async()=>{
+  const form=$('parentForm'), head=$('roleTabs').closest('.card');
+  hideStart();
+  head.querySelector('h1').textContent='Register your athlete';
+  const {data:s}=await sb.auth.getSession();
+  if(!s||!s.session){
+    head.insertAdjacentHTML('beforeend',`<div class="mt-3 rounded-lg p-3" style="border:2px solid #2563eb;background:#eff6ff;color:#0f172a"><p class="font-semibold" style="color:#0f172a">Sign in first</p><p class="text-sm mt-1" style="color:#0f172a">Athletes are registered from your <a class="underline" style="color:#1d4ed8" href="parent.html">Parent Dashboard</a>. Sign in there (or <a class="underline" style="color:#1d4ed8" href="index.html">create a sign-in</a>), then tap <b style="color:#0f172a">+ Register an athlete</b>.</p></div>`);
+    return;
+  }
+  head.querySelector('#startIntro').innerHTML=`Signed in as <b>${esc(s.session.user.email)}</b>. Fill in your athlete's details, upload proof of birth, and sign at the bottom. About 10 minutes. <a class="underline font-semibold" style="color:#fff" href="parent.html">Back to my dashboard</a>`;
+  $('startIntro').classList.remove('hidden');
+  form.classList.remove('hidden');
+  $('email').value=s.session.user.email; $('email').readOnly=true;   // the athlete shows on the dashboard of this sign-in
+  $('viaEmail').checked=true; $('viaEmail').closest('label').classList.add('hidden'); $('parentAcctWrap').classList.add('hidden');
+  if(window.leagueReady){ try{ await window.leagueReady; }catch(e){} }
+  fillAllTeams();
+  const team=QS.get('team'); if(team&&!$('teamCode').value){ $('teamCode').value=team; $('teamCode').dispatchEvent(new Event('change')); }
+})();
 
 // ---- team dropdowns ----
 function fillTeams(sel){
   sel.innerHTML='<option value="">Select…</option>'+window.VYC_TEAMS.map(t=>`<option value="${t.code}">${t.name} (${t.conference})</option>`).join('');
 }
 function fillAllTeams(){
-  const act=window.VYC_TEAMS.filter(t=>t.active!==false); const sels=['teamCode','cTeam','vHomeTeam','aTeam'].map($); const keep=sels.map(s=>s.value);
+  const act=window.VYC_TEAMS.filter(t=>t.active!==false); const sels=['teamCode','cTeam','vHomeTeam','aTeam','startTeam'].map($); const keep=sels.map(s=>s.value);
   const lab=t=>`<option value="${t.code}">${t.name} (${t.conference==='West'?'Western':'Eastern'})</option>`;
   sels.forEach((sel,i)=>{ sel.innerHTML='<option value="">Select…</option>'+act.map(lab).join(''); sel.value=keep[i]||''; });
 }
@@ -1153,6 +1243,7 @@ $('parentForm').addEventListener('submit', async(e)=>{
 const IMPORT_ID=new URLSearchParams(location.search).get('import'); let IMPORT=null;
 if(IMPORT_ID) (async()=>{
   const form=$('parentForm'), tabsCard=$('roleTabs').closest('.card');
+  hideStart(); $('startIntro').classList.remove('hidden'); form.classList.remove('hidden');
   const {data:s}=await sb.auth.getSession();
   const say=h=>{ form.classList.add('hidden'); form.insertAdjacentHTML('beforebegin',h); };   // hide, don't remove: other code still fills the form's fields
   if(!s||!s.session){ say(`<div class="card" style="border:2px solid #2563eb;background:#eff6ff"><p class="font-semibold">Sign in first</p><p class="text-sm mt-1">Open your <a class="underline" href="parent.html">Parent Dashboard</a>, sign in (or create an account) with your email, then tap <b>Finish registration</b> there.</p></div>`); return; }
@@ -1184,7 +1275,7 @@ let familyDone=[], familyRegIds=[];
   let saved=null; try{ saved=JSON.parse(sessionStorage.getItem('vyc_family')||'null'); }catch(e){}
   if(!saved) return;
   window.addEventListener('load',()=>{ setTimeout(()=>{
-    for(const [id,v] of Object.entries(saved.fields||{})){ const el=$(id); if(el&&v) el.value=v; }
+    for(const [id,v] of Object.entries(saved.fields||{})){ const el=$(id); if(el&&v&&!el.readOnly) el.value=v; }
     if(saved.lastName) $('lastName').value=saved.lastName;
     familyDone=saved.done||[]; familyRegIds=saved.regs||[];
     try{ if($('teamCode').value){ $('teamCode').dispatchEvent(new Event('change')); } }catch(e){}

@@ -58,7 +58,8 @@
       <h2 class="font-bold mb-2">My athletes</h2>
       <div id="importBox"></div>
       <div id="myAthletes"></div>
-      <p class="text-xs text-gray-500 mt-2">Registered a new athlete? <a class="text-blue-600 underline" href="index.html">Add one here</a>. Not verified yet? A coach on their team needs to review it first.</p>
+      <a id="regAthleteBtn" class="btn bg-blue-600 text-white inline-block mt-3" href="index.html?athlete=1">+ Register an athlete</a>
+      <p class="text-xs text-gray-500 mt-2">Have more than one child? Register each one here. Not certified yet? Your team reviews it first, then the Conference certifies it.</p>
     </div>
 
     <div class="card hidden" id="msgCard">
@@ -101,6 +102,8 @@ const CFG=window.APP_CONFIG;
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 $('club').textContent='Parent Dashboard';
 let sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } });
+// Team picked on the Register page (parent.html?team=CODE) — remembered for "+ Register an athlete"
+{ const t=new URLSearchParams(location.search).get('team'); if(t) try{ localStorage.setItem('vyc_parent_team',t); }catch(e){} }
 let me=null, myRegs=[], meets=[], athletes=[], events=[], entries=[], attendance=[], teamSettings={};
 
 window.mountLoginWidget(sb, $('loginWidget'), {hint:new URLSearchParams(location.search).get('code')?"Your team sent you a code to finish your athlete's registration. Sign in, or create an account with your email — then enter the code.":"Sign in with the email you used to register your athlete."});
@@ -122,10 +125,14 @@ sb.auth.onAuthStateChange(async(_e,session)=>{
 async function loadMyAthletes(){
   const {data,error}=await sb.from('registrations').select('*').eq('email',me).order('created_at',{ascending:false});
   myRegs=data||[];
+  // "+ Register an athlete" opens the full athlete form with the parent's team already picked
+  let team=''; try{ team=localStorage.getItem('vyc_parent_team')||''; }catch(e){}
+  if(!team&&myRegs[0]) team=myRegs[0].team_code||'';
+  $('regAthleteBtn').href='index.html?athlete=1'+(team?'&team='+encodeURIComponent(team):'');
   if(error){ $('myAthletes').innerHTML='<p class="text-sm text-red-700">Could not load: '+error.message+'</p>'; return; }
   // Per-team switch: may parents enter meet events themselves, or do they answer "are you coming?" for the coaches?
   try{ const codes=[...new Set(myRegs.map(r=>r.team_code).filter(Boolean))]; if(codes.length){ const {data:ts}=await sb.from('team_settings').select('*').in('team_code',codes); teamSettings={}; (ts||[]).forEach(t=>teamSettings[t.team_code]=t); } }catch(e){}
-  if(!myRegs.length){ $('myAthletes').innerHTML='<p class="text-sm text-gray-500">No athletes registered with this email yet.</p>'; return; }
+  if(!myRegs.length){ $('myAthletes').innerHTML=`<div class="rounded-lg p-3" style="border:2px solid #2563eb;background:#eff6ff"><p class="font-semibold">Next step: register your athlete</p><p class="text-sm mt-1">You're signed in. Tap <b>+ Register an athlete</b> below to fill in their details, upload proof of birth and sign. Your team sent you a code instead? Enter it above.</p></div>`; return; }
   const pillCls={verified:'bg-green-600 text-white',rejected:'bg-red-600 text-white',submitted:'bg-gray-200'};
   $('myAthletes').innerHTML=myRegs.map(r=>`
     <div class="flex flex-wrap items-center gap-2 py-2 border-t first:border-t-0">
