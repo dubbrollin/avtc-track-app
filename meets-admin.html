@@ -504,7 +504,7 @@ async function backupBox(m, opts){
   if(error){ box.innerHTML=`<p class="text-xs text-gray-500">Meet Manager backups aren't switched on in the database yet (supabase/2026-11-09-meet-backups.sql).</p>`; return 1; }
   const list=data||[], mb=b=>b?(b/1048576).toFixed(b<1048576?2:1)+' MB':'';
   box.innerHTML=`<div class="rounded p-3 ${list.length?'bg-white border':''}" ${list.length?'':'style="border:2px solid #f59e0b;background:#fffbeb"'}>
-    <p class="text-sm font-semibold">${list.length?'✅ ':'⚠️ '}Meet Manager backup${list.length?'':' — needed'}</p>
+    <p class="text-sm font-semibold">${list.length?'✅ ':'⚠️ '}Meet Manager backup${list.length?'':' — needed'} <a href="labels.html?meet=${m.id}" target="_blank" rel="noopener" class="text-xs underline font-normal ml-2" style="color:var(--act,#1764c8)" title="Award and competitor labels from the posted results">Print labels 🏷</a></p>
     <p class="text-xs text-gray-600 mb-1">In Meet Manager: <b>File → Backup</b>, save the .zip, then choose it here. ${opts.post?'<b>The results inside it are posted automatically</b> — no separate results file needed. ':''}Every team at this meet can download it from their Coach Dashboard for their own files. ${list.length?`If you fix results later, upload the new backup${opts.post?' — the results update from it too':' too'}. The newest is listed first.`:''}</p>
     <input type="file" id="bkf-${m.id}" accept=".zip,.mdb,application/zip,application/x-zip-compressed" class="text-sm">
     <div id="bkmsg-${m.id}" class="text-sm mt-1"></div>

@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#001C3B"><link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<title>Meet Labels</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css?v=b1">
+<script src="theme.js?v=b2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="config.js"></script><script src="shared.js"></script><script src="events.js"></script><script src="results.js"></script><script src="league-records.js"></script><script src="labels.js?v=1"></script>
+<style>
+  .btn{padding:.5rem .9rem;border-radius:.5rem;font-weight:600}
+  .box{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px}
+  .box h3{font-size:12px;font-weight:800;color:#1d4ed8;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;text-align:center}
+  .opt{display:flex;align-items:center;gap:6px;font-size:14px;padding:2px 0}
+  .num{width:4rem;border:1px solid #d1d5db;border-radius:6px;padding:4px 6px}
+  select.sel{border:1px solid #d1d5db;border-radius:6px;padding:5px 6px;max-width:100%}
+  .tabbar{display:flex;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;width:fit-content;flex-wrap:wrap}
+  .tab{padding:.5rem 1rem;font-size:.9rem;font-weight:600;background:#fff;cursor:pointer;border:0}
+  .tab.active{background:var(--brand);color:#fff}
+  .evwrap{max-height:22rem;overflow:auto;border:1px solid #e5e7eb;border-radius:8px;background:#fff}
+  .evt{width:100%;font-size:13px;border-collapse:collapse}
+  .evt th{position:sticky;top:0;background:#1e3a8a;color:#fff;font-size:11px;text-align:left;padding:4px 6px}
+  .evt td{padding:3px 6px;border-top:1px solid #f1f5f9;white-space:nowrap}
+  .evt tr.printed td{background:#dbeafe}
+  .sub3{display:grid;gap:10px}
+  @media (min-width:860px){ .sub3{grid-template-columns:1fr 1.3fr 1fr} .top4{display:grid;grid-template-columns:auto auto 1fr auto;gap:10px} }
+  @media (max-width:859px){ .top4>*{margin-bottom:10px} }
+  .dis{opacity:.45}
+</style>
+</head>
+<body class="text-gray-900"><header class="topnav"><div class="topnav-inner">
+  <a class="brand" href="home.html">VYC <b>Track &amp; Field</b></a>
+  <nav>
+    <a href="home.html">Home</a>
+    <a href="coach.html">Coach Dashboard</a>
+    <a href="meets-admin.html?view=timer">Timer</a>
+    <a href="results.html">Results</a>
+    <a href="howto.html">How-To</a>
+    <a href="faq.html">FAQ</a>
+  </nav>
+</div></header>
+<div class="max-w-6xl mx-auto p-3">
+  <div id="login" class="card max-w-lg mx-auto">
+    <h1 class="text-xl font-bold">Meet Labels</h1>
+    <p class="text-sm text-gray-600 mb-2">Coaches: sign in to print award labels and competitor labels for your team.</p>
+    <div id="loginWidget"></div>
+  </div>
+
+  <div id="app" class="hidden">
+    <div id="msg"></div>
+
+    <!-- Meet picker -->
+    <div id="pickBox" class="card hidden">
+      <h1 class="text-xl font-bold mb-1">Meet Labels</h1>
+      <p class="text-sm text-gray-600 mb-2">Pick a meet. Labels are ready once the meet's results are posted — the same award and competitor labels Meet Manager prints.</p>
+      <div id="meetList" class="text-sm"></div>
+    </div>
+
+    <div id="meetBox" class="hidden">
+      <div class="card">
+        <div class="flex flex-wrap items-baseline gap-2">
+          <a href="labels.html" class="text-sm underline" style="color:var(--act,#1764c8)">← All meets</a>
+          <h1 class="text-xl font-bold flex-1" id="meetTitle"></h1>
+          <label class="text-sm">Team <select id="teamSel" class="sel"></select></label>
+        </div>
+        <p class="text-xs text-gray-500 mt-1" id="meetSub"></p>
+        <div class="flex flex-wrap items-center gap-2 mt-3">
+          <div class="tabbar"><button class="tab active" data-tab="award">Award Labels</button><button class="tab" data-tab="comp">Competitor / Mailing / Registration Labels</button></div>
+          <div class="flex-1"></div>
+          <label class="text-sm">Memorized <select id="memoSel" class="sel"><option value="">—</option></select></label>
+          <button id="memoSave" class="btn bg-gray-100 text-sm">Memorize</button>
+          <button id="memoDel" class="btn bg-gray-100 text-sm hidden">Forget</button>
+        </div>
+      </div>
+
+      <!-- ============ AWARD LABELS ============ -->
+      <div id="tab-award" class="mt-3">
+        <div class="top4">
+          <div class="box"><h3>Gender</h3>
+            <label class="opt"><input type="radio" name="aGender" value="" checked> All</label>
+            <label class="opt"><input type="radio" name="aGender" value="Boy"> Male</label>
+            <label class="opt"><input type="radio" name="aGender" value="Girl"> Female</label>
+            <label class="opt"><input type="radio" name="aGender" value="Mixed"> Mixed</label></div>
+          <div class="box"><h3>Age Range</h3>
+            <div class="opt"><input id="aAgeLo" class="num" inputmode="numeric"> to <input id="aAgeHi" class="num" inputmode="numeric"></div>
+            <p class="text-xs text-gray-500">e.g. 11 to 12 = Juniors</p></div>
+          <div class="box"><h3>Rounds</h3>
+            <div class="grid grid-cols-2 gap-x-3">
+              <label class="opt"><input type="radio" name="aRounds" value=""> All Rounds</label>
+              <label class="opt"><input type="radio" name="aRounds" value="F" checked> Finals Only</label>
+              <label class="opt"><input type="radio" name="aRounds" value="P"> Prelims Only</label>
+              <label class="opt"><input type="radio" name="aRounds" value="1"> Round 1 Only</label></div></div>
+          <div class="box"><h3>Events</h3>
+            <label class="opt"><input type="radio" name="aKind" value="" checked> Indiv + Relays</label>
+            <label class="opt"><input type="radio" name="aKind" value="indiv"> Indiv Only</label>
+            <label class="opt"><input type="radio" name="aKind" value="relay"> Relays Only</label></div>
+        </div>
+
+        <div class="box mt-3">
+          <div class="flex flex-wrap items-center gap-2 mb-2">
+            <h3 class="flex-1" style="text-align:left;margin:0">Event List</h3>
+            <button id="selAll" class="btn bg-gray-100 text-sm">Select All</button>
+            <button id="deselAll" class="btn bg-gray-100 text-sm">De-Select</button>
+          </div>
+          <div class="evwrap"><table class="evt"><thead><tr><th></th><th>Evt #</th><th>Rnd</th><th>Status</th><th>Event Name</th><th>Heats</th><th>Printed</th></tr></thead><tbody id="evBody"></tbody></table></div>
+          <p class="text-xs text-gray-500 mt-1">Tick the events to print. "Printed" is your own checklist (kept on this device) — rows you've printed turn blue.</p>
+        </div>
+
+        <div class="sub3 mt-3">
+          <div class="box"><h3>Label Selection</h3>
+            <select id="aStock" class="sel w-full"></select>
+            <div class="mt-3 grid gap-1 text-sm">
+              <div class="opt">Individual Places: <input id="aIndFrom" class="num" value="1" inputmode="numeric"> To <input id="aIndTo" class="num" value="8" inputmode="numeric"></div>
+              <div class="opt">Relay Places: <input id="aRelFrom" class="num" value="1" inputmode="numeric"> To <input id="aRelTo" class="num" value="3" inputmode="numeric"></div>
+            </div></div>
+          <div class="box"><h3>Award Type</h3>
+            <label class="opt"><input type="radio" name="aType" value="standard" checked> Standard Award Label</label>
+            <label class="opt"><input type="radio" name="aType" value="std"> Mark Standard Achievement</label>
+            <label class="opt"><input type="radio" name="aType" value="pb"> Personal Best <span class="ml-3"><label class="opt" style="display:inline-flex"><input type="checkbox" id="aUseNT"> Use NT</label></span></label>
+            <label class="opt"><input type="radio" name="aType" value="heat"> By Heat</label>
+            <label class="opt"><input type="radio" name="aType" value="exh"> Exhibition Performances</label>
+            <label class="opt"><input type="radio" name="aType" value="part"> Participation <span class="ml-3"><label class="opt" style="display:inline-flex" id="exclWrap"><input type="checkbox" id="aExcl"> Exclude Place Range</label></span></label>
+            <label class="opt"><input type="radio" name="aType" value="record"> Record Breaker</label>
+            <div class="opt mt-1">Relay Athlete Names (0-8): <input id="aRelayNames" class="num" value="4" inputmode="numeric"></div>
+            <p class="text-xs text-gray-500 mt-1" id="typeHelp"></p></div>
+          <div class="box"><h3>Sort By</h3>
+            <label class="opt"><input type="radio" name="aSort" value="event" checked> Event Number</label>
+            <label class="opt"><input type="radio" name="aSort" value="session"> Session Order <span class="text-xs text-gray-500">(field events first)</span></label>
+            <label class="opt"><input type="radio" name="aSort" value="teamevent"> Team/Event</label>
+            <label class="opt"><input type="radio" name="aSort" value="teamathlete"> Team/Athlete</label>
+            <label class="opt"><input type="radio" name="aSort" value="athlete"> Athlete</label>
+            <label class="opt"><input type="radio" name="aSort" value="comp"> Competitor #</label></div>
+        </div>
+        <div class="box mt-3 flex flex-wrap items-center gap-3">
+          <label class="opt">Start at label # <input id="aSkip" class="num" value="1" inputmode="numeric"></label>
+          <label class="opt"><input type="checkbox" id="aOutline"> Show label outlines (test print)</label>
+          <label class="opt"><input type="checkbox" id="aMark" checked> Tick "Printed" for these events</label>
+          <div class="flex-1"></div>
+          <span id="aCount" class="text-sm text-gray-600"></span>
+          <button id="aGo" class="btn bg-blue-600 text-white">Create Labels (PDF)</button>
+        </div>
+        <div id="aOut" class="mt-2"></div>
+      </div>
+
+      <!-- ============ COMPETITOR / MAILING / REGISTRATION ============ -->
+      <div id="tab-comp" class="mt-3 hidden">
+        <div class="top4">
+          <div class="box"><h3>Gender</h3>
+            <label class="opt"><input type="radio" name="cGender" value="" checked> All</label>
+            <label class="opt"><input type="radio" name="cGender" value="Boy"> Male</label>
+            <label class="opt"><input type="radio" name="cGender" value="Girl"> Female</label></div>
+          <div class="box"><h3>Division</h3><select id="cDivision" class="sel"><option value="">All divisions</option></select></div>
+          <div class="box"><h3>Age Range</h3><div class="opt"><input id="cAgeLo" class="num" inputmode="numeric"> to <input id="cAgeHi" class="num" inputmode="numeric"></div></div>
+          <div></div>
+        </div>
+        <div class="box mt-3">
+          <div class="tabbar mb-3"><button class="tab active" data-ck="comp">Competitor Labels</button><button class="tab" data-ck="mail">Mailing Labels</button><button class="tab" data-ck="reg">Registration Labels</button></div>
+          <div id="ck-comp">
+            <h3 style="text-align:left">Options</h3>
+            <label class="opt"><input type="checkbox" id="cNoComp"> Include athletes with no competitor #</label>
+            <div class="opt">Number of copies of Comp# labels: <input id="cCopies" class="num" value="1" inputmode="numeric"></div>
+            <div class="opt">Comp# range: <input id="cFrom" class="num" value="0" inputmode="numeric"> to <input id="cTo" class="num" inputmode="numeric"></div>
+          </div>
+          <div id="ck-mail" class="hidden">
+            <div class="grid md:grid-cols-2 gap-3">
+              <div><h3 style="text-align:left">Label Choice</h3>
+                <label class="opt"><input type="radio" name="cMail" value="team" checked> Team Mailing Labels</label>
+                <label class="opt"><input type="radio" name="cMail" value="athlete"> Athlete Mailing Labels</label></div>
+              <div><h3 style="text-align:left">Options</h3>
+                <label class="opt"><input type="checkbox" id="cNoAddr"> Include Teams / Athletes with no address</label>
+                <p class="text-xs text-gray-500">The app doesn't keep team mailing addresses, so team labels need this box ticked (they print the team name and head coach).</p></div>
+            </div>
+          </div>
+          <div id="ck-reg" class="hidden">
+            <div class="grid md:grid-cols-2 gap-3">
+              <div><h3 style="text-align:left">Label Choice</h3>
+                <label class="opt"><input type="radio" name="cReg" value="athlete" checked> Athlete Reg Labels</label>
+                <label class="opt"><input type="radio" name="cReg" value="relay"> Relay Reg Labels</label>
+                <label class="opt"><input type="radio" name="cReg" value="team"> Team Reg Labels</label></div>
+              <div><h3 style="text-align:left">Include</h3>
+                <div class="grid grid-cols-2 gap-x-3">
+                  <label class="opt"><input type="checkbox" id="cUndeclared"> Include Undeclared</label>
+                  <label class="opt"><input type="checkbox" id="cEvNum" checked> Include Event #</label>
+                  <label class="opt"><input type="checkbox" id="cAlternates"> Include Alternates</label>
+                  <label class="opt"><input type="checkbox" id="cHeatLane"> Include Heat/Lane</label>
+                </div>
+                <label class="opt"><input type="checkbox" id="cNoEntries" checked> Include Athletes / Teams with no entries</label>
+                <label class="opt"><input type="checkbox" id="cCoaches"> Include Registration Labels for coaches (1x only)</label>
+                <p class="text-xs text-gray-500">Best sizes: 1-1/3 x 4 (up to 4 events), 2 x 4 (7 events), 3-1/3 x 4 (16 events). Heat comes from the posted results; the app doesn't store lanes.</p></div>
+            </div>
+          </div>
+        </div>
+        <div class="sub3 mt-3">
+          <div class="box"><h3>Label Selection</h3><select id="cStock" class="sel w-full"></select></div>
+          <div class="box"><h3>1st Sort</h3>
+            <label class="opt"><input type="radio" name="cSort1" value="team" checked> By Team</label>
+            <label class="opt"><input type="radio" name="cSort1" value="athlete"> By Athlete</label>
+            <label class="opt"><input type="radio" name="cSort1" value="comp"> By Competitor #</label>
+            <label class="opt"><input type="radio" name="cSort1" value="region"> Region/Team <span class="text-xs text-gray-500">(conference)</span></label></div>
+          <div class="box"><h3>2nd Sort</h3>
+            <label class="opt"><input type="radio" name="cSort2" value="alpha" checked> Alphabetical</label>
+            <label class="opt"><input type="radio" name="cSort2" value="comp"> Competitor #</label>
+            <label class="opt"><input type="radio" name="cSort2" value="zip"> Postal Code</label></div>
+        </div>
+        <div class="box mt-3 flex flex-wrap items-center gap-3">
+          <label class="opt">Start at label # <input id="cSkip" class="num" value="1" inputmode="numeric"></label>
+          <label class="opt"><input type="checkbox" id="cOutline"> Show label outlines (test print)</label>
+          <div class="flex-1"></div>
+          <span id="cCount" class="text-sm text-gray-600"></span>
+          <button id="cGo" class="btn bg-blue-600 text-white">Create Labels (PDF)</button>
+        </div>
+        <div id="cOut" class="mt-2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const CFG=window.APP_CONFIG, $=id=>document.getElementById(id), ML=window.MeetLabels;
+let sb=supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (n,t,fn)=>fn() } });
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const MEET_ID=new URLSearchParams(location.search).get('meet');
+let user=null, me=null, allTeams=false, meet=null, results=[], entries=[], regs={}, rosterCache={}, stds=[], recs=[], evList=[], coachNames={};
+const RES_COLS='id,meet_id,registration_id,athlete_name,gender,division,event_code,event_name,is_relay,relay_runners,round,mark,mark_value,is_time,place,overall_place,heat,wind,team_code';
+const REG_COLS='id,first_name,last_name,gender,division,age_on_dec31,team_code,comp_number,address,city,zip,parent_name,status,season_year';
+const REG_COLS_MIN='id,first_name,last_name,gender,division,age_on_dec31,team_code,comp_number,status,season_year';
+
+window.mountLoginWidget(sb,$('loginWidget'),{});
+sb.auth.onAuthStateChange(async(_e,session)=>{
+  user=session?.user||null; if(!user) return;
+  if(window.__authDone===user.id) return; window.__authDone=user.id;
+  sb=supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (n,t,fn)=>fn() } });
+  $('login').classList.add('hidden'); $('app').classList.remove('hidden');
+  start().catch(e=>{ $('msg').innerHTML=`<div class="card text-red-700">Something went wrong: ${esc(e.message||e)}</div>`; });
+});
+async function pageAll(mk){ const all=[]; for(let f=0;;f+=1000){ const {data,error}=await mk().range(f,f+999); if(error) throw error; all.push(...(data||[])); if(!data||data.length<1000) break; } return all; }
+
+async function start(){
+  if(window.leagueReady) await window.leagueReady; if(window.eventsReady) await window.eventsReady;
+  const {data}=await sb.from('coaches').select('*').eq('email',user.email).eq('approved',true).maybeSingle();
+  if(!data){ $('msg').innerHTML='<div class="card max-w-lg mx-auto"><b>Coaches only.</b><p class="text-sm mt-1">Meet labels are for approved coaches, timers and admins. <a class="underline" href="coach.html">Coach Dashboard →</a></p></div>'; return; }
+  me=data; allTeams=!!(me.is_admin||me.role_type==='timer');
+  if(!allTeams&&!me.team_code){ $('msg').innerHTML='<div class="card">Your coach account isn\'t on a team yet.</div>'; return; }
+  if(MEET_ID) await openMeet(MEET_ID); else await listMeets();
+}
+
+// ---------- meet picker ----------
+async function listMeets(){
+  $('pickBox').classList.remove('hidden');
+  const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
+  const {data,error}=await sb.from('meets').select('id,name,meet_date,season_year,team_codes,host_team_code,week_no').lte('meet_date',today).order('meet_date',{ascending:false}).limit(120);
+  if(error){ $('meetList').textContent=error.message; return; }
+  const ms=(data||[]).filter(m=>allTeams||window.meetHasTeam(m,me.team_code));
+  const cnt={}; await Promise.all(ms.map(async m=>{ let q=sb.from('results').select('id',{count:'exact',head:true}).eq('meet_id',m.id); if(!allTeams) q=q.eq('team_code',me.team_code); const {count}=await q; cnt[m.id]=count||0; }));
+  const list=ms.filter(m=>cnt[m.id]);
+  if(!list.length){ $('meetList').innerHTML='<p class="text-gray-500">No meets with posted results yet. Labels show up here as soon as a meet\'s results are uploaded.</p>'; return; }
+  let yr=null;
+  $('meetList').innerHTML=list.map(m=>{ const h=m.season_year!==yr?`<div class="font-bold text-gray-700 mt-3 mb-1">${m.season_year||''} season</div>`:''; yr=m.season_year;
+    return h+`<a href="labels.html?meet=${m.id}" class="flex items-center gap-3 py-2 px-2 rounded hover:bg-blue-50" style="border-top:1px solid #eef0f3"><span class="text-gray-500 w-24">${esc(new Date(m.meet_date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}))}</span><b class="flex-1">${esc(m.name)}</b><span class="text-xs text-gray-500">${cnt[m.id]} results</span><span style="color:var(--act,#1764c8)" class="font-semibold">Labels →</span></a>`; }).join('');
+}
+
+// ---------- one meet ----------
+async function openMeet(id){
+  const {data:m,error}=await sb.from('meets').select('id,name,meet_date,season_year,team_codes,host_team_code,is_championship').eq('id',id).maybeSingle();
+  if(error||!m){ $('msg').innerHTML='<div class="card">Meet not found. <a class="underline" href="labels.html">All meets</a></div>'; return; }
+  if(!allTeams&&!window.meetHasTeam(m,me.team_code)){ $('msg').innerHTML='<div class="card">Your team wasn\'t at this meet. <a class="underline" href="labels.html">All meets</a></div>'; return; }
+  meet=m; $('meetBox').classList.remove('hidden');
+  $('meetTitle').textContent=m.name; $('meetSub').textContent='Loading results…';
+  const [rr,ee,ss,rc]=await Promise.all([
+    pageAll(()=>sb.from('results').select(RES_COLS).eq('meet_id',id).order('id')),
+    pageAll(()=>sb.from('entries').select('registration_id,seed_mark,meet_event_id,meet_events(code,name,division,gender,is_relay,is_field)').eq('meet_id',id).order('id')).catch(()=>[]),
+    pageAll(()=>sb.from('qualifying_standards').select('*').order('id')).catch(()=>[]),
+    pageAll(()=>sb.from('conference_records').select('*').order('id')).catch(()=>[])
+  ]);
+  results=rr; entries=ee.filter(e=>e.meet_events).map(e=>({registration_id:e.registration_id,seed_mark:e.seed_mark,code:e.meet_events.code,name:e.meet_events.name,division:e.meet_events.division,gender:e.meet_events.gender,is_relay:e.meet_events.is_relay}));
+  stds=ss; recs=rc.filter(r=>!r.scope||r.scope==='conference');
+  const lgE=rc.filter(r=>r.scope==='east'), lgW=rc.filter(r=>r.scope==='west'); if(lgE.length||lgW.length) window.LEAGUE_RECORDS={East:lgE,West:lgW};
+  await loadRegs([...new Set([...results.map(r=>r.registration_id),...entries.map(e=>e.registration_id)].filter(Boolean))]);
+  // team picker
+  const teamsHere=[...new Set(results.map(r=>r.team_code).concat(Object.values(regs).map(r=>r.team_code)).filter(Boolean))].sort();
+  const tName=c=>(window.VYC_TEAMS.find(t=>t.code===c)||{}).name||c;
+  if(allTeams){ $('teamSel').innerHTML='<option value="ALL">All teams</option>'+teamsHere.map(c=>`<option value="${esc(c)}">${esc(tName(c))}</option>`).join(''); }
+  else { $('teamSel').innerHTML=`<option value="${esc(me.team_code)}">${esc(tName(me.team_code))}</option>`; $('teamSel').disabled=true; }
+  const mine=results.filter(r=>allTeams||r.team_code===me.team_code).length;
+  $('meetSub').textContent=`${new Date(m.meet_date+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'})} · ${results.length} results posted${allTeams?'':` · ${mine} for your team`}`;
+  if(!results.length) $('msg').innerHTML='<div class="card bg-yellow-50 text-sm">No results are posted for this meet yet — award labels need results. Competitor labels still work from the entries.</div>';
+  try{ const {data:cs}=await sb.from('coaches').select('name,team_code,role_type,approved').eq('approved',true); (cs||[]).forEach(c=>{ if(c.role_type==='timer') return; (coachNames[c.team_code]??=[]).push(c.name+(c.role_type==='head_coach'?' (Head Coach)':'')); }); Object.values(coachNames).forEach(a=>a.sort((x,y)=>(/Head Coach/.test(y)?1:0)-(/Head Coach/.test(x)?1:0))); }catch(e){}
+  setupUi();
+}
+async function loadRegs(ids){
+  for(let i=0;i<ids.length;i+=150){ const part=ids.slice(i,i+150);
+    let {data,error}=await sb.from('registrations').select(REG_COLS).in('id',part);
+    if(error) ({data,error}=await sb.from('registrations').select(REG_COLS_MIN).in('id',part));
+    (data||[]).forEach(r=>{ regs[r.id]=r; }); }
+}
+async function rosterFor(team){ // whole season roster (for "athletes with no entries")
+  const key=team+'|'+meet.season_year; if(rosterCache[key]) return rosterCache[key];
+  const mk=cols=>{ let q=sb.from('registrations').select(cols).eq('season_year',meet.season_year).neq('status','rejected').neq('status','archived'); if(team!=='ALL') q=q.eq('team_code',team); return q.order('id'); };
+  let rows; try{ rows=await pageAll(()=>mk(REG_COLS)); }catch(e){ try{ rows=await pageAll(()=>mk(REG_COLS_MIN)); }catch(e2){ rows=[]; } }
+  rows.forEach(r=>{ regs[r.id]=regs[r.id]||r; }); return rosterCache[key]=rows;
+}
+
+// ---------- settings in/out (Memorize) ----------
+const FIELDS=['aAgeLo','aAgeHi','aStock','aIndFrom','aIndTo','aRelFrom','aRelTo','aUseNT','aExcl','aRelayNames','aOutline','aMark','cDivision','cAgeLo','cAgeHi','cNoComp','cCopies','cFrom','cTo','cNoAddr','cUndeclared','cEvNum','cAlternates','cHeatLane','cNoEntries','cCoaches','cStock'];
+const RADIOS=['aGender','aRounds','aKind','aType','aSort','cGender','cMail','cReg','cSort1','cSort2'];
+const radio=n=>(document.querySelector(`input[name="${n}"]:checked`)||{}).value||'';
+function getState(){ const s={}; FIELDS.forEach(id=>{ const el=$(id); s[id]=el.type==='checkbox'?el.checked:el.value; }); RADIOS.forEach(n=>s[n]=radio(n)); s.ck=curCk; s.tab=curTab; return s; }
+function setState(s){ FIELDS.forEach(id=>{ if(!(id in s)) return; const el=$(id); if(el.type==='checkbox') el.checked=!!s[id]; else el.value=s[id]; });
+  RADIOS.forEach(n=>{ const el=document.querySelector(`input[name="${n}"][value="${s[n]}"]`); if(el) el.checked=true; });
+  if(s.ck) showCk(s.ck); if(s.tab) showTab(s.tab); renderEvents(); updateCounts(); }
+const LS=(k,v)=>{ try{ if(v===undefined) return JSON.parse(localStorage.getItem(k)||'null'); localStorage.setItem(k,JSON.stringify(v)); }catch(e){ return null; } };
+function memos(){ return LS('vyc-label-memos')||{}; }
+function fillMemos(){ const m=memos(); $('memoSel').innerHTML='<option value="">—</option>'+Object.keys(m).sort().map(k=>`<option>${esc(k)}</option>`).join(''); $('memoDel').classList.add('hidden'); }
+
+// ---------- UI ----------
+let curTab='award', curCk='comp';
+function showTab(t){ curTab=t; document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===t)); $('tab-award').classList.toggle('hidden',t!=='award'); $('tab-comp').classList.toggle('hidden',t!=='comp'); }
+function showCk(k){ curCk=k; document.querySelectorAll('[data-ck]').forEach(b=>b.classList.toggle('active',b.dataset.ck===k)); ['comp','mail','reg'].forEach(x=>$('ck-'+x).classList.toggle('hidden',x!==k));
+  if(k==='reg'&&['5160','5161','A4AUS','DOT1516'].includes($('cStock').value)) $('cStock').value='5163'; if(k!=='reg'&&['5163','5164'].includes($('cStock').value)) $('cStock').value='5160'; updateCounts(); }
+const printedKey=()=>'vyc-labels-printed-'+meet.id;
+function printed(){ return new Set(LS(printedKey())||[]); }
+function setupUi(){
+  $('aStock').innerHTML=ML.AWARD_STOCKS.map(k=>`<option value="${k}">${esc(ML.STOCKS[k].name)}</option>`).join('');
+  $('cStock').innerHTML=ML.COMP_STOCKS.map(k=>`<option value="${k}">${esc(ML.STOCKS[k].name)}</option>`).join('');
+  $('cDivision').innerHTML='<option value="">All divisions</option>'+window.DIVISIONS.map(d=>`<option>${esc(d.name)}</option>`).join('');
+  const maxComp=Math.max(0,...Object.values(regs).map(r=>r.comp_number||0)); $('cTo').value=maxComp||9999;
+  document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
+  document.querySelectorAll('[data-ck]').forEach(b=>b.onclick=()=>showCk(b.dataset.ck));
+  document.querySelectorAll('#tab-award input, #tab-award select, #teamSel').forEach(el=>el.addEventListener('change',()=>{ renderEvents(); updateCounts(); }));
+  ['aAgeLo','aAgeHi'].forEach(id=>$(id).addEventListener('input',()=>{ renderEvents(); updateCounts(); }));
+  document.querySelectorAll('#tab-comp input, #tab-comp select').forEach(el=>el.addEventListener('change',updateCounts));
+  $('selAll').onclick=()=>{ document.querySelectorAll('#evBody .evpick').forEach(c=>c.checked=true); updateCounts(); };
+  $('deselAll').onclick=()=>{ document.querySelectorAll('#evBody .evpick').forEach(c=>c.checked=false); updateCounts(); };
+  $('aGo').onclick=makeAward; $('cGo').onclick=makeComp;
+  $('memoSave').onclick=()=>{ const n=prompt('Name for these label settings (e.g. "Ribbons top 6"):'); if(!n) return; const m=memos(); m[n.trim()]=getState(); LS('vyc-label-memos',m); fillMemos(); $('memoSel').value=n.trim(); $('memoDel').classList.remove('hidden'); };
+  $('memoSel').onchange=()=>{ const s=memos()[$('memoSel').value]; $('memoDel').classList.toggle('hidden',!s); if(s) setState(s); };
+  $('memoDel').onclick=()=>{ const m=memos(); delete m[$('memoSel').value]; LS('vyc-label-memos',m); fillMemos(); };
+  fillMemos();
+  evList=ML.awardEventList(results, window.STANDARD_EVENTS);
+  renderEvents(true); updateCounts();
+}
+const TYPE_HELP={standard:'Top finishers in each event, using the place ranges at left.', std:'Athletes who met the qualifying standard here but hadn\'t met it with their entry mark. "Use NT" also includes athletes who entered with no time/mark.',
+  pb:'Every athlete who beat their entry mark. "Use NT" also includes athletes who entered with no time/mark.', heat:'Top finishers in each heat/flight (place in the heat), using the place ranges at left.',
+  exh:'Every exhibition performance (a mark with no place).', part:'Every athlete or relay in the events picked. "Exclude Place Range" leaves out the ones already getting place awards.', record:'Every mark that beat a Conference, Eastern League or Western League record.'};
+function awardFilter(){ return {gender:radio('aGender'),ageLo:$('aAgeLo').value,ageHi:$('aAgeHi').value,team:$('teamSel').value,rounds:radio('aRounds'),kind:radio('aKind')}; }
+function renderEvents(first){
+  const keep=new Set([...document.querySelectorAll('#evBody .evpick')].filter(c=>!c.checked).map(c=>c.dataset.k));
+  const list=ML.filterEvents(evList,awardFilter()), pr=printed();
+  $('evBody').innerHTML=list.map(e=>`<tr class="${pr.has(e.key)?'printed':''}"><td><input type="checkbox" class="evpick" data-k="${esc(e.key)}" ${first||!keep.has(e.key)?'checked':''}></td><td>${e.num}</td><td>${e.round}</td><td><span class="text-xs bg-gray-200 rounded px-1">Scored</span></td><td>${esc(e.name)}</td><td>${e.heats}</td><td><input type="checkbox" class="prpick" data-k="${esc(e.key)}" ${pr.has(e.key)?'checked':''}></td></tr>`).join('')
+    ||'<tr><td colspan="7" class="text-gray-500 p-3">No events match these filters.</td></tr>';
+  document.querySelectorAll('#evBody .evpick').forEach(c=>c.onchange=updateCounts);
+  document.querySelectorAll('#evBody .prpick').forEach(c=>c.onchange=()=>{ const s=printed(); c.checked?s.add(c.dataset.k):s.delete(c.dataset.k); LS(printedKey(),[...s]); c.closest('tr').classList.toggle('printed',c.checked); });
+  $('typeHelp').textContent=TYPE_HELP[radio('aType')]||'';
+  $('exclWrap').classList.toggle('dis',radio('aType')!=='part'); $('aExcl').disabled=radio('aType')!=='part';
+  $('aUseNT').disabled=!['pb','std'].includes(radio('aType'));
+}
+function awardOpts(){ return {team:$('teamSel').value, events:new Set([...document.querySelectorAll('#evBody .evpick:checked')].map(c=>c.dataset.k)), type:radio('aType'),
+  indFrom:+$('aIndFrom').value||1, indTo:+$('aIndTo').value||0, relFrom:+$('aRelFrom').value||1, relTo:+$('aRelTo').value||0, useNT:$('aUseNT').checked, excludePlaces:$('aExcl').checked,
+  relayNames:Math.max(0,Math.min(8,+$('aRelayNames').value||0)), sort:radio('aSort')}; }
+function awardCtx(){ return {meet, results, entries, regs, stds, recs, leagueRecs:window.LEAGUE_RECORDS, stdEvents:window.STANDARD_EVENTS, markToValue:window.markToValue}; }
+
+// Competitor-side athletes: everyone at the meet for the team (entries or results), plus the season roster when "no entries" is ticked.
+async function compCtx(o){
+  const team=$('teamSel').value;
+  const nums=ML.numberEvents(entries.map(e=>({code:e.code,is_relay:e.is_relay,name:e.name,division:e.division,gender:e.gender})).concat(results.map(r=>({code:r.event_code,is_relay:r.is_relay,name:r.event_name,division:r.division,gender:r.gender}))), window.STANDARD_EVENTS);
+  const num=(code,rel,div,g)=>nums.get(ML.evKey({code,is_relay:rel,division:div,gender:g}));
+  const ath={};
+  const addA=id=>{ const r=regs[id]; if(!r) return null; return ath[id]??={id, first_name:r.first_name,last_name:r.last_name,gender:r.gender,division:r.division,age:r.age_on_dec31,team_code:r.team_code,comp_number:r.comp_number,address:r.address,city:r.city,zip:r.zip,parent_name:r.parent_name,entries:[],_ev:{}}; };
+  const heatOf=(id,code,rel)=>{ const rs=results.filter(r=>r.registration_id===id&&r.event_code===code&&!!r.is_relay===!!rel); const p=rs.find(r=>r.round==='P')||rs[0]; return p?p.heat:null; };
+  entries.filter(e=>!e.is_relay).forEach(e=>{ const a=addA(e.registration_id); if(!a) return; const k=e.code; if(a._ev[k]) return; a._ev[k]=1; a.entries.push({num:num(e.code,false,e.division,e.gender),name:e.name,heat:heatOf(e.registration_id,e.code,false)}); });
+  results.filter(r=>r.registration_id&&!r.is_relay).forEach(r=>{ const a=addA(r.registration_id); if(!a||a._ev[r.event_code]) return; a._ev[r.event_code]=1; a.entries.push({num:num(r.event_code,false,r.division,r.gender),name:r.event_name,heat:heatOf(r.registration_id,r.event_code,false)}); });
+  if(o.kind==='reg'&&o.noEntries){ (await rosterFor(team==='ALL'?'ALL':team)).forEach(r=>addA(r.id)); }
+  // relays: from posted relay results (runners as declared in Meet Manager), else from relay entries in the app
+  const relays=[]; const gw=g=>g==='Boy'?'Boys':g==='Girl'?'Girls':'Mixed';
+  results.filter(r=>r.is_relay&&(r.round||'F')===(results.some(x=>x.is_relay&&x.event_code===r.event_code&&x.division===r.division&&x.gender===r.gender&&x.round==='P')?'P':'F')).forEach(r=>{
+    relays.push({team_code:r.team_code,gender:r.gender,division:r.division,num:num(r.event_code,true,r.division,r.gender),name:`${gw(r.gender)} ${r.division||''} ${r.event_name}`,heat:r.heat,letter:(String(r.athlete_name).match(/\b'?([A-F])'?\s*$/)||[])[1]||'',runners:String(r.relay_runners||'').split(/\s*[,;]\s*/).filter(Boolean)}); });
+  const relE={}; entries.filter(e=>e.is_relay).forEach(e=>{ const rg=regs[e.registration_id]; if(!rg) return; const k=[rg.team_code,e.code,e.division,e.gender].join('|'); (relE[k]??={team_code:rg.team_code,gender:e.gender,division:e.division,code:e.code,name:e.name,runners:[]}).runners.push(rg.first_name+' '+rg.last_name); });
+  Object.values(relE).forEach(x=>{ if(relays.some(r=>r.team_code===x.team_code&&r.division===x.division&&r.gender===x.gender&&r.num===num(x.code,true,x.division,x.gender))) return; relays.push({...x,num:num(x.code,true,x.division,x.gender),name:`${gw(x.gender)} ${x.division} ${x.name}`}); });
+  const teams=window.VYC_TEAMS.map(t=>({code:t.code,name:t.name,conference:t.conference,coaches:coachNames[t.code]||[]}));
+  return {meet, athletes:Object.values(ath), relays, teams};
+}
+function compOpts(){ return {kind:curCk, gender:radio('cGender'), team:$('teamSel').value, division:$('cDivision').value, ageLo:$('cAgeLo').value, ageHi:$('cAgeHi').value,
+  noComp:$('cNoComp').checked, copies:+$('cCopies').value||1, compFrom:+$('cFrom').value||0, compTo:+$('cTo').value||1e9, mail:radio('cMail'), noAddr:$('cNoAddr').checked,
+  reg:radio('cReg'), undeclared:$('cUndeclared').checked, alternates:$('cAlternates').checked, noEntries:$('cNoEntries').checked, coaches:$('cCoaches').checked,
+  evNum:$('cEvNum').checked, heatLane:$('cHeatLane').checked, sort1:radio('cSort1'), sort2:radio('cSort2'), stock:$('cStock').value}; }
+let countTimer=null;
+function updateCounts(){ clearTimeout(countTimer); countTimer=setTimeout(async()=>{
+  if(!meet) return;
+  try{ const n=ML.buildAwardLabels(awardCtx(),awardOpts()).length; const st=ML.STOCKS[$('aStock').value]; $('aCount').textContent=`${n} label${n===1?'':'s'}`+(st&&!st.dot&&n?` · ${Math.ceil((n+(+$('aSkip').value||1)-1)/(st.cols*st.rows))} page(s)`:''); }catch(e){ $('aCount').textContent=''; }
+  try{ const o=compOpts(); const n=ML.buildCompLabels(await compCtx(o),o).length; const st=ML.STOCKS[o.stock]; $('cCount').textContent=`${n} label${n===1?'':'s'}`+(st&&!st.dot&&n?` · ${Math.ceil((n+(+$('cSkip').value||1)-1)/(st.cols*st.rows))} page(s)`:''); }catch(e){ $('cCount').textContent=''; }
+},150); }
+function slug(s){ return String(s||'meet').replace(/[^A-Za-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,50); }
+function deliver(bytes,name,outEl){
+  const url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
+  outEl.innerHTML=`<div class="box text-sm flex flex-wrap items-center gap-3"><b>✅ Labels ready.</b> <a class="btn bg-blue-600 text-white" href="${url}" target="_blank" rel="noopener">Open / print</a> <a class="underline" href="${url}" download="${esc(name)}">Download ${esc(name)}</a>
+    <span class="text-xs text-gray-500 w-full">Print at <b>Actual size / 100%</b> (not "Fit to page") so the text lines up with the Avery labels.</span></div>`;
+  const a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+}
+async function makeAward(){
+  const o=awardOpts(); if(!o.events.size){ alert('Tick at least one event in the Event List.'); return; }
+  const labels=ML.buildAwardLabels(awardCtx(),o);
+  if(!labels.length){ $('aOut').innerHTML='<div class="box text-sm">No labels for these choices — try a wider place range, more events, or another award type.</div>'; return; }
+  $('aGo').disabled=true;
+  try{ const bytes=await ML.renderPdf(labels,$('aStock').value,{skip:(+$('aSkip').value||1)-1,outline:$('aOutline').checked});
+    const team=$('teamSel').value; deliver(bytes,`Award-Labels-${slug(meet.name)}-${team==='ALL'?'All':team}.pdf`,$('aOut'));
+    if($('aMark').checked){ const s=printed(); labels.forEach(l=>s.add(l._evKey)); LS(printedKey(),[...s]); renderEvents(); }
+  } finally { $('aGo').disabled=false; }
+}
+async function makeComp(){
+  const o=compOpts(); $('cGo').disabled=true;
+  try{ const labels=ML.buildCompLabels(await compCtx(o),o);
+    if(!labels.length){ $('cOut').innerHTML='<div class="box text-sm">No labels for these choices.'+(o.kind==='comp'&&!o.noComp?' Tip: athletes without a competitor number are left out unless "Include athletes with no competitor #" is ticked.':'')+(o.kind==='mail'&&!o.noAddr?' Tip: tick "Include Teams / Athletes with no address".':'')+'</div>'; return; }
+    const bytes=await ML.renderPdf(labels,o.stock,{skip:(+$('cSkip').value||1)-1,outline:$('cOutline').checked});
+    const kind={comp:'Competitor',mail:'Mailing',reg:'Registration'}[o.kind]; const team=$('teamSel').value;
+    deliver(bytes,`${kind}-Labels-${slug(meet.name)}-${team==='ALL'?'All':team}.pdf`,$('cOut'));
+  } finally { $('cGo').disabled=false; }
+}
+</script>
+</body></html>
