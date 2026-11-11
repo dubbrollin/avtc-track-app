@@ -780,6 +780,7 @@ sb.auth.onAuthStateChange((_e,s)=>{ if(s&&QS.get('role')==='parent'&&!ATHLETE_MO
   if(window.leagueReady){ try{ await window.leagueReady; }catch(e){} } fillAllTeams();
   if(QS.get('import')||ATHLETE_MODE) return;   // the athlete form handles itself below
   if(r==='parent'){ return startWith('parent',team); }
+  if(!r&&team){ $('startTeam').value=team; }   // from a team page's "Register with this team": team already chosen, just pick who
   if(r&&forms[r]){ hideStart(); if(r==='coach'||r==='admin') showChosen(r,team); document.querySelector(`#roleTabs .roletab[data-role=${r}]`).click();
     if(team){ const sel=$(r==='coach'?'cTeam':r==='admin'?'aTeam':''); if(sel) sel.value=team; } }
 })();
