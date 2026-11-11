@@ -59,6 +59,14 @@
       <div id="importBox"></div>
       <div id="myAthletes"></div>
       <a id="regAthleteBtn" class="btn bg-blue-600 text-white inline-block mt-3" href="index.html?athlete=1">+ Register an athlete</a>
+      <div id="seasonPick" class="hidden mt-3 rounded-lg p-3" style="border:2px solid #2563eb;background:#eff6ff">
+        <p class="font-semibold mb-2">What season are you signing up for?</p>
+        <div class="grid gap-2 sm:grid-cols-3">
+          <a id="spTrack" class="btn bg-white border text-center" style="border-color:#93c5fd" href="#"><b>Track &amp; Field</b><br><span class="text-xs text-gray-600 font-normal">Spring season</span></a>
+          <a id="spXc" class="btn bg-white border text-center" style="border-color:#93c5fd" href="#"><b>Cross Country</b><br><span class="text-xs text-gray-600 font-normal">Fall season</span></a>
+          <a id="spVus" class="btn bg-white border text-center" style="border-color:#c4b5fd" href="index.html?role=vus"><b>Valley United Striders</b><br><span class="text-xs text-gray-600 font-normal">Postseason team</span></a>
+        </div>
+      </div>
       <p class="text-xs text-gray-500 mt-2">Have more than one child? Register each one here. Not certified yet? Your team reviews it first, then the Conference certifies it.</p>
     </div>
 
@@ -128,7 +136,11 @@ async function loadMyAthletes(){
   // "+ Register an athlete" opens the full athlete form with the parent's team already picked
   let team=''; try{ team=localStorage.getItem('vyc_parent_team')||''; }catch(e){}
   if(!team&&myRegs[0]) team=myRegs[0].team_code||'';
-  $('regAthleteBtn').href='index.html?athlete=1'+(team?'&team='+encodeURIComponent(team):'');
+  const base='index.html?athlete=1'+(team?'&team='+encodeURIComponent(team):'');
+  $('regAthleteBtn').href=base;
+  // Ask which season first: Track & Field, Cross Country, or Valley United Striders (postseason — its own form)
+  $('spTrack').href=base+'&sport=track'; $('spXc').href=base+'&sport=xc';
+  $('regAthleteBtn').onclick=e=>{ e.preventDefault(); $('seasonPick').classList.toggle('hidden'); };
   if(error){ $('myAthletes').innerHTML='<p class="text-sm text-red-700">Could not load: '+error.message+'</p>'; return; }
   // Per-team switch: may parents enter meet events themselves, or do they answer "are you coming?" for the coaches?
   try{ const codes=[...new Set(myRegs.map(r=>r.team_code).filter(Boolean))]; if(codes.length){ const {data:ts}=await sb.from('team_settings').select('*').in('team_code',codes); teamSettings={}; (ts||[]).forEach(t=>teamSettings[t.team_code]=t); } }catch(e){}
@@ -285,7 +297,7 @@ async function loadMeet(){
     sb.from('entries').select('*').eq('meet_id',m.id),
     sb.from('meet_attendance').select('*').eq('meet_id',m.id)
   ]);
-  athletes=myRegs.filter(r=>r.status!=='rejected'&&window.meetHasTeam(m,r.team_code)); // only athletes whose team is at this meet
+  athletes=myRegs.filter(r=>r.status!=='rejected'&&r.sport!=='Cross Country'&&window.meetHasTeam(m,r.team_code)); // track meets: cross country sign-ups aren't entered // only athletes whose team is at this meet
   events=e.data||[]; entries=n.data||[]; attendance=t.data||[];
   $('none').classList.toggle('hidden',athletes.length>0);
   render();

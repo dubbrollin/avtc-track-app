@@ -102,6 +102,14 @@
 
   <!-- ================= ATHLETE FORM (opened from the Parent Dashboard: index.html?athlete=1) ================= -->
   <form id="parentForm" class="hidden">
+  <div class="card">
+    <h2 class="font-bold text-lg mb-2">What season are you signing up for?</h2>
+    <div class="rolecards">
+      <label class="rolecard"><input type="radio" name="season" value="Track & Field" checked><div><b>Track &amp; Field</b><span class="d">The spring Valley Youth Conference season.</span></div></label>
+      <label class="rolecard"><input type="radio" name="season" value="Cross Country"><div><b>Cross Country</b><span class="d">The fall cross country season.</span></div></label>
+      <label class="rolecard"><input type="radio" name="season" value="vus"><div><b>Valley United Striders</b><span class="d">The postseason all-star team — its own form.</span></div></label>
+    </div>
+  </div>
   <div id="lateNotice" class="hidden"></div>
   <div class="card">
     <h2 class="font-bold text-lg mb-2">Team</h2>
@@ -112,7 +120,7 @@
   <div class="card">
     <h2 class="font-bold text-lg mb-2">Sport &amp; Division</h2>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      <div><label class="f req">Sport</label><select id="sport" required><option>Track &amp; Field</option></select></div>
+      <div><label class="f req">Sport</label><select id="sport" required><option>Track &amp; Field</option><option>Cross Country</option></select></div>
       <div><label class="f req">Gender</label><select id="gender" required><option>Girl</option><option>Boy</option></select></div>
     </div>
   </div>
@@ -244,7 +252,7 @@
   <div class="card">
     <h2 class="font-bold text-lg mb-2">Athlete's Agreement</h2>
     <div class="legal">
-      <p>I understand that participation in Valley Youth Conference (VYC) track &amp; field is a privilege. I agree to follow the direction of my coaches, to compete with good sportsmanship toward teammates and opponents, to attend practices and meets as required by my team, and to respect the rules of my team and the Conference. I understand that unsportsmanlike conduct may result in removal from a meet or the program.</p>
+      <p>I understand that participation in Valley Youth Conference (VYC) <span class="sportWord">track &amp; field</span> is a privilege. I agree to follow the direction of my coaches, to compete with good sportsmanship toward teammates and opponents, to attend practices and meets as required by my team, and to respect the rules of my team and the Conference. I understand that unsportsmanlike conduct may result in removal from a meet or the program.</p>
     </div>
     <label class="flex items-center gap-2 text-sm mt-2 req"><input type="checkbox" id="athleteAgree" required> I (the athlete, with my parent/guardian) agree to the above.</label>
     <div class="mt-2"><label class="f">Athlete signature</label><div id="athleteSigWrap"></div></div>
@@ -803,7 +811,21 @@ if(ATHLETE_MODE) (async()=>{
   if(window.leagueReady){ try{ await window.leagueReady; }catch(e){} }
   fillAllTeams();
   const team=QS.get('team'); if(team&&!$('teamCode').value){ $('teamCode').value=team; $('teamCode').dispatchEvent(new Event('change')); }
+  const sp=QS.get('sport'); if(sp==='xc'||sp==='track') setSeason(sp==='xc'?'Cross Country':'Track & Field');
 })();
+
+// ---- Season: Track & Field, Cross Country, or Valley United Striders (postseason, its own form) ----
+// The choice is saved as registrations.sport ('Track & Field' | 'Cross Country').
+function setSeason(v){
+  if(v==='vus'){ location.href='index.html?role=vus'; return; }
+  const r=document.querySelector(`input[name=season][value="${v}"]`); if(r) r.checked=true;
+  $('sport').value=v;
+  document.querySelectorAll('.sportWord').forEach(s=>s.textContent=v==='Cross Country'?'cross country':'track & field');
+  $('lateNotice').style.display=v==='Cross Country'?'none':'';   // that notice is the track certification deadline
+  if(ATHLETE_MODE){ const h=$('roleTabs').closest('.card').querySelector('h1'); if(h) h.textContent=v==='Cross Country'?'Register your athlete — Cross Country':'Register your athlete — Track & Field'; }
+}
+document.querySelectorAll('input[name=season]').forEach(r=>r.onchange=()=>setSeason(r.value));
+$('sport').addEventListener('change',()=>setSeason($('sport').value));
 
 // ---- team dropdowns ----
 function fillTeams(sel){
@@ -1287,7 +1309,7 @@ let familyDone=[], familyRegIds=[];
 })();
 // The team's fee for this season (set by the team admin on the Payments tab); null when the team hasn't set one.
 async function teamFeeSettings(code){ try{ const {data}=await sb.from('team_payment_settings').select('*').eq('team_code',code).eq('season_year',CFG.SEASON_YEAR).maybeSingle(); return data&&+data.fee_amount>0?data:null; }catch(e){ return null; } }
-const FAMILY_FIELDS=['teamCode','sport','address','city','zip','phone','email','emergencyName','emergencyPhone','parent1Name','parent1Rel','parent2Name','parent2Rel','insuranceCarrier'];
+const FAMILY_FIELDS=['teamCode','address','city','zip','phone','email','emergencyName','emergencyPhone','parent1Name','parent1Rel','parent2Name','parent2Rel','insuranceCarrier'];
 function clearAthleteFields(form, everything){
   const keep=everything?{}:Object.fromEntries(FAMILY_FIELDS.map(id=>[id,$(id).value])), keepLast=$('lastName').value;
   form.reset(); for(const [id,v] of Object.entries(keep)) $(id).value=v;

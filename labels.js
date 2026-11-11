@@ -270,6 +270,115 @@
     return out;
   }
 
+  // ---------- Entry Cards / Tag Labels (before the meet: one per entry, from the app's meet entries) ----------
+  // Event list for entry cards = the meet's events (meet_events), numbered like the award list.
+  function entryEventList(meetEvents, entryRows, regs, stdEvents) {
+    const nums = numberEvents(meetEvents.map(e => ({ code: e.code, is_relay: e.is_relay, name: e.name, division: e.division, gender: e.gender })), stdEvents);
+    return meetEvents.map(e => {
+      const k = evKey({ code: e.code, is_relay: e.is_relay, division: e.division, gender: e.gender });
+      const ents = entryRows.filter(x => x.key === k);
+      return { key: k, evKey: k, num: nums.get(k), round: 'F', firstRound: 'F', name: `${gWord(e.gender)} ${e.division} ${e.name}`, short: e.name, division: e.division, gender: e.gender, is_relay: !!e.is_relay,
+        field: e.is_field != null ? !!e.is_field : isFieldEv({ event_code: e.code, is_relay: e.is_relay }, stdEvents), count: ents.length, heats: 0,
+        teams: [...new Set(ents.map(x => (regs[x.registration_id] || {}).team_code).filter(Boolean))] };
+    }).sort((a, b) => a.num - b.num);
+  }
+  // ctx: {meet, events (entryEventList), entries:[{registration_id, key, seed_mark}], regs, results, markToValue}
+  // o: {team, events:Set, format:'heatlane'|'fast'|'slow'|'session', sort:'event'|'session'|'lane'|'team', blanks, relayNames}
+  function buildEntryCards(ctx, o) {
+    const mtv = ctx.markToValue || (m => parseFloat(m));
+    const evs = new Map((ctx.events || []).map(e => [e.key, e]));
+    const date = ctx.meet && ctx.meet.meet_date ? (([y, m, d]) => `${+m}/${+d}/${y}`)(ctx.meet.meet_date.split('-')) : '';
+    const fieldMark = s => /[-']/.test(s || '');
+    const heatOf = (regId, ev) => { const rs = (ctx.results || []).filter(r => r.registration_id === regId && resEvKey(r) === ev.key); const p = rs.find(r => r.round === 'P') || rs[0]; return p ? p.heat : null; };
+    const cards = [];
+    (ctx.events || []).filter(e => o.events.has(e.key)).forEach(ev => {
+      let rows = (ctx.entries || []).filter(x => x.key === ev.key).map(x => ({ ...x, reg: ctx.regs[x.registration_id] })).filter(x => x.reg && (!o.team || o.team === 'ALL' || x.reg.team_code === o.team));
+      // seed value: field events higher = better, running lower = better
+      rows.forEach(x => { const s = String(x.seed_mark || '').trim(); const v = s && !/^(NT|NM|ND)$/i.test(s) ? mtv(s, !ev.field, fieldMark(s) ? 'E' : 'M') : null; x.v = v == null || isNaN(v) ? null : v; });
+      const rank = rows.filter(x => x.v != null).sort((a, b) => ev.field ? b.v - a.v : a.v - b.v);
+      rows.forEach(x => { x.rank = x.v == null ? null : rank.indexOf(x) + 1; x.heat = heatOf(x.registration_id, ev); });
+      const total = rows.length;
+      if (ev.is_relay) {
+        // one card per team relay; runners = the team's athletes entered in the relay (first 4 = legs, rest alternates)
+        const byTeam = {}; rows.forEach(x => (byTeam[x.reg.team_code] ??= []).push(x));
+        Object.entries(byTeam).forEach(([team, xs]) => {
+          const names = xs.map(x => nm(x.reg.first_name) + ' ' + nm(x.reg.last_name)).slice(0, Math.max(0, +o.relayNames || 0));
+          cards.push({ ev, team, rank: null, heat: xs[0].heat, who: team + ' relay', lines: [
+            { text: 'Ev ' + ev.num + '  ' + ev.name, right: date, size: 10, bold: true },
+            { text: 'Heat ____  Lane ____', right: 'Team: ' + team, size: 9 },
+            ...(names.length ? names.map((n, i) => ({ text: (i < 4 ? (i + 1) + ') ' : 'Alt) ') + n, size: 9 })) : [1, 2, 3, 4].map(i => ({ text: i + ') ______________________', size: 9 }))),
+            { text: 'Time: ____________', right: (ctx.meet && ctx.meet.name) || '', size: 8 },
+          ] });
+        });
+        return;
+      }
+      rows.forEach(x => {
+        const r = x.reg, useHeat = o.format === 'heatlane' || (o.format === 'session' && !ev.field);
+        const second = useHeat ? (x.heat ? 'Heat ' + x.heat + '   Lane ____' : 'Heat ____   Lane ____') : (x.rank ? 'Rank ' + x.rank + ' of ' + total : 'Rank — (no seed)');
+        cards.push({ ev, team: r.team_code, rank: x.rank, v: x.v, heat: x.heat, who: nm(r.last_name) + ', ' + nm(r.first_name), lines: [
+          { text: 'Ev ' + ev.num + '  ' + ev.name, right: date, size: 10, bold: true },
+          { text: second, right: r.comp_number ? '#' + r.comp_number : '', size: 9 },
+          { text: nm(r.first_name) + ' ' + nm(r.last_name), right: r.team_code, size: 12, bold: true },
+          { text: 'Seed: ' + (nm(x.seed_mark) || 'NT'), right: (ev.field ? 'Mark' : 'Time') + ': ____________', size: 9 },
+        ] });
+      });
+    });
+    const slowFast = o.format === 'slow';
+    const rankCmp = (a, b) => ((a.rank || 1e6) - (b.rank || 1e6)) * (slowFast ? -1 : 1) || a.who.localeCompare(b.who);
+    const byEv = (a, b) => (a.ev.num - b.ev.num) || ((a.heat || 999) - (b.heat || 999)) || rankCmp(a, b);
+    const cmp = { event: byEv, session: (a, b) => ((a.ev.field ? 0 : 1) - (b.ev.field ? 0 : 1)) || byEv(a, b),
+      lane: (a, b) => ((a.heat || 999) - (b.heat || 999)) || byEv(a, b), team: (a, b) => String(a.team).localeCompare(String(b.team)) || byEv(a, b) }[o.sort || 'event'] || byEv;
+    cards.sort(cmp);
+    for (let i = 0; i < (+o.blanks || 0); i++) cards.push({ lines: [
+      { text: 'Ev ____  Event ______________________', right: date, size: 10, bold: true },
+      { text: 'Heat ____   Lane ____', right: '#______', size: 9 },
+      { text: 'Name ______________________', right: 'Team ______', size: 12, bold: true },
+      { text: 'Seed: ________', right: 'Mark/Time: ____________', size: 9 },
+    ] });
+    return cards.map(c => ({ lines: c.lines, top: true, grow: 3 }));
+  }
+
+  // ---------- Bar Code Competitor Labels (Code 39, the "3 of 9" format Meet Manager prints) ----------
+  // ctx: {athletes (same shape as competitor labels, plus birth_year and entries[].key), teams}
+  // o: {source:'event'|'roster'|'teamcomp'|'noname', events:Set, gender, sort:'comp'|'name'|'team', digits:5|6, from, to, birthYear, team, test}
+  function buildBarcodes(ctx, o) {
+    const digits = +o.digits === 6 ? 6 : 5, pad = n => String(n).padStart(digits, '0');
+    const teamName = c => ((ctx.teams || []).find(t => t.code === c) || {}).name || c || '';
+    const lab = (num, name, team, yr) => ({ lines: [
+      { barcode: pad(num), size: 0.42 * IN },
+      { text: pad(num), right: team || '', size: 8, bold: true },
+      { text: name || 'Name ____________________', right: yr ? 'Born ' + yr : '', size: 8 },
+    ] });
+    if (o.test) return Array.from({ length: 6 }, (_, i) => lab(i + 1, 'TEST LABEL — check the scanner reads it', 'TEST'));
+    const from = +o.from || 0, to = o.to === '' || o.to == null ? 1e9 : +o.to;
+    if (o.source === 'noname') { const out = []; for (let n = Math.max(0, from); n <= Math.min(to, from + 5000); n++) out.push(lab(n, '', '')); return out; }
+    let A = (ctx.athletes || []).filter(a => a.comp_number && a.comp_number >= from && a.comp_number <= to)
+      .filter(a => !o.gender || o.gender === 'Mixed' || a.gender === o.gender)
+      .filter(a => !o.team || o.team === 'ALL' || a.team_code === o.team);
+    if (o.source === 'event') A = A.filter(a => (a.entries || []).some(e => o.events.has(e.key)));
+    const byName = (a, b) => (nm(a.last_name) + ' ' + nm(a.first_name)).localeCompare(nm(b.last_name) + ' ' + nm(b.first_name));
+    const sort = o.source === 'teamcomp' ? 'team' : o.sort;
+    A.sort(sort === 'name' ? byName : sort === 'team' ? (a, b) => String(a.team_code).localeCompare(String(b.team_code)) || a.comp_number - b.comp_number : (a, b) => a.comp_number - b.comp_number);
+    return A.map(a => lab(a.comp_number, nm(a.first_name) + ' ' + nm(a.last_name), a.team_code, o.birthYear ? a.birth_year : ''));
+  }
+  // Code 39 patterns (n = narrow, w = wide), bar/space alternating, starting with a bar.
+  const C39 = { '0': 'nnnwwnwnn', '1': 'wnnwnnnnw', '2': 'nnwwnnnnw', '3': 'wnwwnnnnn', '4': 'nnnwwnnnw', '5': 'wnnwwnnnn', '6': 'nnwwwnnnn', '7': 'nnnwnnwnw', '8': 'wnnwnnwnn', '9': 'nnwwnnwnn', '*': 'nwnnwnwnn' };
+  function drawCode39(page, value, x, y, w, h) {
+    const s = '*' + String(value).replace(/[^0-9]/g, '') + '*', R = 2.5;
+    const units = s.length * (6 + 3 * R + 1) - 1 + 20;           // + 10 narrow quiet zone each side
+    const n = Math.min(w / units, 2.2); let cx = x + (w - n * units) / 2 + 10 * n;
+    for (const ch of s) { const p = C39[ch]; for (let i = 0; i < 9; i++) { const bw = (p[i] === 'w' ? R : 1) * n; if (i % 2 === 0) page.drawRectangle({ x: cx, y, width: bw, height: h, color: LIB.rgb(0, 0, 0) }); cx += bw; } cx += n; }
+  }
+
+  const CARD_STOCKS = {
+    'CARD3': { name: 'Cards 3-1/2" x 8-1/2" (3 per page)', page: LETTER, cols: 1, rows: 3, w: 8.5 * IN, h: 3.5 * IN, left: 0, top: 0.25 * IN, dx: 0, dy: 3.5 * IN },
+    'CARD6': { name: '6 per sheet (2 across, 3 down)', page: LETTER, cols: 2, rows: 3, w: 4 * IN, h: 3.3333 * IN, left: 0.25 * IN, top: 0.5 * IN, dx: 4 * IN, dy: 3.3333 * IN },
+    'L7421': { name: 'A4 postcards — Avery L7421 (4 per page, landscape)', page: [A4[1], A4[0]], cols: 2, rows: 2, w: 139.7 * MM, h: 96.5 * MM, left: 8.8 * MM, top: 8.5 * MM, dx: 139.7 * MM, dy: 96.5 * MM },
+  };
+  Object.assign(STOCKS, CARD_STOCKS);
+  const ENTRY_STOCKS = ['CARD3', 'CARD6', 'L7421', '5160', '5161', 'A4UK', 'A4AUS', 'DOT14'];
+  const BAR_STOCKS = ['5160', '5161', 'A4UK', 'A4AUS', 'DOT14'];
+
   // ---------- PDF ----------
   // Only characters the built-in PDF fonts know (Latin-1); accents kept, anything else becomes its plain letter or "?".
   const clean = s => Array.from(String(s ?? '')).map(c => { const k = c.charCodeAt(0); if (k >= 32 && k <= 126 || k >= 160 && k <= 255) return c;
@@ -290,11 +399,12 @@
       const col = st.dot ? 0 : i % st.cols, row = st.dot ? 0 : Math.floor(i / st.cols);
       const x = st.dot ? 0 : st.left + col * st.dx, yTop = st.dot ? st.h : page.getHeight() - st.top - row * st.dy;
       const w = st.w - 2 * padX, h = st.h - 2 * padY;
-      const lines = L.lines.filter(l => l.text || l.right);
-      const need = lines.reduce((s, l) => s + l.size * 1.18, 0);
-      const k = Math.min(1, h / need);
+      const lines = L.lines.filter(l => l.text || l.right || l.barcode);
+      const need = lines.reduce((s, l) => s + (l.barcode ? l.size + 3 : l.size * 1.18), 0);
+      const k = Math.min(L.grow || 1, h / need);
       let y = yTop - padY - (L.top ? 0 : Math.max(0, (h - need * k) / 2));
       lines.forEach(l => {
+        if (l.barcode) { const bh = l.size * k; y -= bh + 3 * k; drawCode39(page, l.barcode, x + padX, y + 2 * k, w, bh); return; }
         const font = l.bold ? B : F; let size = l.size * k;
         const t = clean(l.text), r = clean(l.right || '');
         const fit = () => font.widthOfTextAtSize(t, size) + (r ? F.widthOfTextAtSize(r, size) + 6 : 0);
@@ -311,6 +421,6 @@
     return doc.save();
   }
 
-  const api = { STOCKS, AWARD_STOCKS, COMP_STOCKS, DIV_AGES, DIV_ORDER, awardEventList, filterEvents, buildAwardLabels, buildCompLabels, renderPdf, numberEvents, evKey, ord, clean };
+  const api = { STOCKS, AWARD_STOCKS, COMP_STOCKS, ENTRY_STOCKS, BAR_STOCKS, DIV_AGES, DIV_ORDER, awardEventList, entryEventList, filterEvents, buildAwardLabels, buildCompLabels, buildEntryCards, buildBarcodes, renderPdf, numberEvents, evKey, ord, clean };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.MeetLabels = api;
 })(typeof window !== 'undefined' ? window : globalThis);

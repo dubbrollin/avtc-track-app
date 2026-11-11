@@ -379,7 +379,7 @@ async function act(a,id){
     for(let i=0;i<[...entRegIds].length;i+=150){
       const {data:part}=await sb.from('registrations').select('team_code').in('id',[...entRegIds].slice(i,i+150)); (part||[]).forEach(x=>teamsIn.add(x.team_code));
     }
-    for(const tc of teamsIn){ regs.push(...await pageAll(()=>sb.from('registrations').select('id,first_name,last_name,gender,dob,division,age_on_dec31,team_code').eq('team_code',tc).eq('status','verified').order('id'))); }
+    for(const tc of teamsIn){ regs.push(...await pageAll(()=>sb.from('registrations').select('id,first_name,last_name,gender,dob,division,age_on_dec31,team_code').eq('team_code',tc).neq('sport','Cross Country').eq('status','verified').order('id'))); }
     const R=Object.fromEntries(regs.map(r=>[r.id,r])), E=Object.fromEntries(evs.map(e=>[e.id,e]));
     const rows=ens.map(n=>({r:R[n.registration_id],e:E[n.meet_event_id],mark:n.seed_mark,rt:n.relay_team,leg:n.leg})).filter(x=>x.r&&x.e);
     const rosterOnly=regs.filter(r=>!entRegIds.has(r.id));

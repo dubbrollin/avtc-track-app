@@ -11,7 +11,7 @@
 <script src="theme.js?v=b2"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-<script src="config.js"></script><script src="shared.js"></script><script src="events.js"></script><script src="results.js"></script><script src="league-records.js"></script><script src="labels.js?v=1"></script>
+<script src="config.js"></script><script src="shared.js"></script><script src="events.js"></script><script src="results.js"></script><script src="league-records.js"></script><script src="labels.js?v=2"></script>
 <style>
   .btn{padding:.5rem .9rem;border-radius:.5rem;font-weight:600}
   .box{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px}
@@ -70,7 +70,7 @@
         </div>
         <p class="text-xs text-gray-500 mt-1" id="meetSub"></p>
         <div class="flex flex-wrap items-center gap-2 mt-3">
-          <div class="tabbar"><button class="tab active" data-tab="award">Award Labels</button><button class="tab" data-tab="comp">Competitor / Mailing / Registration Labels</button></div>
+          <div class="tabbar"><button class="tab active" data-tab="award">Award Labels</button><button class="tab" data-tab="entry">Entry Cards / Tag Labels</button><button class="tab" data-tab="comp">Competitor / Mailing / Registration Labels</button><button class="tab" data-tab="bar">Bar Code Competitor Labels</button></div>
           <div class="flex-1"></div>
           <label class="text-sm">Memorized <select id="memoSel" class="sel"><option value="">—</option></select></label>
           <button id="memoSave" class="btn bg-gray-100 text-sm">Memorize</button>
@@ -145,6 +145,100 @@
           <button id="aGo" class="btn bg-blue-600 text-white">Create Labels (PDF)</button>
         </div>
         <div id="aOut" class="mt-2"></div>
+      </div>
+
+      <!-- ============ ENTRY CARDS / TAG LABELS ============ -->
+      <div id="tab-entry" class="mt-3 hidden">
+        <p class="text-sm text-gray-600 mb-2">One card or tag label per entry — from the meet entries in the app — to hand out, use as lap-counter cards or pull-off tags, or for check-in. Relay cards list the declared runners.</p>
+        <div class="top4">
+          <div class="box"><h3>Gender</h3>
+            <label class="opt"><input type="radio" name="eGender" value="" checked> All</label>
+            <label class="opt"><input type="radio" name="eGender" value="Boy"> Male</label>
+            <label class="opt"><input type="radio" name="eGender" value="Girl"> Female</label></div>
+          <div class="box"><h3>Age Range</h3><div class="opt"><input id="eAgeLo" class="num" inputmode="numeric"> to <input id="eAgeHi" class="num" inputmode="numeric"></div></div>
+          <div class="box"><h3>Card / Label Format</h3>
+            <label class="opt"><input type="radio" name="eFormat" value="heatlane"> Heat/Lane Number</label>
+            <label class="opt"><input type="radio" name="eFormat" value="fast" checked> Rank Order Fast-Slow</label>
+            <label class="opt"><input type="radio" name="eFormat" value="slow"> Rank Order Slow-Fast</label>
+            <label class="opt"><input type="radio" name="eFormat" value="session"> Session Choices <span class="text-xs text-gray-500">(races heat/lane, field events rank)</span></label></div>
+          <div class="box"><h3>Events</h3>
+            <label class="opt"><input type="radio" name="eKind" value="" checked> Indiv + Relays</label>
+            <label class="opt"><input type="radio" name="eKind" value="indiv"> Indiv Only</label>
+            <label class="opt"><input type="radio" name="eKind" value="relay"> Relays Only</label></div>
+        </div>
+        <div class="box mt-3">
+          <div class="flex flex-wrap items-center gap-2 mb-2">
+            <h3 class="flex-1" style="text-align:left;margin:0">Event List</h3>
+            <button id="eSelAll" class="btn bg-gray-100 text-sm">Select All</button>
+            <button id="eDesel" class="btn bg-gray-100 text-sm">De-Select</button>
+          </div>
+          <div class="evwrap"><table class="evt"><thead><tr><th></th><th>Evt #</th><th>Event Name</th><th>Entries</th></tr></thead><tbody id="eBody"></tbody></table></div>
+          <p class="text-xs text-gray-500 mt-1">Heat numbers fill in once a meet's results (with heats) are posted; before that the card has blanks to write them in. The app doesn't store lanes.</p>
+        </div>
+        <div class="sub3 mt-3">
+          <div class="box"><h3>Label / Card Selection</h3><select id="eStock" class="sel w-full"></select>
+            <div class="opt mt-3">Relay runner names on card (0-8): <input id="eRelayNames" class="num" value="8" inputmode="numeric"></div></div>
+          <div class="box"><h3>Sort By</h3>
+            <label class="opt"><input type="radio" name="eSort" value="event" checked> Event Number</label>
+            <label class="opt"><input type="radio" name="eSort" value="session"> Session Order <span class="text-xs text-gray-500">(field events first)</span></label>
+            <label class="opt"><input type="radio" name="eSort" value="lane"> Heat/Lane</label>
+            <label class="opt"><input type="radio" name="eSort" value="team"> Team <span class="text-xs text-gray-500">(handy for relay cards)</span></label></div>
+          <div class="box"><h3>Blank Cards</h3>
+            <div class="opt">Blank cards / labels: <input id="eBlanks" class="num" value="0" inputmode="numeric"></div>
+            <p class="text-xs text-gray-500">For late entries written in by hand at the meet (Meet Manager's default is 10).</p></div>
+        </div>
+        <div class="box mt-3 flex flex-wrap items-center gap-3">
+          <label class="opt">Start at label # <input id="eSkip" class="num" value="1" inputmode="numeric"></label>
+          <label class="opt"><input type="checkbox" id="eOutline" checked> Show card outlines</label>
+          <div class="flex-1"></div>
+          <span id="eCount" class="text-sm text-gray-600"></span>
+          <button id="eGo" class="btn bg-blue-600 text-white">Create Cards (PDF)</button>
+        </div>
+        <div id="eOut" class="mt-2"></div>
+      </div>
+
+      <!-- ============ BAR CODE COMPETITOR LABELS ============ -->
+      <div id="tab-bar" class="mt-3 hidden">
+        <p class="text-sm text-gray-600 mb-2">Standard Code 39 ("3 of 9") bar codes of each competitor number — for cross country and road-race finish chutes where a scanner reads the number. Athletes need a competitor number to get one.</p>
+        <div class="top4">
+          <div class="box"><h3>Gender</h3>
+            <label class="opt"><input type="radio" name="bGender" value="" checked> All</label>
+            <label class="opt"><input type="radio" name="bGender" value="Girl"> Female Only</label>
+            <label class="opt"><input type="radio" name="bGender" value="Boy"> Male Only</label>
+            <label class="opt"><input type="radio" name="bGender" value="Mixed"> Mixed</label></div>
+          <div class="box"><h3>Print From</h3>
+            <label class="opt"><input type="radio" name="bSource" value="event"> By Event</label>
+            <label class="opt"><input type="radio" name="bSource" value="roster" checked> Athlete Roster</label>
+            <label class="opt"><input type="radio" name="bSource" value="teamcomp"> Team Competitor Number</label>
+            <label class="opt"><input type="radio" name="bSource" value="noname"> No Name Comp# Range</label></div>
+          <div class="box"><h3>Options</h3>
+            <div class="opt">Comp# range: <input id="bFrom" class="num" value="0" inputmode="numeric"> to <input id="bTo" class="num" inputmode="numeric"></div>
+            <label class="opt"><input type="radio" name="bDigits" value="5" checked> 5-digit codes</label>
+            <label class="opt"><input type="radio" name="bDigits" value="6"> 6-digit codes</label>
+            <label class="opt"><input type="checkbox" id="bBirth"> Include birth year <span class="text-xs text-gray-500">(USATF / AAU cross country)</span></label></div>
+          <div class="box"><h3>Sort By</h3>
+            <label class="opt"><input type="radio" name="bSort" value="comp" checked> Competitor Number</label>
+            <label class="opt"><input type="radio" name="bSort" value="name"> Athlete Name</label>
+            <label class="opt"><input type="radio" name="bSort" value="team"> Team Name</label></div>
+        </div>
+        <div class="box mt-3" id="bEvBox">
+          <h3 style="text-align:left">Events (for "By Event")</h3>
+          <div class="evwrap" style="max-height:14rem"><table class="evt"><thead><tr><th></th><th>Evt #</th><th>Event Name</th><th>Entries</th></tr></thead><tbody id="bBody"></tbody></table></div>
+        </div>
+        <div class="sub3 mt-3">
+          <div class="box"><h3>Label Selection</h3><select id="bStock" class="sel w-full"></select></div>
+          <div class="box"><h3>Test</h3><button id="bTest" class="btn bg-gray-100 text-sm">Print a test page</button>
+            <p class="text-xs text-gray-500 mt-1">Six sample labels with outlines — print one and make sure your scanner reads them before printing the rest.</p></div>
+          <div></div>
+        </div>
+        <div class="box mt-3 flex flex-wrap items-center gap-3">
+          <label class="opt">Start at label # <input id="bSkip" class="num" value="1" inputmode="numeric"></label>
+          <label class="opt"><input type="checkbox" id="bOutline"> Show label outlines</label>
+          <div class="flex-1"></div>
+          <span id="bCount" class="text-sm text-gray-600"></span>
+          <button id="bGo" class="btn bg-blue-600 text-white">Create Bar Codes (PDF)</button>
+        </div>
+        <div id="bOut" class="mt-2"></div>
       </div>
 
       <!-- ============ COMPETITOR / MAILING / REGISTRATION ============ -->
@@ -224,9 +318,9 @@ const CFG=window.APP_CONFIG, $=id=>document.getElementById(id), ML=window.MeetLa
 let sb=supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (n,t,fn)=>fn() } });
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const MEET_ID=new URLSearchParams(location.search).get('meet');
-let user=null, me=null, allTeams=false, meet=null, results=[], entries=[], regs={}, rosterCache={}, stds=[], recs=[], evList=[], coachNames={};
+let user=null, me=null, allTeams=false, meet=null, results=[], entries=[], meetEvents=[], entryEvs=[], regs={}, rosterCache={}, stds=[], recs=[], evList=[], coachNames={};
 const RES_COLS='id,meet_id,registration_id,athlete_name,gender,division,event_code,event_name,is_relay,relay_runners,round,mark,mark_value,is_time,place,overall_place,heat,wind,team_code';
-const REG_COLS='id,first_name,last_name,gender,division,age_on_dec31,team_code,comp_number,address,city,zip,parent_name,status,season_year';
+const REG_COLS='id,first_name,last_name,gender,division,age_on_dec31,dob,team_code,comp_number,address,city,zip,parent_name,status,season_year';
 const REG_COLS_MIN='id,first_name,last_name,gender,division,age_on_dec31,team_code,comp_number,status,season_year';
 
 window.mountLoginWidget(sb,$('loginWidget'),{});
@@ -252,15 +346,16 @@ async function start(){
 async function listMeets(){
   $('pickBox').classList.remove('hidden');
   const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
-  const {data,error}=await sb.from('meets').select('id,name,meet_date,season_year,team_codes,host_team_code,week_no').lte('meet_date',today).order('meet_date',{ascending:false}).limit(120);
+  const season=+(await window.currentSeason());
+  const {data,error}=await sb.from('meets').select('id,name,meet_date,season_year,team_codes,host_team_code,week_no').or(`meet_date.lte.${today},season_year.eq.${season}`).order('meet_date',{ascending:false}).limit(150);
   if(error){ $('meetList').textContent=error.message; return; }
   const ms=(data||[]).filter(m=>allTeams||window.meetHasTeam(m,me.team_code));
-  const cnt={}; await Promise.all(ms.map(async m=>{ let q=sb.from('results').select('id',{count:'exact',head:true}).eq('meet_id',m.id); if(!allTeams) q=q.eq('team_code',me.team_code); const {count}=await q; cnt[m.id]=count||0; }));
-  const list=ms.filter(m=>cnt[m.id]);
-  if(!list.length){ $('meetList').innerHTML='<p class="text-gray-500">No meets with posted results yet. Labels show up here as soon as a meet\'s results are uploaded.</p>'; return; }
+  const cnt={}; await Promise.all(ms.filter(m=>m.meet_date<=today).map(async m=>{ let q=sb.from('results').select('id',{count:'exact',head:true}).eq('meet_id',m.id); if(!allTeams) q=q.eq('team_code',me.team_code); const {count}=await q; cnt[m.id]=count||0; }));
+  const list=ms.filter(m=>cnt[m.id]||m.season_year===season);
+  if(!list.length){ $('meetList').innerHTML='<p class="text-gray-500">No meets yet. This season\'s meets show here for entry cards and bar codes; award labels are ready once a meet\'s results are uploaded.</p>'; return; }
   let yr=null;
   $('meetList').innerHTML=list.map(m=>{ const h=m.season_year!==yr?`<div class="font-bold text-gray-700 mt-3 mb-1">${m.season_year||''} season</div>`:''; yr=m.season_year;
-    return h+`<a href="labels.html?meet=${m.id}" class="flex items-center gap-3 py-2 px-2 rounded hover:bg-blue-50" style="border-top:1px solid #eef0f3"><span class="text-gray-500 w-24">${esc(new Date(m.meet_date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}))}</span><b class="flex-1">${esc(m.name)}</b><span class="text-xs text-gray-500">${cnt[m.id]} results</span><span style="color:var(--act,#1764c8)" class="font-semibold">Labels →</span></a>`; }).join('');
+    return h+`<a href="labels.html?meet=${m.id}" class="flex items-center gap-3 py-2 px-2 rounded hover:bg-blue-50" style="border-top:1px solid #eef0f3"><span class="text-gray-500 w-24">${esc(new Date(m.meet_date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}))}</span><b class="flex-1">${esc(m.name)}</b><span class="text-xs text-gray-500">${cnt[m.id]?cnt[m.id]+' results':m.meet_date>today?'upcoming — entry cards &amp; bar codes':'no results yet'}</span><span style="color:var(--act,#1764c8)" class="font-semibold">Labels →</span></a>`; }).join('');
 }
 
 // ---------- one meet ----------
@@ -270,13 +365,15 @@ async function openMeet(id){
   if(!allTeams&&!window.meetHasTeam(m,me.team_code)){ $('msg').innerHTML='<div class="card">Your team wasn\'t at this meet. <a class="underline" href="labels.html">All meets</a></div>'; return; }
   meet=m; $('meetBox').classList.remove('hidden');
   $('meetTitle').textContent=m.name; $('meetSub').textContent='Loading results…';
-  const [rr,ee,ss,rc]=await Promise.all([
+  const [rr,ee,me2,ss,rc]=await Promise.all([
     pageAll(()=>sb.from('results').select(RES_COLS).eq('meet_id',id).order('id')),
     pageAll(()=>sb.from('entries').select('registration_id,seed_mark,meet_event_id,meet_events(code,name,division,gender,is_relay,is_field)').eq('meet_id',id).order('id')).catch(()=>[]),
+    pageAll(()=>sb.from('meet_events').select('id,code,name,division,gender,is_relay,is_field').eq('meet_id',id).order('id')).catch(()=>[]),
     pageAll(()=>sb.from('qualifying_standards').select('*').order('id')).catch(()=>[]),
     pageAll(()=>sb.from('conference_records').select('*').order('id')).catch(()=>[])
   ]);
-  results=rr; entries=ee.filter(e=>e.meet_events).map(e=>({registration_id:e.registration_id,seed_mark:e.seed_mark,code:e.meet_events.code,name:e.meet_events.name,division:e.meet_events.division,gender:e.meet_events.gender,is_relay:e.meet_events.is_relay}));
+  results=rr; entries=ee.filter(e=>e.meet_events).map(e=>({registration_id:e.registration_id,seed_mark:e.seed_mark,code:e.meet_events.code,name:e.meet_events.name,division:e.meet_events.division,gender:e.meet_events.gender,is_relay:e.meet_events.is_relay,key:ML.evKey({code:e.meet_events.code,is_relay:e.meet_events.is_relay,division:e.meet_events.division,gender:e.meet_events.gender})}));
+  meetEvents=me2;
   stds=ss; recs=rc.filter(r=>!r.scope||r.scope==='conference');
   const lgE=rc.filter(r=>r.scope==='east'), lgW=rc.filter(r=>r.scope==='west'); if(lgE.length||lgW.length) window.LEAGUE_RECORDS={East:lgE,West:lgW};
   await loadRegs([...new Set([...results.map(r=>r.registration_id),...entries.map(e=>e.registration_id)].filter(Boolean))]);
@@ -287,7 +384,7 @@ async function openMeet(id){
   else { $('teamSel').innerHTML=`<option value="${esc(me.team_code)}">${esc(tName(me.team_code))}</option>`; $('teamSel').disabled=true; }
   const mine=results.filter(r=>allTeams||r.team_code===me.team_code).length;
   $('meetSub').textContent=`${new Date(m.meet_date+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'})} · ${results.length} results posted${allTeams?'':` · ${mine} for your team`}`;
-  if(!results.length) $('msg').innerHTML='<div class="card bg-yellow-50 text-sm">No results are posted for this meet yet — award labels need results. Competitor labels still work from the entries.</div>';
+  if(!results.length) $('msg').innerHTML='<div class="card bg-yellow-50 text-sm">No results are posted for this meet yet — award labels need results. Entry cards, bar codes and competitor labels work from the entries.</div>';
   try{ const {data:cs}=await sb.from('coaches').select('name,team_code,role_type,approved').eq('approved',true); (cs||[]).forEach(c=>{ if(c.role_type==='timer') return; (coachNames[c.team_code]??=[]).push(c.name+(c.role_type==='head_coach'?' (Head Coach)':'')); }); Object.values(coachNames).forEach(a=>a.sort((x,y)=>(/Head Coach/.test(y)?1:0)-(/Head Coach/.test(x)?1:0))); }catch(e){}
   setupUi();
 }
@@ -305,8 +402,8 @@ async function rosterFor(team){ // whole season roster (for "athletes with no en
 }
 
 // ---------- settings in/out (Memorize) ----------
-const FIELDS=['aAgeLo','aAgeHi','aStock','aIndFrom','aIndTo','aRelFrom','aRelTo','aUseNT','aExcl','aRelayNames','aOutline','aMark','cDivision','cAgeLo','cAgeHi','cNoComp','cCopies','cFrom','cTo','cNoAddr','cUndeclared','cEvNum','cAlternates','cHeatLane','cNoEntries','cCoaches','cStock'];
-const RADIOS=['aGender','aRounds','aKind','aType','aSort','cGender','cMail','cReg','cSort1','cSort2'];
+const FIELDS=['aAgeLo','aAgeHi','aStock','aIndFrom','aIndTo','aRelFrom','aRelTo','aUseNT','aExcl','aRelayNames','aOutline','aMark','cDivision','cAgeLo','cAgeHi','cNoComp','cCopies','cFrom','cTo','cNoAddr','cUndeclared','cEvNum','cAlternates','cHeatLane','cNoEntries','cCoaches','cStock','eAgeLo','eAgeHi','eStock','eRelayNames','eBlanks','eOutline','bFrom','bTo','bBirth','bStock','bOutline'];
+const RADIOS=['aGender','aRounds','aKind','aType','aSort','cGender','cMail','cReg','cSort1','cSort2','eGender','eFormat','eKind','eSort','bGender','bSource','bDigits','bSort'];
 const radio=n=>(document.querySelector(`input[name="${n}"]:checked`)||{}).value||'';
 function getState(){ const s={}; FIELDS.forEach(id=>{ const el=$(id); s[id]=el.type==='checkbox'?el.checked:el.value; }); RADIOS.forEach(n=>s[n]=radio(n)); s.ck=curCk; s.tab=curTab; return s; }
 function setState(s){ FIELDS.forEach(id=>{ if(!(id in s)) return; const el=$(id); if(el.type==='checkbox') el.checked=!!s[id]; else el.value=s[id]; });
@@ -318,7 +415,7 @@ function fillMemos(){ const m=memos(); $('memoSel').innerHTML='<option value="">
 
 // ---------- UI ----------
 let curTab='award', curCk='comp';
-function showTab(t){ curTab=t; document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===t)); $('tab-award').classList.toggle('hidden',t!=='award'); $('tab-comp').classList.toggle('hidden',t!=='comp'); }
+function showTab(t){ curTab=t; document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===t)); ['award','entry','comp','bar'].forEach(x=>$('tab-'+x).classList.toggle('hidden',t!==x)); }
 function showCk(k){ curCk=k; document.querySelectorAll('[data-ck]').forEach(b=>b.classList.toggle('active',b.dataset.ck===k)); ['comp','mail','reg'].forEach(x=>$('ck-'+x).classList.toggle('hidden',x!==k));
   if(k==='reg'&&['5160','5161','A4AUS','DOT1516'].includes($('cStock').value)) $('cStock').value='5163'; if(k!=='reg'&&['5163','5164'].includes($('cStock').value)) $('cStock').value='5160'; updateCounts(); }
 const printedKey=()=>'vyc-labels-printed-'+meet.id;
@@ -326,22 +423,54 @@ function printed(){ return new Set(LS(printedKey())||[]); }
 function setupUi(){
   $('aStock').innerHTML=ML.AWARD_STOCKS.map(k=>`<option value="${k}">${esc(ML.STOCKS[k].name)}</option>`).join('');
   $('cStock').innerHTML=ML.COMP_STOCKS.map(k=>`<option value="${k}">${esc(ML.STOCKS[k].name)}</option>`).join('');
+  $('eStock').innerHTML=ML.ENTRY_STOCKS.map(k=>`<option value="${k}">${esc(ML.STOCKS[k].name)}</option>`).join('');
+  $('bStock').innerHTML=ML.BAR_STOCKS.map(k=>`<option value="${k}">${esc(ML.STOCKS[k].name)}</option>`).join('');
   $('cDivision').innerHTML='<option value="">All divisions</option>'+window.DIVISIONS.map(d=>`<option>${esc(d.name)}</option>`).join('');
-  const maxComp=Math.max(0,...Object.values(regs).map(r=>r.comp_number||0)); $('cTo').value=maxComp||9999;
+  const maxComp=Math.max(0,...Object.values(regs).map(r=>r.comp_number||0)); $('cTo').value=maxComp||9999; $('bTo').value=maxComp||9999;
   document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
   document.querySelectorAll('[data-ck]').forEach(b=>b.onclick=()=>showCk(b.dataset.ck));
-  document.querySelectorAll('#tab-award input, #tab-award select, #teamSel').forEach(el=>el.addEventListener('change',()=>{ renderEvents(); updateCounts(); }));
+  document.querySelectorAll('#tab-award input, #tab-award select, #teamSel').forEach(el=>el.addEventListener('change',()=>{ renderEvents(); if(el.id==='teamSel'&&entryEvs.length) renderEntryEvents(); updateCounts(); }));
   ['aAgeLo','aAgeHi'].forEach(id=>$(id).addEventListener('input',()=>{ renderEvents(); updateCounts(); }));
   document.querySelectorAll('#tab-comp input, #tab-comp select').forEach(el=>el.addEventListener('change',updateCounts));
   $('selAll').onclick=()=>{ document.querySelectorAll('#evBody .evpick').forEach(c=>c.checked=true); updateCounts(); };
   $('deselAll').onclick=()=>{ document.querySelectorAll('#evBody .evpick').forEach(c=>c.checked=false); updateCounts(); };
-  $('aGo').onclick=makeAward; $('cGo').onclick=makeComp;
+  $('aGo').onclick=makeAward; $('cGo').onclick=makeComp; $('eGo').onclick=makeEntry; $('bGo').onclick=()=>makeBar(false); $('bTest').onclick=()=>makeBar(true);
+  document.querySelectorAll('#tab-entry input, #tab-entry select').forEach(el=>el.addEventListener('change',()=>{ renderEntryEvents(); updateCounts(); }));
+  document.querySelectorAll('#tab-bar input, #tab-bar select').forEach(el=>el.addEventListener('change',()=>{ $('bEvBox').classList.toggle('dis',radio('bSource')!=='event'); updateCounts(); }));
+  $('eSelAll').onclick=()=>{ document.querySelectorAll('#eBody input').forEach(c=>c.checked=true); updateCounts(); };
+  $('eDesel').onclick=()=>{ document.querySelectorAll('#eBody input').forEach(c=>c.checked=false); updateCounts(); };
   $('memoSave').onclick=()=>{ const n=prompt('Name for these label settings (e.g. "Ribbons top 6"):'); if(!n) return; const m=memos(); m[n.trim()]=getState(); LS('vyc-label-memos',m); fillMemos(); $('memoSel').value=n.trim(); $('memoDel').classList.remove('hidden'); };
   $('memoSel').onchange=()=>{ const s=memos()[$('memoSel').value]; $('memoDel').classList.toggle('hidden',!s); if(s) setState(s); };
   $('memoDel').onclick=()=>{ const m=memos(); delete m[$('memoSel').value]; LS('vyc-label-memos',m); fillMemos(); };
   fillMemos();
   evList=ML.awardEventList(results, window.STANDARD_EVENTS);
-  renderEvents(true); updateCounts();
+  renderEvents(true);
+  entryEvs=ML.entryEventList(meetEvents, entries, regs, window.STANDARD_EVENTS);
+  renderEntryEvents(true); $('bEvBox').classList.add('dis'); updateCounts();
+}
+function renderEntryEvents(first){
+  const off=new Set([...document.querySelectorAll('#eBody input')].filter(c=>!c.checked).map(c=>c.dataset.k));
+  const on=new Set([...document.querySelectorAll('#bBody input')].filter(c=>c.checked).map(c=>c.dataset.k));
+  const list=ML.filterEvents(entryEvs,{gender:radio('eGender'),ageLo:$('eAgeLo').value,ageHi:$('eAgeHi').value,team:$('teamSel').value,rounds:'',kind:radio('eKind')}).filter(e=>e.count);
+  $('eBody').innerHTML=list.map(e=>`<tr><td><input type="checkbox" data-k="${esc(e.key)}" ${first||!off.has(e.key)?'checked':''}></td><td>${e.num}</td><td>${esc(e.name)}</td><td>${e.count}</td></tr>`).join('')||'<tr><td colspan="4" class="text-gray-500 p-3">No entries for these filters yet.</td></tr>';
+  $('bBody').innerHTML=ML.filterEvents(entryEvs,{team:$('teamSel').value,kind:'indiv'}).filter(e=>e.count).map(e=>`<tr><td><input type="checkbox" data-k="${esc(e.key)}" ${on.has(e.key)?'checked':''}></td><td>${e.num}</td><td>${esc(e.name)}</td><td>${e.count}</td></tr>`).join('')||'<tr><td colspan="4" class="text-gray-500 p-3">No entries yet.</td></tr>';
+  document.querySelectorAll('#eBody input, #bBody input').forEach(c=>c.onchange=e=>{ e.stopPropagation(); updateCounts(); });
+}
+function entryOpts(){ return {team:$('teamSel').value, events:new Set([...document.querySelectorAll('#eBody input:checked')].map(c=>c.dataset.k)), format:radio('eFormat'), sort:radio('eSort'), blanks:Math.max(0,Math.min(500,+$('eBlanks').value||0)), relayNames:Math.max(0,Math.min(8,+$('eRelayNames').value||0))}; }
+function entryCtx(){ return {meet, events:entryEvs, entries, regs, results, markToValue:window.markToValue}; }
+function barOpts(test){ return {test, source:radio('bSource'), events:new Set([...document.querySelectorAll('#bBody input:checked')].map(c=>c.dataset.k)), gender:radio('bGender'), sort:radio('bSort'), digits:+radio('bDigits'), from:$('bFrom').value, to:$('bTo').value, birthYear:$('bBirth').checked, team:$('teamSel').value}; }
+async function makeEntry(){
+  const o=entryOpts(); if(!o.events.size&&!o.blanks){ alert('Tick at least one event (or ask for blank cards).'); return; }
+  const cards=ML.buildEntryCards(entryCtx(),o); if(!cards.length){ $('eOut').innerHTML='<div class="box text-sm">No entries for these choices.</div>'; return; }
+  $('eGo').disabled=true;
+  try{ const bytes=await ML.renderPdf(cards,$('eStock').value,{skip:(+$('eSkip').value||1)-1,outline:$('eOutline').checked}); const team=$('teamSel').value; deliver(bytes,`Entry-Cards-${slug(meet.name)}-${team==='ALL'?'All':team}.pdf`,$('eOut')); } finally { $('eGo').disabled=false; }
+}
+async function makeBar(test){
+  const o=barOpts(test); if(o.source==='event'&&!o.events.size&&!test){ alert('Tick at least one event in the Events list.'); return; }
+  const labels=ML.buildBarcodes(await compCtx({kind:'bar'}),o);
+  if(!labels.length){ $('bOut').innerHTML='<div class="box text-sm">No bar codes for these choices. Only athletes with a competitor number get one — check the Comp# range, or use "No Name Comp# Range".</div>'; return; }
+  const bytes=await ML.renderPdf(labels,$('bStock').value,{skip:test?0:(+$('bSkip').value||1)-1,outline:test||$('bOutline').checked});
+  const team=$('teamSel').value; deliver(bytes,test?'Bar-Code-Test-Page.pdf':`Bar-Codes-${slug(meet.name)}-${team==='ALL'?'All':team}.pdf`,$('bOut'));
 }
 const TYPE_HELP={standard:'Top finishers in each event, using the place ranges at left.', std:'Athletes who met the qualifying standard here but hadn\'t met it with their entry mark. "Use NT" also includes athletes who entered with no time/mark.',
   pb:'Every athlete who beat their entry mark. "Use NT" also includes athletes who entered with no time/mark.', heat:'Top finishers in each heat/flight (place in the heat), using the place ranges at left.',
@@ -369,10 +498,10 @@ async function compCtx(o){
   const nums=ML.numberEvents(entries.map(e=>({code:e.code,is_relay:e.is_relay,name:e.name,division:e.division,gender:e.gender})).concat(results.map(r=>({code:r.event_code,is_relay:r.is_relay,name:r.event_name,division:r.division,gender:r.gender}))), window.STANDARD_EVENTS);
   const num=(code,rel,div,g)=>nums.get(ML.evKey({code,is_relay:rel,division:div,gender:g}));
   const ath={};
-  const addA=id=>{ const r=regs[id]; if(!r) return null; return ath[id]??={id, first_name:r.first_name,last_name:r.last_name,gender:r.gender,division:r.division,age:r.age_on_dec31,team_code:r.team_code,comp_number:r.comp_number,address:r.address,city:r.city,zip:r.zip,parent_name:r.parent_name,entries:[],_ev:{}}; };
+  const addA=id=>{ const r=regs[id]; if(!r) return null; return ath[id]??={id, first_name:r.first_name,last_name:r.last_name,gender:r.gender,division:r.division,age:r.age_on_dec31,team_code:r.team_code,comp_number:r.comp_number,birth_year:r.dob?String(r.dob).slice(0,4):'',address:r.address,city:r.city,zip:r.zip,parent_name:r.parent_name,entries:[],_ev:{}}; };
   const heatOf=(id,code,rel)=>{ const rs=results.filter(r=>r.registration_id===id&&r.event_code===code&&!!r.is_relay===!!rel); const p=rs.find(r=>r.round==='P')||rs[0]; return p?p.heat:null; };
-  entries.filter(e=>!e.is_relay).forEach(e=>{ const a=addA(e.registration_id); if(!a) return; const k=e.code; if(a._ev[k]) return; a._ev[k]=1; a.entries.push({num:num(e.code,false,e.division,e.gender),name:e.name,heat:heatOf(e.registration_id,e.code,false)}); });
-  results.filter(r=>r.registration_id&&!r.is_relay).forEach(r=>{ const a=addA(r.registration_id); if(!a||a._ev[r.event_code]) return; a._ev[r.event_code]=1; a.entries.push({num:num(r.event_code,false,r.division,r.gender),name:r.event_name,heat:heatOf(r.registration_id,r.event_code,false)}); });
+  entries.filter(e=>!e.is_relay).forEach(e=>{ const a=addA(e.registration_id); if(!a) return; const k=e.code; if(a._ev[k]) return; a._ev[k]=1; a.entries.push({key:e.key,num:num(e.code,false,e.division,e.gender),name:e.name,heat:heatOf(e.registration_id,e.code,false)}); });
+  results.filter(r=>r.registration_id&&!r.is_relay).forEach(r=>{ const a=addA(r.registration_id); if(!a||a._ev[r.event_code]) return; a._ev[r.event_code]=1; a.entries.push({key:ML.evKey({code:r.event_code,is_relay:false,division:r.division,gender:r.gender}),num:num(r.event_code,false,r.division,r.gender),name:r.event_name,heat:heatOf(r.registration_id,r.event_code,false)}); });
   if(o.kind==='reg'&&o.noEntries){ (await rosterFor(team==='ALL'?'ALL':team)).forEach(r=>addA(r.id)); }
   // relays: from posted relay results (runners as declared in Meet Manager), else from relay entries in the app
   const relays=[]; const gw=g=>g==='Boy'?'Boys':g==='Girl'?'Girls':'Mixed';
@@ -391,6 +520,8 @@ let countTimer=null;
 function updateCounts(){ clearTimeout(countTimer); countTimer=setTimeout(async()=>{
   if(!meet) return;
   try{ const n=ML.buildAwardLabels(awardCtx(),awardOpts()).length; const st=ML.STOCKS[$('aStock').value]; $('aCount').textContent=`${n} label${n===1?'':'s'}`+(st&&!st.dot&&n?` · ${Math.ceil((n+(+$('aSkip').value||1)-1)/(st.cols*st.rows))} page(s)`:''); }catch(e){ $('aCount').textContent=''; }
+  try{ const n=ML.buildEntryCards(entryCtx(),entryOpts()).length; $('eCount').textContent=`${n} card${n===1?'':'s'}`; }catch(e){ $('eCount').textContent=''; }
+  try{ const n=ML.buildBarcodes(await compCtx({kind:'bar'}),barOpts(false)).length; $('bCount').textContent=`${n} bar code${n===1?'':'s'}`; }catch(e){ $('bCount').textContent=''; }
   try{ const o=compOpts(); const n=ML.buildCompLabels(await compCtx(o),o).length; const st=ML.STOCKS[o.stock]; $('cCount').textContent=`${n} label${n===1?'':'s'}`+(st&&!st.dot&&n?` · ${Math.ceil((n+(+$('cSkip').value||1)-1)/(st.cols*st.rows))} page(s)`:''); }catch(e){ $('cCount').textContent=''; }
 },150); }
 function slug(s){ return String(s||'meet').replace(/[^A-Za-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,50); }

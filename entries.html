@@ -121,7 +121,7 @@ async function loadMeet(){
   const m=cur(); if(!m) return;
   $('meetInfo').textContent=`${m.location||''} · Entries ${isOpen(m)?'close':'closed'} ${new Date(m.entries_close).toLocaleString()}`;
   // Eligible = verified athletes registered for THIS meet's season: a coach's own team only (admins too), or a parent's own athletes.
-  let athleteQuery=sb.from('registrations').select('id,first_name,last_name,division,gender,status,team_code,email,season_year').eq('status','verified').order('last_name');
+  let athleteQuery=sb.from('registrations').select('id,first_name,last_name,division,gender,status,team_code,email,season_year').eq('status','verified').neq('sport','Cross Country').order('last_name');
   const testMode=await window.entryTestMode(); // Site Admin > League Setup: last season's athletes count too while testing
   if(m.season_year) athleteQuery = testMode ? athleteQuery.in('season_year',[m.season_year, m.season_year-1]) : athleteQuery.eq('season_year', m.season_year);
   if(isCoach) athleteQuery = athleteQuery.eq('team_code', myCoachRow.team_code);
