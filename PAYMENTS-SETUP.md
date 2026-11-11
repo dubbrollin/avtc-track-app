@@ -91,7 +91,7 @@ powershell -ExecutionPolicy Bypass -File "C:\Users\avtra\Cowork Projects\outputs
 
 1. Team admin signs in → Coach Dashboard → **Team admin** card → **Payments**.
 2. **Set up Stripe for this team** → Stripe's form (bank account, responsible person, EIN or SSN) → Stripe sends them back to the Payments tab, which shows **Card payments ON ✓** when Stripe is satisfied. (If Stripe wants more, the tab says "Action needed" with a "Continue Stripe setup" button.)
-3. Enter the **fee per athlete**, optional sibling discount, what it covers, tick the ways to pay they accept (with the Zelle / Cash App / Venmo details), optionally the payment plan (deposit, number of monthly payments, first date) → **Save**.
+3. Build the **fee list** (+ Add a fee / + Add a discount: a name, an amount, and who gets it — every athlete, once per family, each additional child, new / returning athletes, or only athletes you pick; needs `supabase/2026-11-11-team-fee-list.sql`), tick the ways to pay they accept (with the Zelle / Cash App / Venmo details), optionally the payment plan (deposit, number of monthly payments, first date) → **Save**.
 4. Press **Add the fee to athletes who don't have one** for anyone who registered before step 3. New registrations get the fee automatically.
 
 Parents then see the fee and a **Pay now** link on their registration confirmation, on their pay link, and on the Parent Dashboard.

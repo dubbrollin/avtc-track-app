@@ -25,7 +25,7 @@ const STYLE=`<style>.tapbtn{padding:.45rem .8rem;border-radius:.5rem;font-weight
 const PAY_METHODS=[['card','Card (Stripe)'],['zelle','Zelle'],['cashapp','Cash App'],['venmo','Venmo'],['check','Check'],['cash','Cash'],['other','Other']];
 const PAY_STATUS={unpaid:['warn','Unpaid'],pending:['warn','Sent — confirm'],plan:['ok','Payment plan'],paid:['ok','Paid'],waived:['','Waived'],void:['','No fee']};
 window.mountTeamPayments=async function(el, ctx){
-  const sb=ctx.sb, team=ctx.team, SEASON=ctx.season; let rows=[], pending=[];
+  const sb=ctx.sb, team=ctx.team, SEASON=ctx.season; let rows=[], pending=[], items=[];
   el.classList.add('tap'); el.innerHTML=STYLE+'<p class="text-sm text-gray-500">Loading…</p>';
   let st=null, set=null, extras=false;   // extras = this team has the paid team extras (card payments + payment plans live there)
   try{
@@ -35,6 +35,7 @@ window.mountTeamPayments=async function(el, ctx){
       pageAll(()=>sb.from('team_fee_overview').select('*').eq('team_code',team).eq('season_year',SEASON).order('last_name').order('first_name')),
       sb.from('fee_payments').select('*').eq('team_code',team).eq('status','reported').order('reported_at')]);
     st=a; set=s; rows=r; pending=pend||[];
+    const {data:it,error:ie}=await sb.from('team_fee_items').select('*').eq('team_code',team).eq('season_year',SEASON).order('sort').order('created_at'); if(ie) throw ie; items=it||[];
     try{ const {data:x}=await sb.from('team_messaging').select('enabled').eq('team_code',team).maybeSingle(); extras=!!(x&&x.enabled); }catch(e){}
   }catch(e){ el.innerHTML=STYLE+'<p class="text-red-700 text-sm">'+esc(e.message)+'</p>'; return; }
   const s=set||{fee_amount:0,sibling_discount:0,plan_enabled:false,plan_deposit:0,plan_installments:2,plan_interval:'month',accept_card:true};
@@ -53,13 +54,13 @@ ${extras?`<div class="tapcard"><h3 class="font-bold mb-1">Card payments — ${es
   ${st?`<button ${btn('lite','data-id="stripeStatus"')}>Re-check status</button> <a class="tapbtn lite" href="https://dashboard.stripe.com/" target="_blank" rel="noopener">Stripe dashboard ↗</a>`:''}</div>
 ${st?`<p class="text-xs text-gray-400 mt-1">Account ${esc(st.stripe_account_id)} · set up by ${esc(st.created_by||'')}. Refunds for card payments are done in the Stripe dashboard; the app records them automatically.</p>`:''}</div>`:`<div class="tapcard" style="border:1px solid #f59e0b;background:#fffbeb"><span class="tappill warn">Paid team extra</span> <b>Taking payments online and tracking them</b> — parents paying by card, payment plans, Zelle / Cash App / Venmo / check with "I sent it", and the app keeping track of who has paid — is part of the paid team extras, which aren't switched on for ${esc(tn)}. ${ctx.canPickTeam?'Switch them on in the Paid Extras tab.':'See the Paid extras tab; the league site admin switches them on.'} What's free: post your team fee below so every parent sees what they owe.</div>`}
 
-<div class="tapcard"><h3 class="font-bold mb-1">${SEASON} team fee &amp; ways to pay</h3>
-<p class="text-xs text-gray-500 mb-2">Every team sets its own fee. Every athlete who registers with ${esc(tn)} gets it automatically, and the parent ${extras?'is taken to the payment portal right after submitting the registration':'sees what they owe on their dashboard'}.</p>
-<div class="grid gap-2" style="grid-template-columns:repeat(auto-fit,minmax(14rem,1fr))">
- <label class="text-sm"><b>Fee per athlete $</b><br><input data-id="psFee" type="number" min="0" step="0.01" value="${+s.fee_amount||''}" class="w-full"></label>
- <label class="text-sm"><b>Sibling discount $</b> <span class="text-xs text-gray-500">off each 2nd+ child (same email)</span><br><input data-id="psSib" type="number" min="0" step="0.01" value="${+s.sibling_discount||''}" class="w-full"></label>
- <label class="text-sm" style="grid-column:1/-1"><b>What the fee covers</b> <span class="text-xs text-gray-500">(shown to parents)</span><br><input data-id="psNote" value="${esc(s.fee_note||'')}" class="w-full" placeholder="e.g. uniform, meet entry fees, league certification"></label>
-</div>
+<div class="tapcard"><h3 class="font-bold mb-1">${SEASON} team fees &amp; ways to pay</h3>
+<p class="text-xs text-gray-500 mb-2">Every team sets its own fees. Every athlete who registers with ${esc(tn)} gets them automatically, and the parent ${extras?'is taken to the payment portal right after submitting the registration':'sees what they owe on their dashboard'}.</p>
+<p class="text-sm mb-1"><b>Your fees and discounts</b> <span class="text-xs text-gray-500">— add as many as you need, name them how you like, and choose who each one is for. Parents see the total and every line.</span></p>
+<div class="tapscroll" style="max-height:none"><table class="tapt"><thead><tr><th>Name parents see</th><th>Fee or discount</th><th>Amount</th><th>Who gets it</th><th>Note for parents (optional)</th><th></th></tr></thead><tbody data-id="flBody"></tbody></table></div>
+<div class="flex flex-wrap gap-2 mt-2"><button ${btn('lite','data-id="flAddFee"')}>+ Add a fee</button><button ${btn('lite','data-id="flAddDisc"')}>+ Add a discount</button></div>
+<div data-id="flTotals" class="mt-2 rounded-lg p-2 text-sm" style="background:#f9fafb;border:1px solid #e5e7eb"></div>
+<label class="text-sm block mt-2"><b>Message to parents about the fees</b> <span class="text-xs text-gray-500">(optional, shown with the total)</span><br><input data-id="psNote" value="${esc(s.fee_note||'')}" class="w-full" placeholder="e.g. due by March 1 — ask us about scholarships"></label>
 <div class="mt-3 ${extras?'':'hide'}">${chk('psCard',s.accept_card!==false,'<b>Card</b> (needs the Stripe setup above)')}
 <div class="ml-6 mt-1">${chk('psPlan',s.plan_enabled,'<b>Offer a payment plan</b> — deposit now, then equal monthly card payments charged automatically')}
  <div data-id="psPlanBox" class="flex flex-wrap gap-2 items-end mt-1 ${s.plan_enabled?'':'hide'}">
@@ -74,8 +75,8 @@ ${st?`<p class="text-xs text-gray-400 mt-1">Account ${esc(st.stripe_account_id)}
  <div>${chk('psVenmo',s.accept_venmo,'<b>Venmo</b>')}<input data-id="psVenmoInfo" value="${esc(s.venmo_info||'')}" class="w-full mt-1" placeholder="@Venmo-handle"></div>
  <div>${chk('psOther',s.accept_other,'<b>Check or cash</b>')}<input data-id="psOtherInfo" value="${esc(s.other_info||'')}" class="w-full mt-1" placeholder="Who to make the check out to, where to bring it"></div>
 </div>
-<p class="text-xs text-gray-500 mt-2">${extras?'For Zelle, Cash App, Venmo, check and cash the parent taps "I sent it" and you confirm below once it arrives. ':''}Changing the fee later doesn't change athletes who already have a fee (adjust those one by one below).</p>
-<div class="flex flex-wrap gap-2 mt-2"><button ${btn('pri','data-id="psSave"')}>Save</button><button ${btn('lite','data-id="psEnsure" title="Athletes who registered before the fee was set don\'t have one yet"')}>Add the fee to athletes who don't have one</button></div></div>
+<p class="text-xs text-gray-500 mt-2">${extras?'For Zelle, Cash App, Venmo, check and cash the parent taps "I sent it" and you confirm below once it arrives. ':''}Athletes who register after you save get the new list automatically. Athletes already registered keep what they have until you tap "Update athletes who haven't paid"; anyone who has paid something or is on a payment plan is never changed (use "Fees" on their row below).</p>
+<div class="flex flex-wrap gap-2 mt-2"><button ${btn('pri','data-id="psSave"')}>Save</button><button ${btn('lite','data-id="psEnsure" title="Puts the saved list on athletes who have no fee yet and on athletes who have not paid anything"')}>Update athletes who haven't paid</button></div></div>
 
 ${extras&&pending.length?`<div class="tapcard" style="border:1px solid #f59e0b;background:#fffbeb"><h3 class="font-bold mb-1">Parents say they've sent ${pending.length} payment${pending.length>1?'s':''} — confirm when it arrives</h3>
 <table class="tapt"><thead><tr><th>Athlete</th><th>How</th><th>Amount</th><th>Reference</th><th>Sent</th><th></th></tr></thead><tbody>${pending.map(p=>{ const f=rows.find(r=>r.id===p.fee_id)||{};
@@ -85,27 +86,62 @@ ${extras&&pending.length?`<div class="tapcard" style="border:1px solid #f59e0b;b
 <div class="tapcard"><div class="flex flex-wrap items-center gap-2 mb-2"><h3 class="font-bold flex-1">Athletes — ${rows.length} with a fee${extras?` · ${money(tot('paid'))} collected · ${money(tot('balance'))} outstanding`:''}</h3>
  <select data-id="payFilter" class="${extras?'':'hide'}"><option value="">Everyone</option><option value="owing">Still owing</option><option value="plan">On a payment plan</option><option value="paid">Paid</option></select></div>
 <div class="tapscroll"><table class="tapt"><thead><tr><th>Athlete</th><th>Parent</th><th>Fee</th>${extras?'<th>Paid</th><th>Balance</th><th>Status</th>':''}<th></th></tr></thead><tbody data-id="payBody"></tbody></table></div>
-<p class="text-xs text-gray-500 mt-1">${extras?`"Record payment" is for money you received outside the app (Zelle, check, cash…). Card payments record themselves. "Pay link" copies the parent's personal pay page for this athlete — handy to text or email.`:`"Adjust" sets a special rate or scholarship for one athlete; "Waive" removes the fee. Tracking who has paid is part of the paid team extras.`}</p></div>`;
+<p class="text-xs text-gray-500 mt-1">${extras?`"Record payment" is for money you received outside the app (Zelle, check, cash…). Card payments record themselves. "Fees" opens one athlete's lines: change an amount, take a fee off (for example the volunteer fee once the hours are worked), or add a discount or scholarship. "Pay link" copies the parent's personal pay page for this athlete — handy to text or email.`:`"Fees" opens one athlete's lines: change an amount, take a fee off, or add a discount or scholarship; "Waive" removes everything. Tracking who has paid is part of the paid team extras.`}</p></div>`;
   const draw=()=>{ const flt=q('payFilter').value, L=rows.filter(r=>flt==='owing'?(+r.balance>0&&!['waived','void'].includes(r.status)):flt==='plan'?r.status==='plan':flt==='paid'?r.status==='paid':true);
     q('payBody').innerHTML=L.map(r=>{ const [cls,lab]=PAY_STATUS[r.status]||['',r.status];
      return `<tr data-fee="${r.id}"><td>${esc(r.first_name)} ${esc(r.last_name)}<div class="text-xs text-gray-500">${esc(r.division||'')}${r.reg_status==='rejected'?' · rejected':''}</div></td><td class="text-xs">${esc(r.email)}</td>
-     <td class="font-mono">${money(r.amount_due)}${+r.discount>0?`<div class="text-xs text-gray-500">${esc(r.discount_note||'discount')} −${money(r.discount)}</div>`:''}${r.note?`<div class="text-xs text-gray-500">${esc(r.note)}</div>`:''}</td><td class="font-mono">${money(r.paid)}</td><td class="font-mono ${+r.balance>0&&!['waived','void'].includes(r.status)?'text-red-700 font-bold':''}">${['waived','void'].includes(r.status)?'—':money(r.balance)}</td>
+     <td><span class="font-mono font-bold">${money(r.amount_due)}</span>${(r.lines||[]).map(l=>`<div class="text-xs text-gray-500" ${l.removed?'style="text-decoration:line-through"':''}>${esc(l.name)}${l.family?' (family)':''} ${l.kind==='discount'?'−':''}${money(l.amount)}</div>`).join('')}${r.note?`<div class="text-xs text-gray-500">${esc(r.note)}</div>`:''}</td><td class="font-mono">${money(r.paid)}</td><td class="font-mono ${+r.balance>0&&!['waived','void'].includes(r.status)?'text-red-700 font-bold':''}">${['waived','void'].includes(r.status)?'—':money(r.balance)}</td>
      <td><span class="tappill ${cls}">${lab}</span>${r.status==='plan'?`<div class="text-xs text-gray-500">${r.plan_paid} of ${r.plan_installments} × ${money(r.plan_amount)}${r.plan_next_on?' · next '+esc(r.plan_next_on):''}${r.plan_failed?' · <b class="text-red-700">card failed</b>':''}</div>`:''}${+r.reported_count>0?`<div class="text-xs" style="color:#92400e">${r.reported_count} payment(s) to confirm above</div>`:''}</td>
-     <td class="whitespace-nowrap"><button ${btn('lite','data-act="link" title="Copy this athlete\'s pay page link"')}>Pay link</button> ${!['paid','waived','void'].includes(r.status)?`<button ${btn('grn','data-act="record"')}>Record payment</button> `:''}${r.status!=='plan'&&r.status!=='void'?`<button ${btn('lite','data-act="adjust"')}>Adjust</button> `:''}${!['paid','waived','void','plan'].includes(r.status)?`<button ${btn('lite','data-act="waive"')}>Waive</button>`:''}</td></tr>`; }).join('')
+     <td class="whitespace-nowrap"><button ${btn('lite','data-act="link" title="Copy this athlete\'s pay page link"')}>Pay link</button> ${!['paid','waived','void'].includes(r.status)?`<button ${btn('grn','data-act="record"')}>Record payment</button> `:''}${r.status!=='plan'&&r.status!=='void'?`<button ${btn('lite','data-act="adjust" title="See, change, add or take off this athlete\'s fees and discounts"')}>Fees</button> `:''}${!['paid','waived','void','plan'].includes(r.status)?`<button ${btn('lite','data-act="waive"')}>Waive</button>`:''}</td></tr>`; }).join('')
      ||'<tr><td colspan="7" class="p-3 text-gray-500">No athletes here yet.</td></tr>';
     // Without the paid extras the app doesn't track payments: fee only, plus Adjust / Waive.
     if(!extras) q('payBody').querySelectorAll('tr[data-fee]').forEach(tr=>{ [5,4,3].forEach(i=>tr.children[i]&&tr.children[i].remove()); tr.querySelectorAll('[data-act="link"],[data-act="record"]').forEach(x=>x.remove()); }); };
   draw();
   const refresh=()=>window.mountTeamPayments(el,ctx);
+  /* ---- the fee list ---- */
+  const WHO=[['athlete','Every athlete'],['family','Once per family'],['sibling','Each additional child (2nd, 3rd…)'],['new','New athletes only'],['returning','Returning athletes only'],['choose','Only athletes I pick']];
+  let list=items.map(i=>({id:i.id,name:i.name,kind:i.kind,amount:+i.amount,is_percent:!!i.is_percent,applies:i.applies,note:i.note||''})), dirty=false;
+  const readList=()=>{ q('flBody').querySelectorAll('tr[data-i]').forEach(tr=>{ const x=list[+tr.dataset.i]; if(!x) return; const g=k=>tr.querySelector(`[data-f="${k}"]`);
+    x.name=g('name').value; x.amount=+g('amount').value||0; x.applies=g('applies').value; x.note=g('note').value; x.is_percent=x.kind==='discount'&&g('unit').value==='pct'; }); };
+  // what a family of 1, 2, 3 would pay (new vs returning shown apart only when the list treats them differently)
+  const famTotal=(n,ret)=>{ let t=0; for(let k=0;k<n;k++){ let fees=0, disc=0, pct=0;
+      list.forEach(x=>{ const on=x.applies==='athlete'||(x.applies==='family'&&k===0)||(x.applies==='sibling'&&k>0)||(x.applies==='new'&&!ret)||(x.applies==='returning'&&ret); if(!on) return;
+        if(x.kind==='fee') fees+=x.amount; else if(x.is_percent) pct+=x.amount; else disc+=x.amount; });
+      t+=Math.max(fees-disc-Math.round(fees*pct)/100,0); } return t; };
+  const drawTotals=()=>{ const split=list.some(x=>x.applies==='new'||x.applies==='returning'), opt=list.filter(x=>x.applies==='choose');
+    const row=(lab,ret)=>`<tr><td class="pr-3">${lab}</td>${[1,2,3].map(n=>`<td class="pr-4 font-mono"><b>${money(famTotal(n,ret))}</b></td>`).join('')}</tr>`;
+    q('flTotals').innerHTML=!list.length?'<b>No fees yet.</b> Tap "+ Add a fee" to start — for example Registration, Uniform, Fundraiser, Parent volunteer fee.'
+      :`<b>What a family pays in total</b>${dirty?' <span class="tappill warn">not saved yet</span>':''}<table class="mt-1 text-sm"><tr class="text-xs text-gray-500"><td></td><td class="pr-4">1 athlete</td><td class="pr-4">2 athletes</td><td class="pr-4">3 athletes</td></tr>${split?row('New athletes',false)+row('Returning athletes',true):row('Family total',false)}</table>
+      <div class="text-xs text-gray-500 mt-1">"Once per family" lines are charged one time, on the family's first athlete. A family is the athletes registered with the same parent email.${opt.length?` Not counted above: ${opt.map(x=>esc(x.name)).join(', ')} (added only to athletes you pick, with "Fees" on their row).`:''}</div>`; };
+  const drawList=()=>{ q('flBody').innerHTML=list.map((x,i)=>`<tr data-i="${i}"><td><input data-f="name" value="${esc(x.name)}" placeholder="${x.kind==='fee'?'e.g. Uniform':'e.g. Sibling discount'}" style="width:100%;min-width:9rem"></td>
+      <td><span class="tappill ${x.kind==='fee'?'':'ok'}">${x.kind==='fee'?'Fee':'Discount'}</span></td>
+      <td class="whitespace-nowrap">${x.kind==='discount'?`<select data-f="unit"><option value="usd" ${x.is_percent?'':'selected'}>$ off</option><option value="pct" ${x.is_percent?'selected':''}>% off</option></select>`:'$ <input type="hidden" data-f="unit" value="usd">'} <input data-f="amount" type="number" min="0" step="0.01" value="${x.amount||''}" style="width:6rem"></td>
+      <td><select data-f="applies">${opts(WHO,x.applies)}</select></td><td><input data-f="note" value="${esc(x.note)}" style="width:100%;min-width:8rem"></td>
+      <td class="whitespace-nowrap"><button ${btn('lite','data-fl="up" title="Move up"')}>↑</button> <button ${btn('lite','data-fl="del" title="Remove from the list"')}>✕</button></td></tr>`).join('')
+      ||'<tr><td colspan="6" class="p-3 text-gray-500">Nothing on the list yet.</td></tr>'; drawTotals(); };
+  drawList();
+  q('flBody').oninput=()=>{ readList(); dirty=true; drawTotals(); };
+  q('flBody').onchange=()=>{ readList(); dirty=true; drawTotals(); };
+  q('flBody').onclick=e=>{ const b=e.target.closest('button[data-fl]'); if(!b) return; e.stopPropagation(); readList(); const i=+b.closest('tr').dataset.i;
+    if(b.dataset.fl==='del') list.splice(i,1); else if(i>0) [list[i-1],list[i]]=[list[i],list[i-1]]; dirty=true; drawList(); };
+  const addRow=kind=>{ readList(); list.push({name:'',kind,amount:0,is_percent:false,applies:kind==='discount'?'sibling':'athlete',note:''}); dirty=true; drawList(); const ins=q('flBody').querySelectorAll('[data-f="name"]'); ins[ins.length-1].focus(); };
+  q('flAddFee').onclick=()=>addRow('fee'); q('flAddDisc').onclick=()=>addRow('discount');
+  const applyList=async()=>{ const {data,error}=await sb.rpc('apply_fee_list',{p_team:team,p_season:SEASON}); if(error){ toast(error.message,true); return false; } toast(data?`Updated ${data} athlete(s)`:'Everyone is already up to date'); return true; };
   q('payFilter').onchange=draw;
   if(q('teamSel')) q('teamSel').onchange=()=>{ ctx.team=q('teamSel').value; if(ctx.onTeamChange) ctx.onTeamChange(ctx.team); refresh(); };
   q('psPlan').onchange=()=>q('psPlanBox').classList.toggle('hide',!q('psPlan').checked);
-  q('psSave').onclick=async()=>{ const p={team_code:team,season_year:SEASON,fee_amount:+q('psFee').value||0,sibling_discount:+q('psSib').value||0,fee_note:q('psNote').value,
+  q('psSave').onclick=async()=>{ readList();
+    if(list.some(x=>!x.name.trim())){ toast('Give every fee and discount a name (or remove the empty row).',true); return; }
+    const p={team_code:team,season_year:SEASON,fee_note:q('psNote').value,
     accept_card:extras&&q('psCard').checked,plan_enabled:extras&&q('psPlan').checked,plan_deposit:+q('psDep').value||0,plan_installments:+q('psN').value||1,plan_interval:q('psEvery').value||'month',plan_first_date:q('psFirst').value||null,
     accept_zelle:q('psZelle').checked,zelle_info:q('psZelleInfo').value,accept_cashapp:q('psCashapp').checked,cashapp_info:q('psCashappInfo').value,accept_venmo:q('psVenmo').checked,venmo_info:q('psVenmoInfo').value,accept_other:q('psOther').checked,other_info:q('psOtherInfo').value};
     for(const [on,info,label] of [['accept_zelle','zelle_info','Zelle'],['accept_cashapp','cashapp_info','Cash App'],['accept_venmo','venmo_info','Venmo']]){ if(p[on]&&!p[info].trim()){ toast(`Add the ${label} details parents should send to.`,true); return; } }
-    const {error}=await sb.rpc('save_team_payment_settings',{p}); if(error){ toast(error.message,true); return; } toast('Saved'); refresh(); };
-  q('psEnsure').onclick=async()=>{ const {data,error}=await sb.rpc('ensure_athlete_fees',{p_team:team,p_season:SEASON}); if(error){ toast(error.message,true); return; } toast(data?`Added the fee to ${data} athlete(s)`:'Everyone already has a fee'); refresh(); };
+    const changed=dirty;
+    const {error:le}=await sb.rpc('save_fee_list',{p_team:team,p_season:SEASON,p_items:list.map(x=>({id:x.id||null,name:x.name,kind:x.kind,amount:x.amount,is_percent:x.is_percent,applies:x.applies,note:x.note}))}); if(le){ toast(le.message,true); return; }
+    const {error}=await sb.rpc('save_team_payment_settings',{p}); if(error){ toast(error.message,true); refresh(); return; } toast('Saved');
+    if(changed&&list.length&&confirm('Saved.\n\nPut the new list on athletes who are already registered and haven\'t paid anything yet?\n\nAthletes who have paid something or are on a payment plan are not changed.')) await applyList();
+    refresh(); };
+  q('psEnsure').onclick=async()=>{ if(dirty){ toast('Save your changes to the list first.',true); return; } if(await applyList()) refresh(); };
   const stripeCall=async action=>{ toast(action==='connect'?'Opening Stripe…':'Checking with Stripe…');
     const {data,error}=await sb.functions.invoke('team-stripe',{body:{action,team_code:team}});
     if(error){ let m=error.message; try{ const j=await error.context?.json(); if(j?.error) m=j.error; }catch(e){} toast(m,true); return; }
@@ -133,9 +169,30 @@ ${extras&&pending.length?`<div class="tapcard" style="border:1px solid #f59e0b;b
       <label class="text-sm" style="grid-column:1/-1">Note<br><input id="rpNote" class="w-full"></label></div><div class="flex gap-2 mt-3"><button ${btn('grn','id="rpGo"')}>Record</button><button ${btn('lite','onclick="window.closeTapModal()"')}>Cancel</button></div></div>`);
       document.getElementById('rpGo').onclick=async()=>{ const g=i=>document.getElementById(i); const {error}=await sb.rpc('record_fee_payment',{p_fee:id,p_method:g('rpMethod').value,p_amount:+g('rpAmt').value,p_received_on:g('rpDate').value||null,p_reference:g('rpRef').value||null,p_note:g('rpNote').value||null});
         if(error){ toast(error.message,true); return; } closeModal(); toast('Recorded'); refresh(); }; return; }
-    if(act==='adjust'){ const amt=prompt(`New fee amount for ${who} (currently ${money(r.amount_due)}). For a scholarship or special rate:`,(+r.amount_due).toFixed(2)); if(amt===null) return;
-      const note=prompt('Reason (the family sees this):',r.note||''); if(note===null) return;
-      const {error}=await sb.rpc('set_athlete_fee',{p_fee:id,p_amount:+amt,p_note:note||null}); if(error){ toast(error.message,true); return; } toast('Saved'); refresh(); return; }
+    if(act==='adjust'){ let touched=false;
+      const show=async()=>{ const {data:f,error}=await sb.from('team_fee_overview').select('*').eq('id',id).maybeSingle(); if(error||!f){ toast(error?error.message:'Fee not found',true); return; }
+        const L=f.lines||[], have=new Set(L.filter(l=>!l.removed).map(l=>l.item_id)), can=items.filter(i=>!have.has(i.id));
+        openModal(`<div class="tap">${STYLE}<h3 class="font-bold mb-1">Fees — ${esc(who)}</h3><p class="text-xs text-gray-500 mb-2">The family sees every line and any reason you give. ${+f.paid>0?`Paid so far ${money(f.paid)}.`:''}</p>
+        <table class="tapt"><thead><tr><th>Line</th><th>Amount</th><th>Reason / note</th><th></th></tr></thead><tbody>${L.map(l=>`<tr data-line="${l.id}" ${l.removed?'style="opacity:.55"':''}><td ${l.removed?'style="text-decoration:line-through"':''}>${esc(l.name)}${l.family?' <span class="tappill">once per family</span>':''}${l.kind==='discount'?' <span class="tappill ok">discount</span>':''}</td>
+          <td class="whitespace-nowrap">${l.kind==='discount'?'−':''}${l.percent!=null?'':'$'}<input data-lf="amt" type="number" min="0" step="0.01" value="${l.percent!=null?+l.percent:(+l.amount).toFixed(2)}" style="width:5.5rem" ${l.removed?'disabled':''}>${l.percent!=null?`% <span class="text-xs text-gray-500">= ${money(l.amount)}</span>`:''}</td>
+          <td><input data-lf="note" value="${esc(l.note||'')}" style="width:100%;min-width:7rem"></td>
+          <td class="whitespace-nowrap">${l.removed?`<button ${btn('lite','data-la="back"')}>Put back</button>`:`<button ${btn('lite','data-la="save"')}>Save</button> <button ${btn('lite','data-la="off" title="This athlete doesn\'t owe this line"')}>Take off</button>`}</td></tr>`).join('')||'<tr><td colspan="4" class="text-gray-500 p-2">No lines yet.</td></tr>'}
+          <tr><td class="font-bold">Total</td><td class="font-mono font-bold">${money(f.amount_due)}</td><td colspan="2" class="text-xs text-gray-500">${+f.paid>0?`Balance ${money(f.balance)}`:''}</td></tr></tbody></table>
+        <div class="mt-3 text-sm font-semibold">Add a line</div>
+        <div class="flex flex-wrap gap-2 items-end mt-1"><label class="text-xs">What<br><select id="alWhat">${can.map(i=>`<option value="${i.id}">${esc(i.name)} (${i.kind==='discount'?'−':''}${i.is_percent?(+i.amount)+'%':money(i.amount)})</option>`).join('')}<option value="fee">Something else — a fee…</option><option value="discount" ${can.length?'':'selected'}>Something else — a discount / scholarship…</option></select></label>
+          <label class="text-xs" id="alNameBox">Name<br><input id="alName" style="width:10rem" placeholder="e.g. Scholarship"></label><label class="text-xs" id="alAmtBox">Amount $<br><input id="alAmt" type="number" min="0" step="0.01" style="width:6rem"></label>
+          <label class="text-xs flex-1">Reason / note<br><input id="alNote" style="width:100%"></label><button ${btn('pri','id="alGo"')}>Add</button></div>
+        <div class="flex gap-2 mt-3"><button ${btn('lite','id="alDone"')}>Done</button></div></div>`);
+        const g=i=>document.getElementById(i), box=document.getElementById('tapModalBox');
+        const sync=()=>{ const own=g('alWhat').value==='fee'||g('alWhat').value==='discount'; g('alNameBox').classList.toggle('hide',!own); g('alAmtBox').classList.toggle('hide',!own); }; sync(); g('alWhat').onchange=sync;
+        const run=async(fn,args)=>{ const {error}=await sb.rpc(fn,args); if(error){ toast(error.message,true); return; } touched=true; show(); };
+        g('alGo').onclick=()=>{ const w=g('alWhat').value, own=w==='fee'||w==='discount';
+          if(own&&(!g('alName').value.trim()||!(+g('alAmt').value>=0)||g('alAmt').value==='')){ toast('Enter a name and an amount.',true); return; }
+          run('fee_line_add',own?{p_fee:id,p_name:g('alName').value,p_kind:w,p_amount:+g('alAmt').value,p_note:g('alNote').value||null}:{p_fee:id,p_item:w,p_note:g('alNote').value||null}); };
+        g('alDone').onclick=()=>{ closeModal(); if(touched) refresh(); };
+        box.querySelectorAll('button[data-la]').forEach(b=>b.onclick=()=>{ const tr=b.closest('tr'), a=b.dataset.la, note=tr.querySelector('[data-lf="note"]').value;
+          run('fee_line_set',a==='save'?{p_line:tr.dataset.line,p_amount:+tr.querySelector('[data-lf="amt"]').value||0,p_note:note}:{p_line:tr.dataset.line,p_removed:a==='off',p_note:note}); }); };
+      show(); return; }
     if(act==='waive'){ const note=prompt(`Waive ${who}'s fee entirely? Reason:`); if(note===null) return;
       const {error}=await sb.rpc('set_athlete_fee',{p_fee:id,p_amount:0,p_note:note||null,p_waive:true}); if(error){ toast(error.message,true); return; } toast('Fee waived'); refresh(); }
   };
