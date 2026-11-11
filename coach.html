@@ -59,6 +59,7 @@
     .dash-col-right{position:sticky;top:12px}
   }
 .tatab{padding:.55rem 1rem;font-size:.9rem;cursor:pointer;background:#fff;border:0;font-weight:600}.tatab.active{background:var(--brand);color:#fff}
+.sptab{padding:.4rem .9rem;font-size:.85rem;cursor:pointer;background:#fff;font-weight:600}.sptab.active{background:var(--brand);color:#fff}
 </style>
 </head>
 <body class="text-gray-900"><header class="topnav"><div class="topnav-inner">
@@ -149,6 +150,7 @@
           <div id="feeBanner"></div>
           <div class="card">
             <div class="col-head"><h2 class="flex-1">Roster <span id="count" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
+            <div class="sportTabsR hidden flex gap-1 mb-2"><button type="button" class="sptab active" data-sp="Track &amp; Field" style="border:1px solid #e5e7eb;border-radius:8px">Track &amp; Field</button><button type="button" class="sptab" data-sp="Cross Country" style="border:1px solid #e5e7eb;border-radius:8px">Cross Country</button></div>
             <div class="flex flex-wrap items-center gap-2 mb-2">
               <select id="filter" class="flex-1 min-w-0"><option value="">All</option><option value="submitted">Needs team review</option><option value="reviewed">Team reviewed — waiting for the president</option><option value="verified">Certified</option><option value="rejected">Rejected</option></select>
               <select id="sortBy" class="min-w-0" title="Sort the roster"><option value="name">Sort: Name (A–Z)</option><option value="sex">Sort: Sex (girls, then boys)</option><option value="division">Sort: Division (youngest first)</option><option value="newest">Sort: Newest first</option></select>
@@ -214,6 +216,7 @@
           <div id="leftCol">
           <div class="card" id="rosterSection">
             <div class="col-head"><h2 class="flex-1">My roster <span id="dashCount" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
+            <div class="sportTabsR hidden flex gap-1 mb-2"><button type="button" class="sptab active" data-sp="Track &amp; Field" style="border:1px solid #e5e7eb;border-radius:8px">Track &amp; Field</button><button type="button" class="sptab" data-sp="Cross Country" style="border:1px solid #e5e7eb;border-radius:8px">Cross Country</button></div>
             <div id="dashRoster" class="text-sm rosterScroll"></div>
           </div>
 
@@ -583,7 +586,17 @@ function pill(r){
   const c={match:'bg-green-100 text-green-800',mismatch:'bg-red-100 text-red-800',pending:'bg-yellow-100 text-yellow-800',unreadable:'bg-orange-100 text-orange-800',error:'bg-red-100 text-red-800'}[s];
   return `<span class="pill ${c}">ID: ${s}</span>`;
 }
+// Track & Field and Cross Country rosters are separate tabs (shown when the team is in the cross country league or has XC sign-ups).
+let rosterSport='Track & Field';
+const sportRows=()=>rows.filter(r=>(r.sport||'Track & Field')===rosterSport);
+function paintSportTabs(){
+  const t=(window.VYC_TEAMS||[]).find(x=>myCoach&&x.code===myCoach.team_code), show=!!(t&&t.xc)||rows.some(r=>r.sport==='Cross Country');
+  document.querySelectorAll('.sportTabsR').forEach(bar=>{ bar.classList.toggle('hidden',!show); bar.querySelectorAll('[data-sp]').forEach(b=>{ b.classList.toggle('active',b.dataset.sp===rosterSport);
+    const n=rows.filter(r=>(r.sport||'Track & Field')===b.dataset.sp).length; b.textContent=b.dataset.sp+' ('+n+')'; b.onclick=()=>{ rosterSport=b.dataset.sp; render(); }; }); });
+}
 function renderDashRoster(){
+  paintSportTabs();
+  const rows=sportRows();
   const el=$('dashRoster'); if(!el) return;
   $('dashCount').textContent=`(${rows.length})`;
   if(!rows.length){ el.innerHTML='<p class="text-gray-500">No athletes on your roster yet. Share the registration link with parents.</p>'; return; }
@@ -616,7 +629,7 @@ function sortRoster(list){
 }
 function visibleRows(){
   const f=$('filter').value, q=(($('nameSearch')&&$('nameSearch').value)||'').trim().toLowerCase();
-  return sortRoster(rows.filter(r=>(!f||r.status===f)&&(!q||`${r.first_name} ${r.last_name} ${r.last_name}, ${r.first_name} ${r.comp_number??''}`.toLowerCase().includes(q))));
+  return sortRoster(sportRows().filter(r=>(!f||r.status===f)&&(!q||`${r.first_name} ${r.last_name} ${r.last_name}, ${r.first_name} ${r.comp_number??''}`.toLowerCase().includes(q))));
 }
 function render(){
   renderDashRoster();

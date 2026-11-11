@@ -141,6 +141,7 @@ async function loadMyAthletes(){
   // Ask which season first: Track & Field, Cross Country, or Valley United Striders (postseason — its own form)
   $('spTrack').href=base+'&sport=track'; $('spXc').href=base+'&sport=xc';
   $('regAthleteBtn').onclick=e=>{ e.preventDefault(); $('seasonPick').classList.toggle('hidden'); };
+  if(new URLSearchParams(location.search).get('sport')==='xc'){ $('seasonPick').classList.remove('hidden'); $('spXc').style.borderColor='#1d4ed8'; $('spXc').style.borderWidth='3px'; }
   if(error){ $('myAthletes').innerHTML='<p class="text-sm text-red-700">Could not load: '+error.message+'</p>'; return; }
   // Per-team switch: may parents enter meet events themselves, or do they answer "are you coming?" for the coaches?
   try{ const codes=[...new Set(myRegs.map(r=>r.team_code).filter(Boolean))]; if(codes.length){ const {data:ts}=await sb.from('team_settings').select('*').in('team_code',codes); teamSettings={}; (ts||[]).forEach(t=>teamSettings[t.team_code]=t); } }catch(e){}

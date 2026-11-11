@@ -216,13 +216,27 @@ window.leagueReady = (async function(){
       fetch(C.SUPABASE_URL+'/rest/v1/league_teams?select=*&order=sort_order,name',{headers:h}).then(r=>r.ok?r.json():null),
       fetch(C.SUPABASE_URL+'/rest/v1/app_settings?select=*',{headers:h}).then(r=>r.ok?r.json():null)]);
     if(Array.isArray(t)&&t.length){
-      window.VYC_TEAMS.splice(0,window.VYC_TEAMS.length,...t.map(x=>({code:x.code,name:x.name,conference:x.conference,active:x.active!==false})));
+      // active = in the TRACK league (every track page uses this); xc = in the CROSS COUNTRY league; enabled = not switched off at all.
+      window.VYC_TEAMS.splice(0,window.VYC_TEAMS.length,...t.map(x=>({code:x.code,name:x.name,conference:x.conference,enabled:x.active!==false,active:x.active!==false&&x.in_track!==false,xc:x.active!==false&&!!x.in_xc})));
       window.TEAMS.splice(0,window.TEAMS.length,...window.VYC_TEAMS.filter(x=>x.active).map(x=>x.name));
     }
     if(Array.isArray(st)){ const y=st.find(x=>x.key==='season_year'); if(y&&+y.value) C.SEASON_YEAR=+y.value; }
     if(Array.isArray(st)){ const tm=st.find(x=>x.key==='entry_test_mode'); C.ENTRY_TEST_MODE=!!(tm&&tm.value==='on'); }
+    // Cross country: its own season year and registration window (Site Admin > League Setup > Cross Country)
+    if(Array.isArray(st)){ const g=k=>(st.find(x=>x.key===k)||{}).value||''; const y=+g('xc_season_year')||C.SEASON_YEAR;
+      C.XC={season:y, open:g('xc_registration_open_'+y), close:g('xc_registration_close_'+y), start:g('xc_season_start_'+y), end:g('xc_season_end_'+y)}; }
   }catch(e){}
 })();
+// ---- Cross country registration window, in words: {state:'open'|'not_yet'|'closed'|'unset', text} (database enforces the same dates) ----
+window.xcWindow = function(){
+  const X=(window.APP_CONFIG||{}).XC||{}, today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
+  const f=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}):'';
+  const season=(X.start||X.end)?` The season runs ${X.start?f(X.start):'?'} – ${X.end?f(X.end):'?'}.`:'';
+  if(X.open&&today<X.open) return {state:'not_yet', text:`Cross country registration for the ${X.season} season opens ${f(X.open)}.${season}`};
+  if(X.close&&today>X.close) return {state:'closed', text:`Cross country registration for the ${X.season} season closed ${f(X.close)}.${season}`};
+  if(!X.open&&!X.close) return {state:'unset', text:`Cross country — ${X.season||''} season.${season}`};
+  return {state:'open', text:`Cross country registration for the ${X.season} season is open${X.close?' until '+f(X.close):''}.${season}`};
+};
 // ---- VYC background screening: the league's official link (valleyconference.org > Background Screening, provider TCLogiQ) ----
 window.VYC_BG_CHECK_URL = 'https://www.tclogiq.com/valleyyouth';
 window.bgCheckLinkHtml = function(lead){

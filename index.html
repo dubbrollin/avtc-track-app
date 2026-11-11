@@ -78,6 +78,8 @@
   </div>
 
   <div id="startPick" class="card">
+      <div class="flex gap-1 mb-3" id="sportTabs"><div class="roletab active" data-sport="track">Track &amp; Field</div><div class="roletab" data-sport="xc">Cross Country</div></div>
+      <div id="startXcInfo" class="hidden mb-3 rounded-lg p-2 text-sm" style="border:1px solid #93c5fd;background:#eff6ff"></div>
       <h2 class="font-bold text-base mb-2">1. Who's registering?</h2>
       <div class="rolecards">
         <label class="rolecard"><input type="radio" name="who" value="parent"><div><b>Parent / Guardian</b><span class="d">Sign up your athlete for the season.</span></div></label>
@@ -110,6 +112,8 @@
       <label class="rolecard"><input type="radio" name="season" value="vus"><div><b>Valley United Striders</b><span class="d">The postseason all-star team — its own form.</span></div></label>
     </div>
   </div>
+  <div id="xcNotice" class="hidden card text-sm"></div>
+  <div id="xcPull" class="hidden card"></div>
   <div id="lateNotice" class="hidden"></div>
   <div class="card">
     <h2 class="font-bold text-lg mb-2">Team</h2>
@@ -137,11 +141,11 @@
         <label class="f req">Is this athlete in high school?</label>
         <div class="flex gap-4 text-sm mt-1"><label class="flex items-center gap-1"><input type="radio" name="inHs" value="no"> No</label><label class="flex items-center gap-1"><input type="radio" name="inHs" value="yes"> Yes</label></div>
         <div id="hsTeamWrap" class="hidden mt-2">
-          <label class="f req">Are they running with their current high school track team (CIF or City)?</label>
+          <label class="f req">Are they running with their current high school <span class="hsSport">track</span> team (CIF or City)?</label>
           <div class="flex gap-4 text-sm mt-1"><label class="flex items-center gap-1"><input type="radio" name="hsTrack" value="no"> No</label><label class="flex items-center gap-1"><input type="radio" name="hsTrack" value="yes"> Yes</label></div>
-          <p id="hsReject" class="hidden text-sm text-red-700 font-semibold mt-1">This athlete can't be registered: running for a high school track team and a VYC team in the same season is against California CIF rules (VYC rule IV.A.2).</p>
+          <p id="hsReject" class="hidden text-sm text-red-700 font-semibold mt-1">This athlete can't be registered: running for a high school <span class="hsSport">track</span> team and a VYC team in the same season is against California CIF rules (VYC rule IV.A.2).</p>
         </div>
-        <p class="text-xs text-gray-600 mt-1">VYC rule IV.A.2: an athlete who trains or competes with a high school track team is not eligible for Valley Youth Conference competition this season.</p>
+        <p class="text-xs text-gray-600 mt-1">VYC rule IV.A.2: an athlete who trains or competes with a high school <span class="hsSport">track</span> team is not eligible for Valley Youth Conference competition this season.</p>
       </div>
       <div><label class="f req">Address</label><input id="address" required></div>
       <div><label class="f req">City</label><input id="city" required></div>
@@ -151,11 +155,11 @@
       <div><label class="f req">Emergency contact name</label><input id="emergencyName" required></div>
       <div><label class="f req">Emergency contact phone</label><input id="emergencyPhone" required></div>
     </div>
-    <div class="mt-3">
+    <div class="mt-3 trackOnly">
       <label class="f">Is this athlete returning to the club?</label>
       <div class="flex gap-4 text-sm"><label class="flex items-center gap-1"><input type="radio" name="returning" value="yes"> Returning</label><label class="flex items-center gap-1"><input type="radio" name="returning" value="no" checked> New athlete</label></div>
     </div>
-    <div class="mt-3">
+    <div class="mt-3 trackOnly">
       <label class="f req">Was this athlete a member of a different team last season?</label>
       <div class="flex gap-4 text-sm"><label class="flex items-center gap-1"><input type="radio" name="otherTeam" value="no" checked> No</label><label class="flex items-center gap-1"><input type="radio" name="otherTeam" value="yes"> Yes</label></div>
       <div id="priorTeamWrap" class="hidden mt-2">
@@ -165,7 +169,7 @@
         <p class="text-xs text-gray-500 mt-1">If it was a VYC team, that team will be asked to approve the transfer (for example, confirming no fees are owed from last season). Your registration still goes through while they review it.</p>
       </div>
     </div>
-    <div class="mt-3">
+    <div class="mt-3 trackOnly">
       <label class="f req">Did this athlete run for Valley United Striders last season?</label>
       <div class="flex gap-4 text-sm"><label class="flex items-center gap-1"><input type="radio" name="vusLast" value="no" checked> No</label><label class="flex items-center gap-1"><input type="radio" name="vusLast" value="yes"> Yes</label></div>
       <p id="vusNote" class="text-sm mt-2 rounded-lg p-2 hidden"></p>
@@ -175,7 +179,7 @@
   <div class="card">
     <h2 class="font-bold text-lg mb-2">Proof of Birth</h2>
     <div id="proofNotNeeded" class="hidden rounded-lg border-2 border-green-500 bg-green-50 p-3 text-sm">
-      ✓ <b>Not needed — returning athlete.</b> We'll confirm the name and birth date match last season's verified record. Make sure the date of birth above is correct.
+      <span id="proofNotNeededTxt">✓ <b>Not needed — returning athlete.</b> We'll confirm the name and birth date match last season's verified record. Make sure the date of birth above is correct.</span>
     </div>
     <div id="proofNeeded">
       <p class="text-xs text-gray-500 mb-1">Upload one of the documents VYC accepts (PDF or photo): birth certificate (or a photocopy), military birth certificate, passport, foreign birth document or green card, school record showing the date of birth, court decree, or a valid California ID card.</p>
@@ -757,7 +761,7 @@ function showChosen(who,team){
   $('startChosen').innerHTML=`Registering as <b>${esc(PARENT_LEAD[who]||who)}</b>${team?` · <b>${esc(teamLabel(team))}</b>`:''} · <a href="index.html" class="underline font-semibold" style="color:#fff">change</a>`;
   $('startChosen').classList.remove('hidden');
 }
-const goParentDash=team=>{ location.href='parent.html?team='+encodeURIComponent(team||'')+'&new=1'; };
+const goParentDash=team=>{ location.href='parent.html?team='+encodeURIComponent(team||'')+'&new=1'+(START_SPORT==='xc'?'&sport=xc':''); };
 document.querySelectorAll('input[name=who]').forEach(r=>r.onchange=()=>{
   $('startTeamQ').textContent=r.value==='parent'?'2. What team will your athlete be on?':'2. What team are you with?';
   $('startTeamWrap').classList.remove('hidden'); $('startNext').classList.remove('hidden'); $('startMsg').textContent='';
@@ -773,7 +777,7 @@ function startWith(who,team){
   if(who==='parent'){
     if(authSession) return goParentDash(team);   // already signed in: straight to the dashboard
     // keep the answers in the address so the email-confirm link / Google bring the parent back to this step
-    history.replaceState(null,'','index.html?role=parent&team='+encodeURIComponent(team));
+    history.replaceState(null,'','index.html?role=parent&team='+encodeURIComponent(team)+(START_SPORT==='xc'?'&sport=xc':''));
     $('parentAcctCard').classList.remove('hidden');
     if(!$('parentLoginWidget').childElementCount) window.mountLoginWidget(sb,$('parentLoginWidget'),{hint:'New here? Enter your email, choose a password and tap <b>First time? Create password</b>. Already have a sign-in? Just tap <b>Sign in</b>.'});
     return;
@@ -787,6 +791,7 @@ sb.auth.onAuthStateChange((_e,s)=>{ if(s&&QS.get('role')==='parent'&&!ATHLETE_MO
   const r=QS.get('role'), team=QS.get('team')||'';
   if(window.leagueReady){ try{ await window.leagueReady; }catch(e){} } fillAllTeams();
   if(QS.get('import')||ATHLETE_MODE) return;   // the athlete form handles itself below
+  if(QS.get('sport')==='xc') setStartSport('xc');
   if(r==='parent'){ return startWith('parent',team); }
   if(!r&&team){ $('startTeam').value=team; }   // from a team page's "Register with this team": team already chosen, just pick who
   if(r&&forms[r]){ hideStart(); if(r==='coach'||r==='admin') showChosen(r,team); document.querySelector(`#roleTabs .roletab[data-role=${r}]`).click();
@@ -818,23 +823,88 @@ if(ATHLETE_MODE) (async()=>{
 // The choice is saved as registrations.sport ('Track & Field' | 'Cross Country').
 function setSeason(v){
   if(v==='vus'){ location.href='index.html?role=vus'; return; }
+  const was=$('sport').value;
   const r=document.querySelector(`input[name=season][value="${v}"]`); if(r) r.checked=true;
   $('sport').value=v;
   document.querySelectorAll('.sportWord').forEach(s=>s.textContent=v==='Cross Country'?'cross country':'track & field');
   $('lateNotice').style.display=v==='Cross Country'?'none':'';   // that notice is the track certification deadline
+  const xc=v==='Cross Country';
+  document.querySelectorAll('.trackOnly').forEach(el=>el.classList.toggle('hidden',xc));
+  document.querySelectorAll('.hsSport').forEach(el=>el.textContent=xc?'cross country':'track');
+  fillAllTeams();
+  const n=$('xcNotice'); if(xc&&window.xcWindow){ const w=window.xcWindow(); n.innerHTML=(w.state==='open'||w.state==='unset'?'🏃 ':'⛔ ')+esc(w.text)+(w.state==='closed'||w.state==='not_yet'?' The form won\'t go through outside those dates.':'');
+    n.style.cssText=w.state==='closed'||w.state==='not_yet'?'border:2px solid #dc2626;background:#fef2f2':'border:1px solid #93c5fd;background:#eff6ff'; }
+  n.classList.toggle('hidden',!xc); $('xcPull').classList.toggle('hidden',!xc);
+  if(xc&&ATHLETE_MODE) loadXcPull();
+  if(was!==v){ clearAutoPick(); xcPick=null; xcAuto=false; updateDivision(); updateProofNeed(); if(xc) xcCheck(); else autoMatch(); }
   if(ATHLETE_MODE){ const h=$('roleTabs').closest('.card').querySelector('h1'); if(h) h.textContent=v==='Cross Country'?'Register your athlete — Cross Country':'Register your athlete — Track & Field'; }
 }
 document.querySelectorAll('input[name=season]').forEach(r=>r.onchange=()=>setSeason(r.value));
+
+// ---- Cross country helpers ----
+function isXC(){ return $('sport').value==='Cross Country'; }
+function seasonYear(){ return isXC()?(((CFG.XC||{}).season)||CFG.SEASON_YEAR):CFG.SEASON_YEAR; }
+// Start page: Track & Field | Cross Country tab (the team list shows that league's teams).
+var START_SPORT='track';   // var: the team lists read it before this line runs
+function setStartSport(sp){
+  START_SPORT=sp==='xc'?'xc':'track';
+  document.querySelectorAll('#sportTabs .roletab').forEach(t=>t.classList.toggle('active',t.dataset.sport===START_SPORT));
+  const box=$('startXcInfo'); if(START_SPORT==='xc'&&window.xcWindow){ box.textContent=window.xcWindow().text+' Only the teams in the cross country league are listed.'; box.classList.remove('hidden'); } else box.classList.add('hidden');
+  fillAllTeams();
+}
+document.querySelectorAll('#sportTabs .roletab').forEach(t=>t.onclick=()=>setStartSport(t.dataset.sport));
+if(window.leagueReady) window.leagueReady.then(()=>{ if(START_SPORT==='xc') setStartSport('xc'); if(isXC()) setSeason('Cross Country'); });
+// Proof of birth for cross country: not needed when the name + birth date match ANY verified VYC registration (track or
+// cross country, any team) — checked as they're typed (xc_birth_verified), and again by the database on submit.
+let xcPick=null, xcAuto=false, xcSeq=0;
+const nk=s=>String(s||'').toLowerCase().replace(/[^a-z]/g,'');
+function xcVerified(){
+  const f=$('firstName').value, l=$('lastName').value, d=$('dob').value;
+  if(xcPick&&xcPick.status==='verified'&&nk(xcPick.first_name)===nk(f)&&nk(xcPick.last_name)===nk(l)&&xcPick.dob===d) return true;
+  return xcAuto;
+}
+async function xcCheck(){
+  const f=$('firstName').value.trim(), l=$('lastName').value.trim(), d=$('dob').value, seq=++xcSeq;
+  xcAuto=false; if(f&&l&&d){ try{ const {data}=await sb.rpc('xc_birth_verified',{p_first:f,p_last:l,p_dob:d}); if(seq!==xcSeq) return; xcAuto=data===true; }catch(e){} }
+  updateProofNeed();
+}
+// "Registered for track before?" — the parent's own earlier registrations (track or cross country) fill in the form.
+let xcPullRows=null;
+async function loadXcPull(){
+  const box=$('xcPull');
+  if(!xcPullRows){
+    const {data:s}=await sb.auth.getSession(); const em=s&&s.session&&s.session.user.email; if(!em){ box.classList.add('hidden'); return; }
+    const {data}=await sb.from('registrations').select('*').ilike('email',em).neq('status','rejected').order('created_at',{ascending:false});
+    const seen=new Set(); xcPullRows=(data||[]).sort((a,b)=>(a.sport==='Track & Field'?0:1)-(b.sport==='Track & Field'?0:1)||String(b.created_at).localeCompare(String(a.created_at)))
+      .filter(r=>{ const k=nk(r.first_name)+'|'+nk(r.last_name)+'|'+r.dob; if(seen.has(k)) return false; seen.add(k); return true; });
+  }
+  if(!xcPullRows.length){ box.innerHTML='<p class="text-sm text-gray-600">Registered for VYC track before with a different email? Just fill in the form — if the name and birth date match a verified VYC registration, you won\'t need to upload proof of birth again.</p>'; return; }
+  box.innerHTML=`<h2 class="font-bold text-lg mb-1">Registered for track before?</h2><p class="text-sm text-gray-600 mb-2">Tap your athlete to fill in this form from their track registration. Check everything is still correct — and pick their cross country team.</p>
+    <div class="grid gap-2">${xcPullRows.map((r,i)=>`<button type="button" class="text-left bg-white border-2 rounded-lg p-2 text-sm hover:bg-blue-50" style="border-color:#93c5fd" data-xp="${i}"><b>${esc(r.first_name)} ${esc(r.last_name)}</b> <span class="text-gray-600">— ${esc(r.sport)} ${r.season_year} · ${esc(teamLabel(r.team_code))}${r.status==='verified'?' · certified':''}</span><span class="float-right font-semibold" style="color:#1d4ed8">Fill in →</span></button>`).join('')}</div>
+    <p id="xcPullMsg" class="text-sm mt-2"></p>`;
+  box.querySelectorAll('[data-xp]').forEach(b=>b.onclick=()=>{
+    const r=xcPullRows[+b.dataset.xp]; xcPick=r;
+    const map={firstName:'first_name',lastName:'last_name',dob:'dob',gender:'gender',address:'address',city:'city',zip:'zip',phone:'phone',emergencyName:'emergency_name',emergencyPhone:'emergency_phone',
+      parent1Name:'parent1_name',parent1Rel:'parent1_relationship',parent2Name:'parent2_name',parent2Rel:'parent2_relationship',insuranceCarrier:'insurance_carrier',doctorName:'doctor_name',physicalDate:'doctor_date',medicalConditions:'medical_conditions'};
+    let n=0; for(const [id,k] of Object.entries(map)){ const el=$(id); if(el&&r[k]!=null&&r[k]!==''){ el.value=r[k]; n++; } }
+    if(window.VYC_TEAMS.some(t=>t.code===r.team_code&&t.xc)) $('teamCode').value=r.team_code;
+    ['dob','physicalDate'].forEach(id=>{ const el=$(id); if(el) el.dispatchEvent(new Event('change')); });
+    updateDivision(); xcCheck();
+    $('xcPullMsg').innerHTML=`✓ Filled in ${n} answers from ${esc(r.first_name)}'s ${esc(r.sport)} ${r.season_year} registration${r.status==='verified'?' — no proof of birth needed':''}. Please check them, ${$('teamCode').value?'confirm the team,':'<b>choose the cross country team</b>,'} and sign at the bottom.`;
+  });
+}
 $('sport').addEventListener('change',()=>setSeason($('sport').value));
 
 // ---- team dropdowns ----
 function fillTeams(sel){
   sel.innerHTML='<option value="">Select…</option>'+window.VYC_TEAMS.map(t=>`<option value="${t.code}">${t.name} (${t.conference})</option>`).join('');
 }
+// Team lists by league: track teams, cross country teams (some teams are only in one), or both (coaches / team admins).
 function fillAllTeams(){
-  const act=window.VYC_TEAMS.filter(t=>t.active!==false); const sels=['teamCode','cTeam','vHomeTeam','aTeam','startTeam'].map($); const keep=sels.map(s=>s.value);
-  const lab=t=>`<option value="${t.code}">${t.name} (${t.conference==='West'?'Western':'Eastern'})</option>`;
-  sels.forEach((sel,i)=>{ sel.innerHTML='<option value="">Select…</option>'+act.map(lab).join(''); sel.value=keep[i]||''; });
+  const T=window.VYC_TEAMS, track=T.filter(t=>t.active!==false), xc=T.filter(t=>t.xc), both=T.filter(t=>t.active!==false||t.xc);
+  const lab=t=>`<option value="${t.code}">${t.name}${t.conference?` (${t.conference==='West'?'Western':'Eastern'})`:''}</option>`;
+  const lists={teamCode:isXC()?xc:track, cTeam:both, vHomeTeam:track, aTeam:both, startTeam:START_SPORT==='xc'?xc:track};
+  Object.entries(lists).forEach(([id,L])=>{ const sel=$(id); if(!sel) return; const keep=sel.value; sel.innerHTML='<option value="">Select…</option>'+L.map(lab).join(''); sel.value=L.some(t=>t.code===keep)?keep:''; });
 }
 fillAllTeams(); if(window.leagueReady) window.leagueReady.then(fillAllTeams);
 // Late-registration notice. A registration is on time only if it is COMPLETED (every document uploaded and both signatures —
@@ -933,6 +1003,7 @@ function showPastPicked(){
   $('pastUndo').onclick=()=>{ pastPick=null; setRadio('returning','no'); setRadio('otherTeam','no'); updateProofNeed(); findPast(); };
 }
 async function findPast(){
+  if(isXC()) return;
   if(pastPick) return;
   const q=$('lastName').value.trim(), box=$('pastMatches'), seq=++pastSeq;
   if(q.replace(/[^a-z]/gi,'').length<3){ box.classList.add('hidden'); box.innerHTML=''; return; }
@@ -1000,7 +1071,8 @@ function paintProofType(){ const v=(document.querySelector('input[name=proofType
 document.querySelectorAll('input[name=proofType]').forEach(r=>r.addEventListener('change',()=>{ paintProofType(); if(r.value==='other') $('proofTypeOther').focus(); }));
 function updateProofNeed(){
   updateVus(); lockNewIfTransfer();
-  const skip=returningVerified();
+  const skip=isXC()?xcVerified():returningVerified();
+  $('proofNotNeededTxt').innerHTML=isXC()?'✓ <b>Not needed</b> — this name and birth date match a verified VYC registration (track or cross country). Make sure the date of birth above is correct.':'✓ <b>Not needed — returning athlete.</b> We\'ll confirm the name and birth date match last season\'s verified record. Make sure the date of birth above is correct.';
   $('proofNotNeeded').classList.toggle('hidden',!skip); $('proofNeeded').classList.toggle('hidden',skip);
   $('proofFile').required=!skip;
   const transfer=isTransfer();
@@ -1015,6 +1087,7 @@ let autoTimer=null, autoSeq=0, autoDismissed='';
 const autoKey=()=>[$('firstName').value,$('lastName').value,$('dob').value,$('teamCode').value].map(s=>String(s).trim().toLowerCase()).join('|');
 function clearAutoPick(){ if(pastPick&&pastPick.auto){ pastPick=null; $('pastMatches').classList.add('hidden'); $('pastMatches').innerHTML=''; setRadio('returning','no'); setRadio('otherTeam','no'); } }
 async function autoMatch(){
+  if(isXC()){ clearAutoPick(); xcCheck(); return; }
   if(pastPick && !pastPick.auto){ if(!$('dob').value) return; pastPick=null; } // a list pick becomes a full check once the birth date is in
   const f=$('firstName').value.trim(), l=$('lastName').value.trim(), d=$('dob').value, team=$('teamCode').value, key=autoKey(), seq=++autoSeq;
   if(!f||!l||!d||key===autoDismissed){ clearAutoPick(); updateProofNeed(); return; }
@@ -1069,7 +1142,7 @@ $('firstName').addEventListener('input',()=>{ if(!pastPick&&!$('pastMatches').cl
 $('teamCode').addEventListener('change',()=>{ applyPastPick(); updateProofNeed(); });
 function updateDivision(){
   const dob=$('dob').value; if(!dob) return;
-  const age=window.ageOnDec31(dob, CFG.SEASON_YEAR);
+  const age=window.ageOnDec31(dob, seasonYear());
   const div=window.divisionFor(age);
   $('divisionShow').value = div ? `${div} (age ${age} on 12/31)` : 'Out of age range';
   // High-school rule question (VYC IV.A.2) only for athletes old enough to be in 9th grade.
@@ -1192,36 +1265,38 @@ $('parentForm').addEventListener('submit', async(e)=>{
       if(p1 || p2){ if(p1.length<6) throw new Error('Password must be at least 6 characters.'); if(p1!==p2) throw new Error('Passwords do not match.'); }
     }
     const teamCode=$('teamCode').value; if(!teamCode) throw new Error('Please select a team.');
-    const otherTeam=document.querySelector('input[name=otherTeam]:checked').value==='yes';
+    const otherTeam=!isXC()&&document.querySelector('input[name=otherTeam]:checked').value==='yes';
     const pCode=otherTeam?$('priorTeamCode').value:'';
     if(otherTeam && !pCode) throw new Error('Please select which team the athlete was on last season.');
     if(pCode==='__OTHER' && !$('priorTeam').value.trim()) throw new Error('Please type the name of the previous team.');
     const priorVyc=pCode && pCode!=='__OTHER' ? pCode : null;
     const priorName=!otherTeam?null:priorVyc?(window.VYC_TEAMS.find(t=>t.code===priorVyc)||{}).name||priorVyc:$('priorTeam').value.trim();
-    const skipProof=returningVerified();
+    const skipProof=isXC()?xcVerified():returningVerified();
     const proofType=skipProof?null:(document.querySelector('input[name=proofType]:checked')||{}).value||null;
     const proofTypeOther=proofType==='other'?$('proofTypeOther').value.trim():null;
     if(!skipProof&&!proofType) throw new Error('Please choose what kind of proof of birth you are uploading: birth certificate, state-issued ID, passport, or other.');
     if(proofType==='other'&&!proofTypeOther) throw new Error('Please say what kind of document the proof of birth is.');
     const file=skipProof?null:$('proofFile').files[0]; if(!skipProof&&!file) throw new Error('Please upload proof of birth.');
-    const dob=$('dob').value, age=window.ageOnDec31(dob,CFG.SEASON_YEAR), division=window.divisionFor(age);
+    const dob=$('dob').value, age=window.ageOnDec31(dob,seasonYear()), division=window.divisionFor(age);
     const inHs=(document.querySelector('input[name=inHs]:checked')||{}).value, hsAns=(document.querySelector('input[name=hsTrack]:checked')||{}).value;
     if(age>=13 && !inHs) throw new Error('Please answer: is this athlete in high school?');
-    if(inHs==='yes' && !hsAns) throw new Error('Please answer: are they running with their current high school track team?');
-    if(inHs==='yes' && hsAns==='yes') throw new Error('This athlete can\'t be registered: running for a high school track team and a VYC team in the same season is against California CIF rules (VYC rule IV.A.2).');
+    const hsW=isXC()?'cross country':'track';
+    if(inHs==='yes' && !hsAns) throw new Error('Please answer: are they running with their current high school '+hsW+' team?');
+    if(inHs==='yes' && hsAns==='yes') throw new Error('This athlete can\'t be registered: running for a high school '+hsW+' team and a VYC team in the same season is against California CIF rules (VYC rule IV.A.2).');
     const proofPath=skipProof?null:await uploadProof(file,'registrations');
     const row={
       id: crypto.randomUUID(), // made here so the confirmation can link straight to this athlete's pay page
-      season_year:CFG.SEASON_YEAR, sport:$('sport').value, gender:$('gender').value,
+      season_year:seasonYear(), sport:$('sport').value, gender:$('gender').value,
       first_name:$('firstName').value.trim(), last_name:$('lastName').value.trim(), dob,
       age_on_dec31:age, division, in_high_school: age>=13 ? inHs==='yes' : null, hs_track_this_season: age>=13 ? (inHs==='yes' && hsAns==='yes') : null,
       address:$('address').value.trim(), city:$('city').value.trim(), zip:$('zip').value.trim(),
       phone:$('phone').value.trim(), email:$('email').value.trim(),
       emergency_name:$('emergencyName').value.trim(), emergency_phone:$('emergencyPhone').value.trim(),
+      ...(isXC()?{is_returning:false, ran_for_other_team:false, prior_team:null, prior_team_code:null, ran_vus_last_season:false, prior_registration_id:null}:{
       is_returning: document.querySelector('input[name=returning]:checked').value==='yes',
       ran_for_other_team: otherTeam||vusMove(), prior_team:vusMove()?teamLabel(lastSeasonTeam()):priorName, prior_team_code:vusMove()?lastSeasonTeam():priorVyc,
       ran_vus_last_season: vusYes(),
-      prior_registration_id: pastPick ? pastPick.id : null,
+      prior_registration_id: pastPick ? pastPick.id : null}),
       proof_path:proofPath, proof_type:proofType, proof_type_other:proofTypeOther,
       insurance_carrier:$('insuranceCarrier').value.trim(),
       medical_option: $('medicalConditions').value.trim() ? 'conditions':'clear',
