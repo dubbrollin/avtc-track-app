@@ -9,8 +9,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="theme.css?v=b1">
-<script src="theme.js?v=b2"></script>
+<link rel="stylesheet" href="theme.css?v=b3">
+<script src="theme.js?v=b3"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&display=swap" rel="stylesheet">
@@ -149,11 +149,11 @@
       </div>
       <div><label class="f req">Address</label><input id="address" required></div>
       <div><label class="f req">City</label><input id="city" required></div>
-      <div><label class="f req">Zip</label><input id="zip" required></div>
-      <div><label class="f req">Phone</label><input id="phone" required></div>
+      <div><label class="f req">Zip</label><input id="zip" inputmode="numeric" autocomplete="postal-code" required></div>
+      <div><label class="f req">Phone</label><input id="phone" type="tel" inputmode="tel" autocomplete="tel" required></div>
       <div><label class="f req">Email</label><input type="email" id="email" required></div>
       <div><label class="f req">Emergency contact name</label><input id="emergencyName" required></div>
-      <div><label class="f req">Emergency contact phone</label><input id="emergencyPhone" required></div>
+      <div><label class="f req">Emergency contact phone</label><input id="emergencyPhone" type="tel" inputmode="tel" autocomplete="off" required></div>
     </div>
     <div class="mt-3 trackOnly">
       <label class="f">Is this athlete returning to the club?</label>
@@ -293,7 +293,7 @@
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div><label class="f req">First name</label><input id="cFirst" required></div>
       <div><label class="f req">Last name</label><input id="cLast" required></div>
-      <div><label class="f req">Phone</label><input id="cPhone" required></div>
+      <div><label class="f req">Phone</label><input id="cPhone" type="tel" inputmode="tel" autocomplete="tel" required></div>
       <div><label class="f req">Team</label><select id="cTeam" required></select></div>
     </div>
   </div>
@@ -375,7 +375,7 @@
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div><label class="f req">First name</label><input id="aFirst" required></div>
       <div><label class="f req">Last name</label><input id="aLast" required></div>
-      <div><label class="f req">Phone</label><input id="aPhone" required></div>
+      <div><label class="f req">Phone</label><input id="aPhone" type="tel" inputmode="tel" autocomplete="tel" required></div>
       <div><label class="f req">Team</label><select id="aTeam" required></select></div>
       <div><label class="f req">Your role on the team</label><select id="aTitle" required>
         <option value="">Select…</option><option>Head Coach</option><option>Team President / Director</option><option>Registrar / Team Manager</option><option>Other</option></select></div>
@@ -431,7 +431,7 @@
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div><label class="f req">First name</label><input id="tFirst" required></div>
       <div><label class="f req">Last name</label><input id="tLast" required></div>
-      <div><label class="f req">Phone</label><input id="tPhone" required></div>
+      <div><label class="f req">Phone</label><input id="tPhone" type="tel" inputmode="tel" autocomplete="tel" required></div>
     </div>
   </div>
   <div class="card">
@@ -500,12 +500,12 @@
       <div><label class="f req">Relationship</label><select id="vParent1Rel" required><option value="">Select…</option><option>Mother</option><option>Father</option><option>Grandparent</option><option>Aunt</option><option>Uncle</option></select></div>
       <div><label class="f">Parent/Guardian 2 name (optional)</label><input id="vParent2Name"></div>
       <div><label class="f">Relationship</label><select id="vParent2Rel"><option value="">Select…</option><option>Mother</option><option>Father</option><option>Grandparent</option><option>Aunt</option><option>Uncle</option></select></div>
-      <div><label class="f req">Phone</label><input id="vPhone" required></div>
+      <div><label class="f req">Phone</label><input id="vPhone" type="tel" inputmode="tel" autocomplete="tel" required></div>
       <div><label class="f req">Email</label><input type="email" id="vEmail" required></div>
       <div><label class="f req">Address</label><input id="vAddress" required></div>
       <div><label class="f req">City</label><input id="vCity" required></div>
       <div><label class="f req">State</label><input id="vState" value="CA" required></div>
-      <div><label class="f req">Zip</label><input id="vZip" required></div>
+      <div><label class="f req">Zip</label><input id="vZip" inputmode="numeric" autocomplete="postal-code" required></div>
     </div>
   </div>
   <div class="card">
@@ -934,14 +934,14 @@ function makeSig(container){
       <button type="button" class="btn bg-gray-100 sigmode" data-m="draw">Draw</button>
       <button type="button" class="btn bg-gray-100 sigmode" data-m="type">Type name</button>
     </div>
-    <div class="sig-draw"><canvas width="400" height="100" style="border:1px solid #d1d5db;border-radius:8px;background:#fff;touch-action:none"></canvas>
+    <div class="sig-draw"><canvas width="400" height="100" aria-label="Sign here with your finger or mouse" style="display:block;width:100%;max-width:400px;height:auto;border:1px solid #d1d5db;border-radius:8px;background:#fff;touch-action:none"></canvas>
       <button type="button" class="btn bg-gray-100 sigclear mt-1">Clear</button></div>
     <div class="sig-type hidden"><input class="sigtypeinput" placeholder="Type full name"><div class="sig-font mt-1 sigpreview"></div></div>`;
   container.appendChild(wrap);
   const canvas=wrap.querySelector('canvas'), ctx=canvas.getContext('2d');
   let drawing=false, hasDrawn=false, mode='draw';
   ctx.lineWidth=2; ctx.lineCap='round'; ctx.strokeStyle='#111827';
-  function pos(e){ const r=canvas.getBoundingClientRect(); const p=e.touches?e.touches[0]:e; return {x:p.clientX-r.left, y:p.clientY-r.top}; }
+  function pos(e){ const r=canvas.getBoundingClientRect(); const p=e.touches?e.touches[0]:e; const k=r.width?canvas.width/r.width:1; return {x:(p.clientX-r.left)*k, y:(p.clientY-r.top)*k}; }
   canvas.addEventListener('pointerdown',e=>{drawing=true;hasDrawn=true;const p=pos(e);ctx.beginPath();ctx.moveTo(p.x,p.y);});
   canvas.addEventListener('pointermove',e=>{if(!drawing)return;const p=pos(e);ctx.lineTo(p.x,p.y);ctx.stroke();});
   window.addEventListener('pointerup',()=>drawing=false);

@@ -126,3 +126,65 @@ body .heathead{color:var(--act);background:var(--act-soft)}
 body .text-blue-600,body .text-blue-700,body .text-blue-800{color:var(--act)}
 body .bg-blue-50{background-color:var(--act-soft)}
 body .border-blue-500,body .border-blue-400{border-color:var(--act)}
+
+/* ================= comfort pass (2026-11-12): easier to tap, read and follow on every page ================= */
+html{scroll-padding-top:76px}                                   /* jump links don't hide under the sticky top bar */
+body h1,body h2,body h3{text-wrap:balance}
+body p,body li{text-wrap:pretty}
+body .text-gray-400{color:#667385}                              /* small grey notes were too faint to read outdoors */
+
+/* keyboard / switch users can always see where they are */
+body :is(a,button,summary,select,[role=button],[tabindex]):focus-visible{outline:3px solid var(--act);outline-offset:2px;border-radius:6px}
+body .card.text-center:has(h1) a:focus-visible,body .card:has(#roleTabs) a:focus-visible{outline-color:#fff}
+
+/* buttons: finger-sized on phones and tablets, and they look "off" while busy */
+@media (pointer:coarse){
+  body .btn:not(.hidden):not([hidden]),body .tapbtn:not(.hidden):not([hidden]){min-height:44px}
+  body a.btn:not(.hidden):not([hidden]):not(.block){display:inline-flex;align-items:center;justify-content:center;text-align:center}
+  body .topnav nav a{min-height:44px;display:flex;align-items:center}
+  body summary{min-height:44px}
+}
+body .btn:disabled,body .tapbtn:disabled{opacity:.55;cursor:not-allowed;filter:none;transform:none}
+
+/* ---------- sign-in box ---------- */
+body .authlbl{display:block;font-size:.8rem;font-weight:600;color:var(--ink);margin:0 0 .25rem}
+body .authpass{position:relative}
+body .authpass input{padding-right:4.25rem}
+body #authEmail,body #authPass{min-height:46px;font-size:16px}
+body #authShow{position:absolute;right:4px;top:4px;bottom:4px;padding:0 .75rem;border:0;border-radius:6px;background:transparent;color:var(--act);font-weight:600;font-size:.85rem;cursor:pointer}
+body #authShow:hover{background:var(--act-soft)}
+body .authbtns{display:flex;flex-wrap:wrap;gap:.5rem}
+body .authbtns .btn{flex:1 1 210px;min-height:46px;padding:.6rem 1rem;font-size:.95rem}
+body #authGoogle{min-height:46px;font-size:.95rem}
+body .authdemo{min-height:40px;padding:.45rem .8rem}
+body #authMsg:empty{display:none}
+body #authMsg{border-radius:8px;padding:.6rem .75rem;margin-top:.75rem;line-height:1.45}
+body #authMsg.text-red-600{background:var(--bad-bg);color:var(--bad)}
+body #authMsg.text-green-700{background:var(--ok-bg);color:var(--ok)}
+
+/* ---------- "Loading…" becomes soft placeholder bars instead of a lone word ---------- */
+body .vyc-loading{position:relative;color:transparent!important;user-select:none;min-height:104px;border-radius:10px;overflow:hidden;
+  background:
+    linear-gradient(var(--line),var(--line)) 0 6px/62% 14px no-repeat,
+    linear-gradient(var(--line),var(--line)) 0 38px/88% 14px no-repeat,
+    linear-gradient(var(--line),var(--line)) 0 70px/74% 14px no-repeat}
+body .vyc-loading::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.75) 50%,transparent 70%);transform:translateX(-100%);animation:vyc-sweep 1.4s ease-in-out infinite}
+@keyframes vyc-sweep{to{transform:translateX(100%)}}
+
+/* people who ask their device for less motion get none */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+  body .vyc-loading::after{display:none}
+}
+
+/* ---------- registration forms, second pass (2026-11-12): answers you can hit with a thumb ---------- */
+/* Yes / No and Returning / New: each choice is its own button-sized box */
+body form .flex > label.flex:has(> input[type=radio]){min-height:44px;padding:0 .9rem 0 .7rem;gap:.5rem;border:1.5px solid var(--field);border-radius:8px;background:#fff;font-weight:500;cursor:pointer}
+body form .flex:has(> label.flex > input[type=radio]){gap:.5rem;flex-wrap:wrap}
+body form .flex > label.flex:has(> input[type=radio]:checked){border-color:var(--act);background:var(--act-soft);color:var(--act-dark);font-weight:600}
+/* "I agree" rows: the whole row is the target, and it turns green once ticked */
+body form label.flex:has(> input[type=checkbox]){min-height:44px;padding:.55rem .7rem;border-radius:8px;cursor:pointer;align-items:flex-start}
+body form label.flex:has(> input[type=checkbox]) > input{margin-top:.15rem}
+body form label.flex.req:has(> input[type=checkbox]){border:1.5px solid var(--field);background:#fff}
+body form label.flex.req:has(> input[type=checkbox]:checked){border-color:var(--ok);background:var(--ok-bg)}
+body form input[type=file]{width:100%;max-width:100%}
