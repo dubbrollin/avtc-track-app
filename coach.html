@@ -150,6 +150,7 @@
           <div id="feeBanner"></div>
           <div class="card">
             <div class="col-head"><h2 class="flex-1">Roster <span id="count" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
+            <div class="seasonTabsR hidden flex flex-wrap gap-1 mb-2"></div>
             <div class="sportTabsR hidden flex gap-1 mb-2"><button type="button" class="sptab active" data-sp="Track &amp; Field" style="border:1px solid #e5e7eb;border-radius:8px">Track &amp; Field</button><button type="button" class="sptab" data-sp="Cross Country" style="border:1px solid #e5e7eb;border-radius:8px">Cross Country</button></div>
             <div class="flex flex-wrap items-center gap-2 mb-2">
               <select id="filter" class="flex-1 min-w-0"><option value="">All</option><option value="submitted">Needs team review</option><option value="reviewed">Team reviewed — waiting for the president</option><option value="verified">Certified</option><option value="rejected">Rejected</option></select>
@@ -161,6 +162,7 @@
             </div>
             <p class="text-xs text-gray-600 mb-2" id="certNote">You do the <b>first review</b>: check the proof of birth and details, then mark the athlete <b>Team reviewed</b>. Your Conference President gives the final <b>Certified</b> — only certified athletes can be entered in meets. Only the president can change an athlete's information.</p>
             <p id="rosterNote" class="text-xs text-gray-500 mb-2 hidden">You're seeing names, divisions and status only — full registration details (documents, contact info, medical info) are visible to team admins only.</p>
+            <div id="archNote" class="hidden rounded-lg border border-amber-400 bg-amber-50 p-2 mb-2 text-sm"></div>
             <p id="msg" class="text-sm text-gray-600 mb-2"></p>
             <div id="list"></div>
           </div>
@@ -216,6 +218,7 @@
           <div id="leftCol">
           <div class="card" id="rosterSection">
             <div class="col-head"><h2 class="flex-1">My roster <span id="dashCount" class="text-gray-500 font-normal text-xs normal-case tracking-normal"></span></h2></div>
+            <div class="seasonTabsR hidden flex flex-wrap gap-1 mb-2"></div>
             <div class="sportTabsR hidden flex gap-1 mb-2"><button type="button" class="sptab active" data-sp="Track &amp; Field" style="border:1px solid #e5e7eb;border-radius:8px">Track &amp; Field</button><button type="button" class="sptab" data-sp="Cross Country" style="border:1px solid #e5e7eb;border-radius:8px">Cross Country</button></div>
             <div id="dashRoster" class="text-sm rosterScroll"></div>
           </div>
@@ -458,7 +461,8 @@ async function load(){
     if(error){ $('msg').textContent='Could not load: '+error.message; return; }
     rows=data||[];
   }
-  if(fullAccess){ await loadClearances(); loadFeeNotice(); }
+  if(fullAccess){ await loadClearances(); loadFeeNotice(); await loadWaitingImports(); }
+  try{ if(window.leagueReady) await window.leagueReady; }catch(e){}
   render();
   loadComing();
   window.mountTeamSchedule($('teamSched'),{sb,teams:[myCoach&&myCoach.team_code],backups:true});
@@ -588,25 +592,70 @@ function pill(r){
 }
 // Track & Field and Cross Country rosters are separate tabs (shown when the team is in the cross country league or has XC sign-ups).
 let rosterSport='Track & Field';
-const sportRows=()=>rows.filter(r=>(r.sport||'Track & Field')===rosterSport);
+// Each season has its own roster: this season's sign-ups, and earlier seasons kept as a read-only archive
+// (the archive is what returning athletes are matched against, so nothing is ever removed from it).
+let rosterSeason=0, waitingImports=[]; // 0 = this season
+const curSeason=()=>rosterSport==='Cross Country'?((CFG.XC&&CFG.XC.season)||CFG.SEASON_YEAR):CFG.SEASON_YEAR;
+const rowSeason=r=>r.season_year==null?curSeason():+r.season_year;
+const viewSeason=()=>rosterSeason||curSeason();
+const isArchive=()=>viewSeason()<curSeason();
+const allSportRows=()=>rows.filter(r=>(r.sport||'Track & Field')===rosterSport);
+const sportRows=()=>allSportRows().filter(r=>rowSeason(r)===viewSeason());
+const kidKey=r=>((r.first_name||'')+'|'+(r.last_name||'')).toLowerCase().replace(/[^a-z|]/g,'')+'|'+(r.dob||'');
+// Where an archived athlete stands for this season: 'back' (registered again), 'waiting' (on the import waiting list) or ''.
+function backState(r){
+  const now=allSportRows().filter(x=>rowSeason(x)===curSeason()&&x.status!=='rejected');
+  if(now.some(x=>x.prior_registration_id===r.id||kidKey(x)===kidKey(r))) return 'back';
+  if(waitingImports.some(x=>kidKey(x)===kidKey(r)||(!x.dob&&kidKey({...x,dob:r.dob})===kidKey(r)))) return 'waiting';
+  return '';
+}
+const backPill=r=>{ const b=backState(r); return b==='back'?`<span class="pill bg-green-100 text-green-800">✓ Registered for ${curSeason()}</span>`:b==='waiting'?`<span class="pill bg-blue-100 text-blue-800">On the ${curSeason()} waiting list</span>`:`<span class="pill bg-gray-200">Not back for ${curSeason()} yet</span>`; };
+async function loadWaitingImports(){ if(!fullAccess) return;
+  const {data}=await sb.from('reg_imports').select('first_name,last_name,dob').eq('team_code',myCoach.team_code).eq('season_year',CFG.SEASON_YEAR).eq('status','waiting'); waitingImports=data||[]; }
+function paintSeasonTabs(){
+  const all=allSportRows(), cur=curSeason(), years=[...new Set(all.map(rowSeason).concat(cur))].sort((a,b)=>b-a);
+  if(!years.includes(viewSeason())) rosterSeason=0;
+  document.querySelectorAll('.seasonTabsR').forEach(bar=>{ bar.classList.toggle('hidden',years.length<2);
+    bar.innerHTML=years.map(y=>`<button type="button" class="sptab ${y===viewSeason()?'active':''}" data-yr="${y}" style="border:1px solid #e5e7eb;border-radius:8px">${y===cur?y+' season':y+' — archived'} (${all.filter(r=>rowSeason(r)===y).length})</button>`).join('');
+    bar.querySelectorAll('[data-yr]').forEach(b=>b.onclick=()=>{ rosterSeason=+b.dataset.yr===cur?0:+b.dataset.yr; render(); }); });
+}
+// Last season's records carry placeholder contact details (roster import) — never pass those on.
+const realEmail=e=>e&&!/example\.invalid$/i.test(String(e).trim())?String(e).trim():'';
+const realPhone=p=>{ const d=String(p||'').replace(/\D/g,''); return d.length>=10&&!/^0+$/.test(d)?String(p).trim():''; };
+const realName=n=>n&&!/^roster import$/i.test(String(n).trim())?String(n).trim():'';
+// "Bring to this season": puts archived athletes on this season's waiting list (same list as Import athletes). The parent then
+// confirms and signs; the athlete is recognised as returning from this archived record, so no new proof of birth.
+async function bringForward(ids){
+  const list=rows.filter(r=>ids.includes(r.id)&&!backState(r)); if(!list.length) return;
+  if(list.length>1&&!confirm(`Put ${list.length} athletes from ${viewSeason()} on your ${curSeason()} waiting list? Each family gets a code (Import athletes tab) to confirm and sign. Nobody is registered until their parent finishes.`)) return;
+  $('msg').textContent='Adding to the '+curSeason()+' waiting list…';
+  const payload=list.map(r=>{ const em=realEmail(r.email), ph=realPhone(r.phone); return {first_name:r.first_name,last_name:r.last_name,gender:r.gender,dob:r.dob,guardian_name:realName(r.parent1_name),guardian_email:em,guardian_phone:ph,
+    address:realName(r.address),city:realName(r.city),zip:r.zip||'',family_key:em||ph.replace(/\D/g,'').slice(-10)||''}; });
+  const {data,error}=await sb.rpc('import_athletes',{p_team:myCoach.team_code,p_rows:payload,p_source:'From the '+viewSeason()+' roster'});
+  if(error){ $('msg').textContent=''; alert('Could not add: '+error.message); return; }
+  const sk=(data&&data.skipped)||[];
+  await loadWaitingImports(); render();
+  $('msg').innerHTML=`<span class="text-green-800 font-semibold">✓ ${data.added} athlete${data.added===1?'':'s'} added to the ${curSeason()} waiting list.</span>${sk.length?' Skipped '+sk.length+': '+sk.slice(0,6).map(esc).join('; ')+(sk.length>6?'…':''):''} <a class="underline text-blue-700" href="coach.html?view=roster&tab=import">See the waiting list and family codes →</a>`;
+}
 function paintSportTabs(){
   const t=(window.VYC_TEAMS||[]).find(x=>myCoach&&x.code===myCoach.team_code), show=!!(t&&t.xc)||rows.some(r=>r.sport==='Cross Country');
   document.querySelectorAll('.sportTabsR').forEach(bar=>{ bar.classList.toggle('hidden',!show); bar.querySelectorAll('[data-sp]').forEach(b=>{ b.classList.toggle('active',b.dataset.sp===rosterSport);
-    const n=rows.filter(r=>(r.sport||'Track & Field')===b.dataset.sp).length; b.textContent=b.dataset.sp+' ('+n+')'; b.onclick=()=>{ rosterSport=b.dataset.sp; render(); }; }); });
+    const n=rows.filter(r=>(r.sport||'Track & Field')===b.dataset.sp).length; b.textContent=b.dataset.sp+' ('+n+')'; b.onclick=()=>{ rosterSport=b.dataset.sp; rosterSeason=0; render(); }; }); });
+  paintSeasonTabs();
 }
 function renderDashRoster(){
   paintSportTabs();
   const rows=sportRows();
   const el=$('dashRoster'); if(!el) return;
   $('dashCount').textContent=`(${rows.length})`;
-  if(!rows.length){ el.innerHTML='<p class="text-gray-500">No athletes on your roster yet. Share the registration link with parents.</p>'; return; }
+  if(!rows.length){ el.innerHTML=`<p class="text-gray-500">No athletes on your ${viewSeason()} roster yet. Share the registration link with parents.${allSportRows().length?' Last season\'s athletes are under the archived tab above.':''}</p>`; return; }
   // Division first (youngest to oldest), then Boys and Girls inside each division — every coach sees it this way; the database already limits
   // Division/Event coaches to their own division and sex, a Head Coach sees the whole team.
   const order=(window.DIVISIONS||[]).map(d=>d.name);
   const by={}; rows.forEach(r=>{ ((by[r.division]??={})[r.gender]??=[]).push(r); });
   const nm=r=>{ const x=fullAccess&&xferFor(r);
     if(x) return `<span class="xfer" onclick="showXfer('${x.id}')" title="Click to review this transfer">${esc(r.last_name)}, ${esc(r.first_name)}<small>${xferLabel(x)}</small></span>`;
-    return `<span>${r.comp_number?`<span class="text-blue-700 text-xs">#${r.comp_number}</span> `:''}${esc(r.last_name)}, ${esc(r.first_name)}${r.status==='verified'?'':` <span class="text-gray-400 text-xs">· ${esc(STATUS_LABEL[r.status]||r.status)}</span>`}</span>`; };
+    return `<span>${r.comp_number?`<span class="text-blue-700 text-xs">#${r.comp_number}</span> `:''}${esc(r.last_name)}, ${esc(r.first_name)}${isArchive()?(backState(r)==='back'?` <span class="text-green-700 text-xs">· back for ${curSeason()}</span>`:''):r.status==='verified'?'':` <span class="text-gray-400 text-xs">· ${esc(STATUS_LABEL[r.status]||r.status)}</span>`}</span>`; };
   const sortN=(p,q)=>(p.last_name+p.first_name).localeCompare(q.last_name+q.first_name);
   el.innerHTML=Object.keys(by).sort((x,y)=>order.indexOf(x)-order.indexOf(y)).map(d=>{
     const total=(by[d].Boy||[]).length+(by[d].Girl||[]).length;
@@ -634,8 +683,14 @@ function visibleRows(){
 function render(){
   renderDashRoster();
   const f=$('filter').value; const shown=visibleRows();
-  $('count').textContent=`(${shown.length})`;
-  if(!shown.length){ $('list').innerHTML='<div class="card text-gray-500 text-sm">No registrations yet for your team. Share the registration link with parents.</div>'; return; }
+  const arch=isArchive(), cur=curSeason();
+  $('count').textContent=`— ${viewSeason()}${arch?' archive':' season'} (${shown.length})`;
+  $('runChecks').classList.toggle('hidden',arch); if(fullAccess) $('certNote').classList.toggle('hidden',arch);
+  const notBack=arch&&fullAccess&&rosterSport==='Track & Field'?sportRows().filter(r=>r.status==='verified'&&!backState(r)):[];
+  $('archNote').classList.toggle('hidden',!arch);
+  if(arch){ const all=sportRows(), back=all.filter(r=>backState(r)==='back').length, wait=all.filter(r=>backState(r)==='waiting').length;
+    $('archNote').innerHTML=`<b>${viewSeason()} roster — archived.</b> These athletes are kept as last season's record and are <b>not</b> on your ${cur} roster. ${back} of ${all.length} ${back===1?'has':'have'} registered again for ${cur}${wait?`, ${wait} ${wait===1?'is':'are'} on the waiting list`:''}. When a family registers, the athlete is recognised from this record (no new proof of birth).${notBack.length?` <button type="button" class="btn bg-blue-600 text-white text-sm ml-1" onclick="bringForward(sportRows().filter(r=>r.status==='verified').map(r=>r.id))">Bring all ${notBack.length} to ${cur}</button>`:''}`; }
+  if(!shown.length){ $('list').innerHTML=`<div class="card text-gray-500 text-sm">${sportRows().length?'No athletes match that filter or search.':arch?'No athletes in this archive.':`No ${viewSeason()} registrations yet for your team. Share the registration link with parents${allSportRows().length?' — or open the archived tab above and bring last season\'s athletes forward':''}.`}</div>`; return; }
   if(!fullAccess){
     $('list').innerHTML=shown.map(r=>`
     <div class="card" data-id="${r.id}">
@@ -643,7 +698,7 @@ function render(){
         <div class="flex-1 min-w-0">
           <div class="font-bold text-base">${r.comp_number?`<span class="text-blue-700">#${r.comp_number}</span> `:''}${esc(r.last_name)}, ${esc(r.first_name)} <span class="text-gray-500 font-normal text-sm">${r.gender} · ${r.division} · ${esc(r.sport)}</span></div>
         </div>
-        ${statusPill(r.status)}
+        ${arch?backPill(r):''} ${statusPill(r.status)}
       </div>
     </div>`).join('');
     return;
@@ -657,20 +712,21 @@ function render(){
         <div class="font-bold text-base">${r.comp_number?`<span class="text-blue-700">#${r.comp_number}</span> `:''}${esc(r.last_name)}, ${esc(r.first_name)} <span class="text-gray-500 font-normal text-sm">${r.gender} · ${r.division} (${r.age_on_dec31}) · ${esc(r.sport)}</span></div>
         <div class="text-xs text-gray-500">DOB ${fmtDate(r.dob)} · submitted ${fmtDate(r.created_at)} · ${r.is_returning?'Returning':'New athlete'}${r.ran_for_other_team?' · last season: '+esc(r.prior_team||'another team'):''}${r.medical_option==='conditions'?' · <b class="text-red-700">Medical: '+esc(r.medical_conditions||'condition listed — see Details')+'</b>':''}</div>
       </div>
-      ${clearPill(clearIn[r.id])} ${pill(r)} ${r.is_late?'<span class="pill bg-red-100 text-red-800">Late registration</span>':''} ${statusPill(r.status)}
+      ${clearPill(clearIn[r.id])} ${pill(r)} ${r.is_late?'<span class="pill bg-red-100 text-red-800">Late registration</span>':''} ${arch?backPill(r):''} ${statusPill(r.status)}
     </div>
     ${r.dob_check_note?`<div class="text-xs mt-1 ${r.dob_check_status==='match'?'text-green-700':'text-red-700'}">${esc(r.dob_check_note)}</div>`:''}
     <div class="flex flex-wrap gap-2 mt-3">
       ${r.proof_path?`<button class="btn bg-gray-200" onclick="viewProof('${r.id}')">View proof of birth${window.proofTypeLabel(r)?' ('+esc(window.proofTypeLabel(r))+')':''}</button>`:'<span class="pill bg-green-100 text-green-800">Returning — verified from last season\'s record (no proof needed)</span>'}
       <button class="btn bg-gray-200" onclick="details('${r.id}')">Details</button>
       <button class="btn bg-gray-200" onclick="makePdf('${r.id}')">Download forms PDF</button>
+      ${arch?(r.status==='verified'&&rosterSport==='Track & Field'&&!backState(r)?`<button class="btn bg-blue-600 text-white" onclick="bringForward(['${r.id}'])">Bring to ${cur}</button>`:''):`
       ${r.status==='submitted'||r.status==='rejected'?(clearIn[r.id]&&clearIn[r.id].vus&&!['cleared','not_same'].includes(clearIn[r.id].status)
         ?`<span class="text-xs text-purple-800 font-semibold">Can't review yet — waiting for ${esc(TEAM_NAME(clearIn[r.id].from_team))} to approve the Valley United move</span>`
         :`<button class="btn bg-blue-600 text-white" onclick="setStatus('${r.id}','reviewed')">✓ Team reviewed</button>`):''}
       ${r.status==='reviewed'?'<span class="text-xs text-blue-800 font-semibold self-center">Waiting for the Conference President to certify</span>':''}
       ${r.status!=='rejected'&&r.status!=='verified'?`<button class="btn bg-red-100 text-red-800" onclick="setStatus('${r.id}','rejected')">Reject</button>`:''}
       ${r.dob_check_status!=='pending'&&r.proof_path&&r.status!=='verified'?`<button class="btn bg-gray-100 text-sm" onclick="runChecks([rows.find(x=>x.id==='${r.id}')],true)">Re-run ID check</button>`:''}
-      ${canDeleteAthlete(r)?`<button class="btn bg-red-600 text-white" onclick="deleteAthlete('${r.id}')">Delete athlete</button>`:''}
+      ${canDeleteAthlete(r)?`<button class="btn bg-red-600 text-white" onclick="deleteAthlete('${r.id}')">Delete athlete</button>`:''}`}
     </div>
     <div id="proof-${r.id}" class="mt-2"></div>
     <div id="det-${r.id}" class="mt-2 text-sm hidden"></div>
@@ -787,12 +843,12 @@ $('exportHytek').onclick=()=>{
   if(!shown.length){ alert('Nothing to export.'); return; }
   if(f!=='verified' && !confirm(`This will include ${shown.length} athlete(s), some not yet certified. Tip: set the filter to "Certified" to export only certified athletes. Continue?`)) return;
   const txt=hytekRoster(shown, CFG);
-  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'})); a.download=`${myCoach.team_code||'roster'}_hytek_roster_${CFG.SEASON_YEAR}.txt`; a.click();
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'})); a.download=`${myCoach.team_code||'roster'}_hytek_roster_${viewSeason()}.txt`; a.click();
 };
 $('exportCsv').onclick=()=>{
   const cols=['last_name','first_name','dob','age_on_dec31','division','gender','sport','is_returning','prior_team','address','city','zip','phone','email','emergency_name','emergency_phone','parent1_name','parent1_relationship','parent2_name','parent2_relationship','insurance_carrier','medical_option','medical_conditions','doctor_name','doctor_date','dob_check_status','status','verified_by','created_at'];
-  const csv=[cols.join(',')].concat(sortRoster(rows).map(r=>cols.map(c=>`"${String(r[c]??'').replace(/"/g,'""')}"`).join(','))).join('\n');
-  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download=`registrations_${myCoach.team_code}_${CFG.SEASON_YEAR}.csv`; a.click();
+  const csv=[cols.join(',')].concat(sortRoster(sportRows()).map(r=>cols.map(c=>`"${String(r[c]??'').replace(/"/g,'""')}"`).join(','))).join('\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download=`registrations_${myCoach.team_code}_${viewSeason()}.csv`; a.click();
 };
 
 // ---- "Who's coming" (dashboard): parents' yes/no answers + requested events for a meet, for the athletes this coach sees ----
