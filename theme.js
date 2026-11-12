@@ -80,3 +80,28 @@
   window.drawDemoBanner=draw;   // the sign-in widget calls this right after a look-around sign-in, so the banner shows without a reload
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',draw); else draw();
 })();
+
+// Comfort pass (2026-11-12), look-only: (1) a bare "Loading…" line is shown as soft placeholder bars (screen readers still hear
+// "Loading…"); (2) the browser's own "Failed to fetch" wording, wherever a page prints it, is swapped for plain words.
+(function(){
+  var NET=/(TypeError: )?(Failed to fetch|NetworkError when attempting to fetch resource\.?|Load failed)\.?/g;
+  var SAY="can't reach the server. Check your internet connection, then reload the page.";
+  function tidy(root){ try{
+    if(!root||root.nodeType!==1) return;
+    var ps=root.matches&&root.matches('p,div,span,td')?[root]:[]; ps=ps.concat([].slice.call(root.querySelectorAll('p,td')));
+    ps.forEach(function(p){ if(p.tagName!=='P') return;
+      var on=!p.childElementCount&&/^Loading(…|\\.\\.\\.)?$/.test((p.textContent||'').trim());
+      if(on&&!p.classList.contains('vyc-loading')){ p.classList.add('vyc-loading'); p.setAttribute('role','status'); }
+      else if(!on&&p.classList.contains('vyc-loading')){ p.classList.remove('vyc-loading'); p.removeAttribute('role'); } });
+    var w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,null), n;
+    while((n=w.nextNode())){ if(n.nodeValue&&n.nodeValue.search(NET)>-1){ NET.lastIndex=0; n.nodeValue=n.nodeValue.replace(NET,SAY); } NET.lastIndex=0; }
+  }catch(e){} }
+  function start(){ try{
+    tidy(document.body);
+    new MutationObserver(function(ms){ ms.forEach(function(m){
+      if(m.type==='characterData'){ tidy(m.target.parentNode); return; }
+      [].forEach.call(m.addedNodes,function(n){ tidy(n.nodeType===1?n:n.parentNode); }); }); })
+      .observe(document.body,{childList:true,subtree:true,characterData:true});
+  }catch(e){} }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start); else start();
+})();

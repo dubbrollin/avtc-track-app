@@ -113,11 +113,16 @@ window.mountLoginWidget = function(sb, container, opts){
   const hint = opts.hint || "Sign in with your email and password.";
   container.innerHTML = `
     <p class="text-sm text-gray-600 mb-2">${hint}</p>
-    <input type="email" id="authEmail" class="w-full border rounded p-2 mb-2" placeholder="you@example.com" autocomplete="email">
-    <input type="password" id="authPass" class="w-full border rounded p-2 mb-2" placeholder="Password" autocomplete="current-password">
-    <div class="flex gap-2 mb-2">
-      <button type="button" id="authSignIn" class="btn bg-blue-600 text-white flex-1">Sign in</button>
-      <button type="button" id="authSignUp" class="btn bg-gray-200 flex-1">First time? Create password</button>
+    <label class="authlbl" for="authEmail">Email</label>
+    <input type="email" id="authEmail" class="w-full border rounded p-2 mb-2" placeholder="you@example.com" autocomplete="email" inputmode="email" autocapitalize="none" spellcheck="false">
+    <label class="authlbl" for="authPass">Password</label>
+    <div class="authpass mb-3">
+      <input type="password" id="authPass" class="w-full border rounded p-2" placeholder="Your password" autocomplete="current-password">
+      <button type="button" id="authShow" aria-pressed="false" aria-label="Show password">Show</button>
+    </div>
+    <div class="authbtns mb-2">
+      <button type="button" id="authSignIn" class="btn bg-blue-600 text-white">Sign in</button>
+      <button type="button" id="authSignUp" class="btn bg-gray-200">First time? Create password</button>
     </div>
     <div class="flex items-center gap-2 my-2 text-xs text-gray-400"><div class="flex-1 border-t"></div>or<div class="flex-1 border-t"></div></div>
     <button type="button" id="authGoogle" class="btn bg-white border w-full flex items-center justify-center gap-2">
@@ -127,21 +132,32 @@ window.mountLoginWidget = function(sb, container, opts){
     ${(window.APP_CONFIG||{}).LOOK_AROUND ? `<div class="mt-3 pt-3 border-t">
       <p class="text-sm font-semibold">Just reviewing? Look around without an account</p>
       <p class="text-xs text-gray-500 mb-2">One tap opens the app the way a real user sees it, with a sample team's data. Everything is view-only; changes are turned off until you sign in with your own account.</p>
-      <div class="flex flex-wrap gap-2">${(window.DEMO_LOGINS||[]).map(d=>`<button type="button" class="btn bg-white border text-sm" data-demo="${d.key}">👀 As ${d.label}</button>`).join('')}</div>
+      <div class="flex flex-wrap gap-2">${(window.DEMO_LOGINS||[]).map(d=>`<button type="button" class="btn bg-white border text-sm authdemo" data-demo="${d.key}">👀 As ${d.label}</button>`).join('')}</div>
     </div>` : ''}
-    <p id="authMsg" class="text-sm mt-2"></p>`;
+    <p id="authMsg" class="text-sm mt-2" role="status" aria-live="polite"></p>`;
   const g = sel => container.querySelector(sel);
   const emailEl = g('#authEmail'), passEl = g('#authPass'), msgEl = g('#authMsg');
   const setMsg = (t, ok) => { msgEl.textContent = t; msgEl.className = 'text-sm mt-2 ' + (ok ? 'text-green-700' : 'text-red-600'); };
+  // While a sign-in is on its way: grey the buttons out so a second tap can't double-send, then put them back.
+  const busy = async (fn) => { const bs = container.querySelectorAll('#authSignIn,#authSignUp,#authGoogle'); bs.forEach(b => b.disabled = true);
+    try { await fn(); } catch (e) { setMsg(plain((e && e.message) || e)); } finally { bs.forEach(b => b.disabled = false); } };
+  const plain = m => /Failed to fetch|NetworkError|Load failed/i.test(m || '') ? "Can't reach the server. Check your internet connection and try again." : m;
+  // Enter in either box signs in (the widget can sit inside another form, so it must not submit that one).
+  [emailEl, passEl].forEach(el => el.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); g('#authSignIn').click(); } }));
+  g('#authShow').onclick = () => { const show = passEl.type === 'password'; passEl.type = show ? 'text' : 'password';
+    const b = g('#authShow'); b.textContent = show ? 'Hide' : 'Show'; b.setAttribute('aria-pressed', show ? 'true' : 'false'); b.setAttribute('aria-label', show ? 'Hide password' : 'Show password'); passEl.focus(); };
   g('#authSignIn').onclick = async () => {
     const email = emailEl.value.trim(), password = passEl.value;
-    if (!email || !password) return setMsg('Enter your email and password.');
-    setMsg('Signing in…');
+    if (!email) { emailEl.focus(); return setMsg('Enter your email.'); }
+    if (!password) { passEl.focus(); return setMsg('Enter your password.'); }
+    setMsg('Signing in…', true);
+    await busy(async () => {
     const { error } = await sb.auth.signInWithPassword({ email, password });
     if (error && /not confirmed/i.test(error.message)) return needConfirm(email);
     if (error) setMsg(/Invalid login credentials/i.test(error.message)
       ? "Wrong email/password, or you haven't set a password yet — try \"First time? Create password.\""
-      : error.message);
+      : plain(error.message));
+    });
   };
   // New logins must prove the email is theirs: we email a link, and the login only works after they open it.
   const needConfirm = (email) => {
@@ -157,17 +173,19 @@ window.mountLoginWidget = function(sb, container, opts){
     const email = emailEl.value.trim(), password = passEl.value;
     if (!email || !password) return setMsg('Enter your email and choose a password.');
     if (password.length < 6) return setMsg('Password must be at least 6 characters.');
-    setMsg('Creating your login…');
+    setMsg('Creating your login…', true);
+    await busy(async () => {
     const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.href.split('#')[0] } });
     if (error) setMsg(/already registered|already exists/i.test(error.message)
       ? 'That email already has a password set — use Sign in instead.'
-      : error.message);
+      : plain(error.message));
     else if (data && !data.session) needConfirm(email);   // email confirmation is on: no session until they open the link
     else setMsg('Account created — signing you in…', true);
+    });
   };
   g('#authGoogle').onclick = async () => {
     const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.href.split('#')[0] } });
-    if (error) setMsg(error.message);
+    if (error) setMsg(plain(error.message));
   };
   container.querySelectorAll('[data-demo]').forEach(b => b.onclick = async () => {
     const d = (window.DEMO_LOGINS || []).find(x => x.key === b.dataset.demo); if (!d) return;
