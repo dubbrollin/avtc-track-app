@@ -176,3 +176,15 @@ body .vyc-loading::after{content:"";position:absolute;inset:0;background:linear-
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
   body .vyc-loading::after{display:none}
 }
+
+/* ---------- registration forms, second pass (2026-11-12): answers you can hit with a thumb ---------- */
+/* Yes / No and Returning / New: each choice is its own button-sized box */
+body form .flex > label.flex:has(> input[type=radio]){min-height:44px;padding:0 .9rem 0 .7rem;gap:.5rem;border:1.5px solid var(--field);border-radius:8px;background:#fff;font-weight:500;cursor:pointer}
+body form .flex:has(> label.flex > input[type=radio]){gap:.5rem;flex-wrap:wrap}
+body form .flex > label.flex:has(> input[type=radio]:checked){border-color:var(--act);background:var(--act-soft);color:var(--act-dark);font-weight:600}
+/* "I agree" rows: the whole row is the target, and it turns green once ticked */
+body form label.flex:has(> input[type=checkbox]){min-height:44px;padding:.55rem .7rem;border-radius:8px;cursor:pointer;align-items:flex-start}
+body form label.flex:has(> input[type=checkbox]) > input{margin-top:.15rem}
+body form label.flex.req:has(> input[type=checkbox]){border:1.5px solid var(--field);background:#fff}
+body form label.flex.req:has(> input[type=checkbox]:checked){border-color:var(--ok);background:var(--ok-bg)}
+body form input[type=file]{width:100%;max-width:100%}
