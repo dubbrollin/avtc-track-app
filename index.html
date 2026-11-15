@@ -304,8 +304,13 @@
       <div id="cTeamWrap"><label class="f req">Team</label><select id="cTeam"></select></div>
     </div>
     <div id="cVusWrap" class="subpick hidden mt-3">
-      <label class="f req">Which Valley United Striders roster do you coach?</label>
-      <div class="chips">
+      <label class="f req">Valley United Track &amp; Field, Cross Country, or both?</label>
+      <div class="chips mb-2">
+        <label class="chip"><input type="checkbox" name="cVusSport" value="Track &amp; Field" checked> Valley United Track &amp; Field</label>
+        <label class="chip"><input type="checkbox" name="cVusSport" value="Cross Country"> Valley United Cross Country</label>
+      </div>
+      <label class="f req cVusTrackOnly">Which Valley United track roster do you coach?</label>
+      <div class="chips cVusTrackOnly">
         <label class="chip"><input type="checkbox" name="cVusSquad" value="postseason" checked> Postseason team</label>
         <label class="chip"><input type="checkbox" name="cVusSquad" value="developmental"> Developmental</label>
       </div>
@@ -515,6 +520,13 @@
     <p class="text-sm mt-2 rounded p-2" style="background:#faf5ff;border:1px solid #c4b5fd"><b>Ran for a VYC team this season?</b> Don't use this form. Sign in to the <a class="underline text-blue-700" href="parent.html">Parent Dashboard</a> and tap <b>Request Valley United</b> on your athlete — their season bests carry over automatically.</p>
   </div>
   <div class="card">
+    <label class="f req">Which Valley United team?</label>
+    <div class="grid gap-2 sm:grid-cols-2 mt-1">
+      <label class="rolecard"><input type="radio" name="vSport" value="Track &amp; Field" checked><span><b>Valley United Track &amp; Field</b><span class="d">The spring/summer postseason track team.</span></span></label>
+      <label class="rolecard"><input type="radio" name="vSport" value="Cross Country"><span><b>Valley United Cross Country</b><span class="d">The cross country team — one team, no events to pick.</span></span></label>
+    </div>
+  </div>
+  <div class="card">
     <h2 class="font-bold text-lg mb-2">Athlete Information</h2>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div><label class="f req">First name</label><input id="vFirst" required></div>
@@ -546,19 +558,22 @@
     </div>
   </div>
   <div class="card">
-    <h2 class="font-bold text-lg mb-2">Events</h2>
-    <p class="text-sm text-gray-600 mb-2">List the <b>individual events</b> you want your athlete to run for Valley United — <b>up to 3</b>, for every age. Every event needs a mark from this season.</p>
-    <p class="text-sm mb-2 rounded p-2" style="background:#faf5ff;border:1px solid #c4b5fd"><b>Relays are the coaches' decision</b>, based on each athlete's skill — you don't list them here. To run a relay an athlete needs a mark in its race: the <b>4x100</b> needs a <b>100m</b> mark, the <b>4x400</b> a <b>400m</b> mark and the <b>4x800</b> an <b>800m</b> mark. A high school athlete without a verified mark in that race must run it at the first Valley United meet after their high school season; no mark there means they can't run on that relay.</p>
+    <h2 class="font-bold text-lg mb-2 vTrackOnly">Events</h2>
+    <h2 class="font-bold text-lg mb-2 vXcOnly" style="display:none">High school</h2>
+    <p class="text-sm text-gray-600 mb-2 vXcOnly" style="display:none">Valley United Cross Country is one team — your athlete runs the race for their age group, so there are no events to pick.</p>
+    <p class="text-sm text-gray-600 mb-2 vTrackOnly">List the <b>individual events</b> you want your athlete to run for Valley United — <b>up to 3</b>, for every age. Every event needs a mark from this season.</p>
+    <p class="text-sm mb-2 rounded p-2 vTrackOnly" style="background:#faf5ff;border:1px solid #c4b5fd"><b>Relays are the coaches' decision</b>, based on each athlete's skill — you don't list them here. To run a relay an athlete needs a mark in its race: the <b>4x100</b> needs a <b>100m</b> mark, the <b>4x400</b> a <b>400m</b> mark and the <b>4x800</b> an <b>800m</b> mark. A high school athlete without a verified mark in that race must run it at the first Valley United meet after their high school season; no mark there means they can't run on that relay.</p>
     <div class="mb-3 rounded border p-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div><label class="f req" for="vHighSchool">High school</label><input id="vHighSchool" placeholder="e.g. Antelope Valley High School"></div>
-      <div><label class="f req">When does the high school (CIF) track season end?</label>
+      <div><label class="f req">When does the high school (CIF) <span class="vSportWord">track</span> season end?</label>
         <input type="date" id="vCifEnd">
-        <label class="flex items-center gap-2 text-sm mt-1"><input type="checkbox" id="vCifDone"> It's already over (or not running high school track this year)</label></div>
-      <div class="sm:col-span-2"><label class="f" for="vAthNet">Athletic.net profile link <span class="font-normal text-gray-500">(if you have it)</span></label>
+        <label class="flex items-center gap-2 text-sm mt-1"><input type="checkbox" id="vCifDone"> It's already over (or not running high school <span class="vSportWord">track</span> this year)</label></div>
+      <div class="sm:col-span-2 vTrackOnly"><label class="f" for="vAthNet">Athletic.net profile link <span class="font-normal text-gray-500">(if you have it)</span></label>
         <input id="vAthNet" type="url" inputmode="url" placeholder="https://www.athletic.net/athlete/…" autocomplete="off">
         <p class="text-xs text-gray-600 mt-1">High school times aren't in our system, so Valley United checks every mark below on Athletic.net. The link makes that quicker: find your athlete on <a class="underline text-blue-700" href="https://www.athletic.net/" target="_blank" rel="noopener">athletic.net</a>, open their profile and copy the address. No link? Leave it blank — we'll look them up by name and school.</p></div>
-      <p class="sm:col-span-2 text-sm rounded p-2" style="background:#fffbeb;border:1px solid #f59e0b"><b>If we can't verify a time</b>, your athlete will be required to run that race at the <b>next available Valley United meet</b>. High school athletes can sign up now, but can't run with Valley United until their high school (CIF) season is over — so that's the first Valley United meet after it ends.</p>
+      <p class="sm:col-span-2 text-sm rounded p-2 vTrackOnly" style="background:#fffbeb;border:1px solid #f59e0b"><b>If we can't verify a time</b>, your athlete will be required to run that race at the <b>next available Valley United meet</b>. High school athletes can sign up now, but can't run with Valley United until their high school (CIF) season is over — so that's the first Valley United meet after it ends.</p>
     </div>
+    <div class="vTrackOnly">
     <div id="vEventsList" class="space-y-2"></div>
     <button type="button" id="vAddEvent" class="btn bg-gray-200 mt-2">+ Add event</button>
     <p id="vEventWarn" class="text-sm text-red-600 mt-1 hidden"></p>
@@ -567,6 +582,7 @@
       <p class="text-xs text-gray-600 mb-1">Relays take a different kind of commitment — relay practices, being at every meet the team is counting on you for, and running whatever leg the coaches need. The coaches decide who runs relays, but they need to know ahead of time who is willing.</p>
       <label class="flex items-start gap-2 text-sm py-1"><input type="radio" name="vRelayOk" value="yes" class="mt-1"> <span><b>Yes</b> — willing to run on relays if the coaches choose them.</span></label>
       <label class="flex items-start gap-2 text-sm py-1"><input type="radio" name="vRelayOk" value="no" class="mt-1"> <span><b>No</b> — individual events only, no relays.</span></label>
+    </div>
     </div>
   </div>
   <div class="card">
@@ -634,18 +650,21 @@ function paintCoachSports(){
   const vusHead=vus&&(vRole==='team_president'||vRole==='division_head_coach'); // VYC rule II.D.9: head coaches 21+
   $('cVusDivWrap').classList.toggle('hidden',vRole==='team_president'||vRole==='field_event_coach');
   $('cVusEvtWrap').classList.toggle('hidden',vRole!=='field_event_coach');
+  { const vt=[...document.querySelectorAll('input[name=cVusSport]:checked')].some(x=>x.value==='Track & Field'); document.querySelectorAll('.cVusTrackOnly').forEach(x=>x.style.display=vt?'':'none'); }
   const role=(document.querySelector('input[name=cRole]:checked')||{}).value;
   $('cAge21Wrap').classList.toggle('hidden',!((regular&&role==='head_coach')||vusHead));
 }
-document.querySelectorAll('input[name=cSport],input[name=cVusRole]').forEach(x=>x.addEventListener('change',paintCoachSports));
+document.querySelectorAll('input[name=cSport],input[name=cVusRole],input[name=cVusSport]').forEach(x=>x.addEventListener('change',paintCoachSports));
 function collectCoach(){
   const {sports,vus}=coachPicks();
   if(!sports.length&&!vus) throw new Error('Pick what you coach: Track & Field, Cross Country, Valley United Striders, or more than one.');
   const vusRole=vus?((document.querySelector('input[name=cVusRole]:checked')||{}).value||'assistant_coach'):null;
-  let vusSquads=null, vusDivs=null, vusGender=null, vusEvents=null;
+  let vusSquads=null, vusDivs=null, vusGender=null, vusEvents=null, vusSports=null;
   if(vus){
-    vusSquads=[...document.querySelectorAll('input[name=cVusSquad]:checked')].map(x=>x.value);
-    if(!vusSquads.length) throw new Error('Pick the Valley United roster you coach: Postseason team, Developmental, or both.');
+    vusSports=[...document.querySelectorAll('input[name=cVusSport]:checked')].map(x=>x.value);
+    if(!vusSports.length) throw new Error('Pick Valley United Track & Field, Cross Country, or both.');
+    vusSquads=vusSports.includes('Track & Field')?[...document.querySelectorAll('input[name=cVusSquad]:checked')].map(x=>x.value):['postseason'];
+    if(!vusSquads.length) throw new Error('Pick the Valley United track roster you coach: Postseason team, Developmental, or both.');
     if(vusRole==='field_event_coach'){
       const ev=[...document.querySelectorAll('input[name=cVusEvt]:checked')].map(x=>x.value); if(!ev.length) throw new Error('Please check at least one Valley United field event you coach.'); vusEvents=ev.join(', ');
     }
@@ -668,7 +687,7 @@ function collectCoach(){
   if(sports.length&&!$('cTeam').value) throw new Error('Please select a team.');
   if($('cUsatf').checked && !$('cUsatfDate').value) throw new Error('Please provide your USATF certification date.');
   if((role==='head_coach'||vusRole==='team_president'||vusRole==='division_head_coach') && !$('cAge21').checked) throw new Error('VYC rule II.D.9: the Head Coach must be 21 or older — please confirm your age.');
-  return { first:$('cFirst').value.trim(), last:$('cLast').value.trim(), phone:$('cPhone').value.trim(), team:sports.length?$('cTeam').value:null, role, sports, vus, vusRole, vusSquads, vusDivs, vusGender, vusEvents,
+  return { first:$('cFirst').value.trim(), last:$('cLast').value.trim(), phone:$('cPhone').value.trim(), team:sports.length?$('cTeam').value:null, role, sports, vus, vusRole, vusSquads, vusDivs, vusGender, vusEvents, vusSports,
     division: divs, gender, events,
     bg: $('cUsatf').checked ? null : ($('cBgDate').value||null), usatf:$('cUsatf').checked, usatfDate:$('cUsatf').checked?($('cUsatfDate').value||null):null,
     safesport:$('cSafeSport').value||null, age21:$('cAge21').checked };
@@ -690,7 +709,7 @@ async function saveCoachViaLogin(client, d){
 // Valley United Striders coach request: its own list, approved by a Valley United admin.
 async function saveVusCoach(client,d,email){
   const r=await client.from('vus_coaches').insert({ email:email.trim().toLowerCase(), first_name:d.first, last_name:d.last, phone:d.phone, role_type:d.vusRole||'assistant_coach',
-    squads:d.vusSquads||['postseason'], division_or_age_group:d.vusDivs||null, coach_gender:d.vusGender||null, event_specialty:d.vusEvents||null,
+    squads:d.vusSquads||['postseason'], sports:d.vusSports||['Track & Field'], division_or_age_group:d.vusDivs||null, coach_gender:d.vusGender||null, event_specialty:d.vusEvents||null,
     background_check_date:d.bg, usatf_certified:!!d.usatf, usatf_cert_date:d.usatfDate, safesport_date:d.safesport, age_21_attested:!!d.age21,
     contract_signed_at:new Date().toISOString(), contract_version:'VYC-2026', season_year:CFG.SEASON_YEAR });
   if(r.error&&/duplicate|unique/i.test(r.error.message)) return {error:{message:'You already have a Valley United coach request on file.'}};
@@ -1280,6 +1299,13 @@ $('cUsatfDate').addEventListener('change',bgCheckHint);
 // ---- VUS event rows ----
 const VUS_MAX_4 = ['13/14','15/16','17/18'];
 const VUS_EVENT_OPTIONS = ["100m","200m","400m","800m","1500m","3000m","80m Hurdles","100m Hurdles","110m Hurdles","200m Hurdles","400m Hurdles","Long Jump","Triple Jump","High Jump","Pole Vault","Shot Put","Discus","Javelin","Hammer Throw"];
+// High school form: Valley United Track & Field or Cross Country (cross country = no events, no relays question)
+const vusSportPick=()=>(document.querySelector('input[name=vSport]:checked')||{}).value||'Track & Field';
+function paintVusSport(){ const xc=vusSportPick()==='Cross Country';
+  document.querySelectorAll('#vusForm .vTrackOnly').forEach(x=>x.style.display=xc?'none':'');
+  document.querySelectorAll('#vusForm .vXcOnly').forEach(x=>x.style.display=xc?'':'none');
+  document.querySelectorAll('#vusForm .vSportWord').forEach(x=>x.textContent=xc?'cross country':'track'); }
+document.querySelectorAll('input[name=vSport]').forEach(x=>x.addEventListener('change',paintVusSport));
 function vusMaxEvents(){ return 3; } // Valley United: up to 3 individual events for every age (relays are the coaches' decision)
 function addVusEventRow(){
   const max=vusMaxEvents();
@@ -1505,14 +1531,15 @@ $('vusForm').addEventListener('submit', async(e)=>{
   try{
     if(!$('vIsHs').checked) throw new Error('This form is only for high school athletes (15+) who did not run for a VYC team this season. VYC athletes: use Request Valley United on the Parent Dashboard.');
     const vSig=vusSig.get(); if(!vSig) throw new Error('Please provide the parent/guardian signature.');
-    const rows=[...$('vEventsList').children].map(r=>({
+    const vSport=vusSportPick(), vXc=vSport==='Cross Country';
+    const rows=vXc?[]:[...$('vEventsList').children].map(r=>({
       event:r.querySelector('.ve-event').value, mark:r.querySelector('.ve-mark').value.trim(),
       meet_date:r.querySelector('.ve-date').value||null, state:r.querySelector('.ve-state').value.trim()
     }));
-    if(!rows.length) throw new Error('Please add at least one event.');
+    if(!vXc&&!rows.length) throw new Error('Please add at least one event.');
     const max=vusMaxEvents(); if(rows.length>max) throw new Error(`Maximum ${max} individual events.`);
-    const relayOk=document.querySelector('input[name=vRelayOk]:checked'); if(!relayOk) throw new Error('Please answer whether your athlete is willing to run on relays.');
-    const athNet=$('vAthNet').value.trim(); if(athNet&&!/^https?:\/\/([a-z0-9-]+\.)*athletic\.net\//i.test(athNet)) throw new Error("That link isn't an Athletic.net link (it starts with https://www.athletic.net/). Leave it blank if you don't have it.");
+    const relayOk=vXc?null:document.querySelector('input[name=vRelayOk]:checked'); if(!vXc&&!relayOk) throw new Error('Please answer whether your athlete is willing to run on relays.');
+    const athNet=vXc?'':$('vAthNet').value.trim(); if(athNet&&!/^https?:\/\/([a-z0-9-]+\.)*athletic\.net\//i.test(athNet)) throw new Error("That link isn't an Athletic.net link (it starts with https://www.athletic.net/). Leave it blank if you don't have it.");
     const hs=$('vHighSchool').value.trim(); if(!hs) throw new Error("Please enter the athlete's high school.");
     const cifDone=$('vCifDone').checked, cifEnd=cifDone?null:($('vCifEnd').value||null);
     if(!cifDone&&!cifEnd) throw new Error("Please tell us when the high school (CIF) season ends, or tick that it's already over.");
@@ -1527,7 +1554,7 @@ $('vusForm').addEventListener('submit', async(e)=>{
       parent2_name:$('vParent2Name').value.trim()||null, parent2_relationship:$('vParent2Rel').value||null,
       phone:$('vPhone').value.trim(), email:$('vEmail').value.trim(),
       address:$('vAddress').value.trim(), city:$('vCity').value.trim(), state:$('vState').value.trim(), zip:$('vZip').value.trim(),
-      events: rows, relay_ok:relayOk.value==='yes', athletic_net_url:athNet||null, high_school:hs, cif_season_end:cifEnd, cif_done:cifDone, shirt_size:$('vShirt').value,
+      sport:vSport, events: rows, relay_ok:vXc?null:relayOk.value==='yes', athletic_net_url:athNet||null, high_school:hs, cif_season_end:cifEnd, cif_done:cifDone, shirt_size:$('vShirt').value,
       signature:vSig.png, signature_method:vSig.method, signature_date:new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'}),
       fee_amount_cents:25000, fee_paid:false, status:'submitted'
     };

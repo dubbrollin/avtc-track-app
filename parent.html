@@ -161,46 +161,56 @@ async function loadMyAthletes(){
         <div class="text-xs text-gray-500">Submitted ${fmtDate(r.created_at)}</div>
       </div>
       <span class="pill ${pillCls[r.status]||'bg-gray-200'}">${({submitted:'Awaiting team review',reviewed:'Team reviewed — awaiting certification',verified:'Certified',rejected:'Rejected'})[r.status]||r.status}${r.is_late?' · late registration':''}</span>
-      ${r.status!=='rejected'?`<div class="w-full rounded-lg bg-gray-50 border p-2 mt-1" data-fee="${r.id}"></div><div class="w-full hidden" data-bests="${r.id}"></div>${r.sport!=='Cross Country'?`<div class="w-full hidden mt-1" data-vus="${r.id}"></div>`:''}`:''}
+      ${r.status!=='rejected'?`<div class="w-full rounded-lg bg-gray-50 border p-2 mt-1" data-fee="${r.id}"></div><div class="w-full hidden" data-bests="${r.id}"></div><div class="w-full hidden mt-1" data-vus="${r.id}"></div>`:''}
     </div>`).join('');
   // Team fee for each athlete (card through the team's Stripe, or Zelle / Cash App / Venmo / check)
   myRegs.filter(r=>r.status!=='rejected').forEach(r=>{ const el=document.querySelector(`[data-fee="${r.id}"]`); if(el) window.renderFeeCard(el,{sb,regId:r.id,email:me,compact:true}); });
   loadVus().catch(()=>{});
 }
 
-// ---- Valley United Striders (postseason): the parent asks from the athlete's TRACK registration. The regular-season
+// ---- Valley United Striders: Track & Field (from the athlete's track registration) or Cross Country (from their
+// cross country registration — one Valley United cross country team, no event picks, open during the cross country
+// league's registration window). For track: the regular-season
 // team never changes. The database answers the three questions from the season's results (met a qualifying standard?
 // ran at league finals? ran at IECs?): any yes = Postseason team, no to all = Developmental. Season bests carry over.
 // Shown from the opening day (the season's Invitational, or a date a Valley United admin sets) until the closing date. ----
 const VUS_SHIRTS=['YS','YM','YL','AS','AM','AL','AXL'];
 const todayLA=()=>new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
 const niceDay=d=>d?new Date(String(d).slice(0,10)+'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}):'';
-const VUS_PLACE={postseason:'Postseason team',developmental:'Developmental'};
+const VUS_PLACE={postseason:'Postseason team',developmental:'Developmental',cross_country:'Cross Country team'};
+const isXcReg=r=>r.sport==='Cross Country';
+const vusSportName=r=>isXcReg(r)?'Cross Country':'Track & Field';
+// Request window: track = Invitational (or set date) to closing date; cross country = the XC league registration window (blank = no limit)
+const vusWin=async reg=>{ const {data:w}=await sb.rpc(isXcReg(reg)?'vus_xc_window':'vus_window',{p_season:reg.season_year}); return w||{}; };
+const vusOpenNow=(reg,w)=>{ const t=todayLA(); return isXcReg(reg)?(!(w.opens&&t<w.opens)&&!(w.closes&&t>w.closes)):!!(w.opens&&t>=w.opens&&!(w.closes&&t>w.closes)); };
 async function loadVus(){
-  const regs=myRegs.filter(r=>r.status!=='rejected'&&r.sport!=='Cross Country'); if(!regs.length) return;
+  const regs=myRegs.filter(r=>r.status!=='rejected'); if(!regs.length) return;
   const {data}=await sb.from('vus_requests').select('*').in('registration_id',regs.map(r=>r.id));
   const reqs={}; (data||[]).forEach(q=>reqs[q.registration_id]=q);
   const wins={};
   for(const reg of regs){
     const el=document.querySelector(`[data-vus="${reg.id}"]`); if(!el) continue;
     if(reqs[reg.id]){ vusStatus(el,reg,reqs[reg.id]); continue; }
-    if(!(reg.season_year in wins)){ const {data:w}=await sb.rpc('vus_window',{p_season:reg.season_year}); wins[reg.season_year]=w||{}; }
-    const w=wins[reg.season_year], t=todayLA();
-    if(!w.opens||t<w.opens||(w.closes&&t>w.closes)){ el.classList.add('hidden'); continue; }
+    const wk=vusSportName(reg)+reg.season_year; if(!(wk in wins)) wins[wk]=await vusWin(reg);
+    const w=wins[wk];
+    if(!vusOpenNow(reg,w)){ el.classList.add('hidden'); continue; }
     el.classList.remove('hidden');
-    el.innerHTML=`<div class="vus-box flex flex-wrap items-center gap-2"><div class="flex-1 min-w-0 text-sm"><b style="color:#6b21a8">Valley United Striders</b> — postseason requests are open${w.closes?` until ${esc(niceDay(w.closes))}`:''}. ${esc(reg.first_name)} stays on ${esc(reg.team_code)} for the regular season.</div>
-      <button type="button" class="btn text-white text-sm" style="background:#7c3aed" data-vus-open>Request Valley United</button></div>`;
-    el.querySelector('[data-vus-open]').onclick=()=>vusForm(el,reg);
+    el.innerHTML=vusAskBox(reg,w);
+    el.querySelector('[data-vus-open]').onclick=()=>isXcReg(reg)?vusXcForm(el,reg):vusForm(el,reg);
   }
 }
+// The Valley United box on an athlete: which Valley United (Track & Field or Cross Country) comes from the registration it's on.
+function vusAskBox(reg,w){ const xc=isXcReg(reg);
+  return `<div class="vus-box flex flex-wrap items-center gap-2"><div class="flex-1 min-w-0 text-sm"><b style="color:#6b21a8">Valley United Striders — ${vusSportName(reg)}</b> — requests are open${w.closes?` until ${esc(niceDay(w.closes))}`:''}. ${esc(reg.first_name)} stays on ${esc(reg.team_code)} for the regular season.</div>
+    <button type="button" class="btn text-white text-sm" style="background:#7c3aed" data-vus-open>Request Valley United ${xc?'Cross Country':'Track &amp; Field'}</button></div>`; }
 function vusStatus(el,reg,q){
   el.classList.remove('hidden');
   const st=q.status==='accepted'?`<span class="pill bg-green-600 text-white">Accepted — ${VUS_PLACE[q.placement]}</span>`
     :q.status==='declined'?'<span class="pill bg-red-600 text-white">Not accepted</span>'
     :`<span class="pill bg-gray-200">Waiting for Valley United review — ${VUS_PLACE[q.placement]}</span>`;
-  el.innerHTML=`<div class="vus-box"><div class="flex flex-wrap items-center gap-2"><b style="color:#6b21a8" class="text-sm">Valley United Striders</b>${st}</div>
-    <p class="text-sm mt-1">You asked for: ${(q.events||[]).map(e=>`<b>${esc(e.event_name)}</b> ${esc(e.mark)}`).join(' · ')||'—'}</p>
-    ${q.relay_ok!=null?`<p class="text-sm">Relays: ${q.relay_ok?'willing to run on relays':'individual events only — no relays'}</p>`:''}
+  el.innerHTML=`<div class="vus-box"><div class="flex flex-wrap items-center gap-2"><b style="color:#6b21a8" class="text-sm">Valley United Striders — ${q.sport==='Cross Country'?'Cross Country':'Track &amp; Field'}</b>${st}</div>
+    ${q.sport==='Cross Country'?'':`<p class="text-sm mt-1">You asked for: ${(q.events||[]).map(e=>`<b>${esc(e.event_name)}</b> ${esc(e.mark)}`).join(' · ')||'—'}</p>
+    ${q.relay_ok!=null?`<p class="text-sm">Relays: ${q.relay_ok?'willing to run on relays':'individual events only — no relays'}</p>`:''}`}
     ${q.status==='declined'&&q.review_note?`<p class="text-sm mt-1 text-red-700">${esc(q.review_note)}</p>`:''}
     ${q.status==='accepted'?`<p class="text-xs text-gray-600 mt-1">Fee: $${(q.fee_amount_cents/100).toFixed(0)} — ${q.fee_paid?'paid. Thank you!':'Valley United will send payment instructions.'}</p>`:''}
     ${q.status==='submitted'?'<button type="button" class="text-xs underline text-gray-600 mt-1" data-vus-withdraw>Withdraw this request</button>':''}</div>`;
@@ -218,15 +228,45 @@ async function loadVusPreview(){
   if(ok!==true){ box.innerHTML='<div class="card text-sm text-red-700">The Valley United preview is for site admins and Valley United admins.</div>'; return; }
   const {data:reg,error}=await sb.from('registrations').select('*').eq('id',id).maybeSingle();
   if(error||!reg){ box.innerHTML='<div class="card text-sm text-red-700">Could not load that athlete'+(error?': '+esc(error.message):'.')+'</div>'; return; }
-  const {data:w}=await sb.rpc('vus_window',{p_season:reg.season_year}); const t=todayLA(), win=w||{};
-  const openNow=win.opens&&t>=win.opens&&!(win.closes&&t>win.closes);
+  const win=await vusWin(reg), openNow=vusOpenNow(reg,win);
   box.innerHTML=`<div class="card" style="border:2px dashed #7c3aed"><h2 class="font-bold" style="color:#6b21a8">Admin preview — what ${esc(reg.first_name)} ${esc(reg.last_name)}'s parent sees</h2>
-    <p class="text-sm text-gray-600 mt-1">${openNow?'Requests are open right now, so parents see this button today.':`Parents <b>don't see this yet</b>: requests open ${win.opens?'on '+esc(niceDay(win.opens)):'on the Invitational (no Invitational is marked for the '+esc(reg.season_year)+' season yet)'}${win.closes?' and close '+esc(niceDay(win.closes)):''}.`} Nothing is sent from this preview. <a class="underline" href="admin.html?tab=vus">Back to Site Admin</a></p>
+    <p class="text-sm text-gray-600 mt-1">${openNow?'Requests are open right now, so parents see this button today.':`Parents <b>don't see this yet</b>: requests open ${win.opens?'on '+esc(niceDay(win.opens)):isXcReg(reg)?'when the cross country registration window opens':'on the Invitational (no Invitational is marked for the '+esc(reg.season_year)+' season yet)'}${win.closes?' and close '+esc(niceDay(win.closes)):''}.`} Nothing is sent from this preview. <a class="underline" href="admin.html?tab=vus">Back to Site Admin</a></p>
     <div class="mt-2" id="vusPrevMount"></div></div>`;
   const el=$('vusPrevMount');
-  el.innerHTML=`<div class="vus-box flex flex-wrap items-center gap-2"><div class="flex-1 min-w-0 text-sm"><b style="color:#6b21a8">Valley United Striders</b> — postseason requests are open${win.closes?` until ${esc(niceDay(win.closes))}`:''}. ${esc(reg.first_name)} stays on ${esc(reg.team_code)} for the regular season.</div>
-    <button type="button" class="btn text-white text-sm" style="background:#7c3aed" data-vus-open>Request Valley United</button></div>`;
-  el.querySelector('[data-vus-open]').onclick=()=>vusForm(el,reg,{preview:true,back:loadVusPreview});
+  el.innerHTML=vusAskBox(reg,win);
+  el.querySelector('[data-vus-open]').onclick=()=>isXcReg(reg)?vusXcForm(el,reg,{preview:true,back:loadVusPreview}):vusForm(el,reg,{preview:true,back:loadVusPreview});
+}
+// Valley United CROSS COUNTRY request: one Valley United cross country team — no results check, no event picks, no relays.
+function vusXcForm(el,reg,opt={}){
+  el.innerHTML=`<div class="vus-box">
+    <h3 class="font-bold" style="color:#6b21a8">Valley United Striders Cross Country — request for ${esc(reg.first_name)} ${esc(reg.last_name)}</h3>
+    <div class="rounded p-2 mb-2 text-sm" style="background:#fff;border:2px solid #7c3aed"><b>Valley United Cross Country</b> is one team. ${esc(reg.first_name)} runs the race for their age group — there are no events to pick. ${esc(reg.first_name)} stays on <b>${esc(reg.team_code)}</b> for the regular cross country season — this is not a transfer.</div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+      <div><label class="text-xs font-bold">Shirt size</label><select data-f="shirt" class="border rounded p-2 w-full"><option value="">Select…</option>${VUS_SHIRTS.map(s=>`<option>${s}</option>`).join('')}</select></div>
+      <div><label class="text-xs font-bold">Parent/guardian name</label><input data-f="parent" class="border rounded p-2 w-full" value="${esc(reg.parent1_name||'')}"></div>
+      <div><label class="text-xs font-bold">Phone</label><input data-f="phone" type="tel" class="border rounded p-2 w-full" value="${esc(reg.phone||'')}"></div>
+    </div>
+    <label class="flex items-start gap-2 text-sm mt-2"><input type="checkbox" data-f="returns" class="mt-1"> <span>I understand ${esc(reg.first_name)} returns to <b>${esc(reg.team_code)}</b> after Valley United — athletes who run with Valley United go back to the team they ran with this season.</span></label>
+    <label class="flex items-start gap-2 text-sm mt-1"><input type="checkbox" data-f="agree" class="mt-1"> <span>I agree to the Valley United Striders team rules and code of conduct (<a class="underline text-blue-700" href="https://valleyunitedstriders.com/" target="_blank" rel="noopener">valleyunitedstriders.com</a>), separate from the regular-season contract. Valley United will send the fee and payment instructions once the request is accepted.</span></label>
+    <div class="mt-2"><label class="text-xs font-bold">Parent/guardian signature</label><div data-sig></div></div>
+    <div class="flex flex-wrap gap-2 mt-2"><button type="button" class="btn text-white" style="background:#7c3aed" data-go>Send request</button><button type="button" class="btn bg-gray-200" data-cancel>Cancel</button></div>
+    <p class="text-sm mt-1" data-msg></p></div>`;
+  const sig=window.makeSig(el.querySelector('[data-sig]')), f=k=>el.querySelector(`[data-f="${k}"]`), msg=el.querySelector('[data-msg]');
+  el.querySelector('[data-cancel]').onclick=()=>(opt.back||loadVus)();
+  el.querySelector('[data-go]').onclick=async ev=>{
+    const s=sig.get(), err=t=>{ msg.textContent=t; msg.className='text-sm mt-1 text-red-700'; };
+    if(!f('shirt').value) return err('Please pick a shirt size.');
+    if(!f('parent').value.trim()||!f('phone').value.trim()) return err('Please fill in the parent/guardian name and phone.');
+    if(!f('returns').checked||!f('agree').checked) return err('Please check both boxes.');
+    if(!s) return err('Please sign.');
+    if(opt.preview){ msg.textContent='Preview: the form is filled in correctly. A parent pressing Send would create the request now — nothing was sent.'; msg.className='text-sm mt-1 text-green-700 font-semibold'; return; }
+    ev.target.disabled=true; msg.textContent='Sending…'; msg.className='text-sm mt-1 text-gray-600';
+    const {error}=await sb.from('vus_requests').insert({registration_id:reg.id, events:[], shirt_size:f('shirt').value,
+      parent_name:f('parent').value.trim(), phone:f('phone').value.trim(), returns_to_team:true,
+      signature:s.png, signature_method:s.method, signed_at:new Date().toISOString(), placement:'cross_country'});
+    if(error){ ev.target.disabled=false; return err(error.message); }
+    loadVus();
+  };
 }
 async function vusForm(el,reg,opt={}){
   el.innerHTML='<div class="vus-box text-sm text-gray-600">Checking this season\'s results…</div>';
