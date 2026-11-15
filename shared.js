@@ -381,3 +381,44 @@ window.mountLockoutNotice = async function(el, o){
     <p class="text-sm mt-1">${o.parent?'The league has locked these results because fees or fines are owed. They won\'t show on the Results pages until it\'s paid and unlocked. Please contact your team.':'The league has locked these results because fees or fines are owed. They\'re hidden from everyone (including your team) until your conference president or the Commissioner unlocks them.'}</p>
     <ul class="text-sm mt-1 list-disc ml-5">${items}</ul></div>`;
 };
+// ---- Signature box (draw, or type a name in cursive) — used by the registration forms and the Valley United request ----
+window.makeSig = function makeSig(container){
+  const wrap=document.createElement('div');
+  wrap.innerHTML=`
+    <div class="flex gap-2 text-xs mb-1">
+      <button type="button" class="btn bg-gray-100 sigmode" data-m="draw">Draw</button>
+      <button type="button" class="btn bg-gray-100 sigmode" data-m="type">Type name</button>
+    </div>
+    <div class="sig-draw"><canvas width="400" height="100" aria-label="Sign here with your finger or mouse" style="display:block;width:100%;max-width:400px;height:auto;border:1px solid #d1d5db;border-radius:8px;background:#fff;touch-action:none"></canvas>
+      <button type="button" class="btn bg-gray-100 sigclear mt-1">Clear</button></div>
+    <div class="sig-type hidden"><input class="sigtypeinput" placeholder="Type full name"><div class="sig-font mt-1 sigpreview"></div></div>`;
+  container.appendChild(wrap);
+  const canvas=wrap.querySelector('canvas'), ctx=canvas.getContext('2d');
+  let drawing=false, hasDrawn=false, mode='draw';
+  ctx.lineWidth=2; ctx.lineCap='round'; ctx.strokeStyle='#111827';
+  function pos(e){ const r=canvas.getBoundingClientRect(); const p=e.touches?e.touches[0]:e; const k=r.width?canvas.width/r.width:1; return {x:(p.clientX-r.left)*k, y:(p.clientY-r.top)*k}; }
+  canvas.addEventListener('pointerdown',e=>{drawing=true;hasDrawn=true;const p=pos(e);ctx.beginPath();ctx.moveTo(p.x,p.y);});
+  canvas.addEventListener('pointermove',e=>{if(!drawing)return;const p=pos(e);ctx.lineTo(p.x,p.y);ctx.stroke();});
+  window.addEventListener('pointerup',()=>drawing=false);
+  wrap.querySelector('.sigclear').onclick=()=>{ctx.clearRect(0,0,canvas.width,canvas.height);hasDrawn=false;};
+  wrap.querySelectorAll('.sigmode').forEach(b=>b.onclick=()=>{
+    mode=b.dataset.m;
+    wrap.querySelector('.sig-draw').classList.toggle('hidden',mode!=='draw');
+    wrap.querySelector('.sig-type').classList.toggle('hidden',mode!=='type');
+  });
+  wrap.querySelector('.sigtypeinput').addEventListener('input',e=>wrap.querySelector('.sigpreview').textContent=e.target.value);
+  return {
+    get(){
+      if(mode==='type'){
+        const name=wrap.querySelector('.sigtypeinput').value.trim();
+        if(!name) return null;
+        const c=document.createElement('canvas'); c.width=400;c.height=100; const cx=c.getContext('2d');
+        cx.fillStyle='#fff'; cx.fillRect(0,0,400,100); cx.fillStyle='#111827'; cx.font="40px 'Dancing Script', cursive"; cx.fillText(name,10,60);
+        return {png:c.toDataURL('image/png'), method:'typed'};
+      }
+      if(!hasDrawn) return null;
+      return {png:canvas.toDataURL('image/png'), method:'drawn'};
+    },
+    clear(){ ctx.clearRect(0,0,canvas.width,canvas.height); hasDrawn=false; wrap.querySelector('.sigtypeinput').value=''; wrap.querySelector('.sigpreview').textContent=''; }
+  };
+};

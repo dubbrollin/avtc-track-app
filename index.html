@@ -73,7 +73,7 @@
       <div class="roletab" data-role="coach">Coach</div>
       <div class="roletab" data-role="admin">Team Admin</div>
       <div class="roletab" data-role="timer">Timer</div>
-      <div class="roletab" data-role="vus">Valley United Striders (postseason)</div>
+      <div class="roletab" data-role="vus">Valley United (high school)</div>
     </div>
   </div>
 
@@ -92,7 +92,7 @@
       </div>
       <button type="button" id="startNext" class="btn bg-blue-600 text-white w-full mt-4 hidden">Continue</button>
       <p id="startMsg" class="text-sm mt-2 text-red-600"></p>
-      <p class="text-xs text-gray-500 mt-3">Meet timer? <a class="underline text-blue-700" href="index.html?role=timer">Register as a timer</a> · Valley United Striders postseason? <a class="underline text-blue-700" href="index.html?role=vus">Postseason form</a></p>
+      <p class="text-xs text-gray-500 mt-3">Meet timer? <a class="underline text-blue-700" href="index.html?role=timer">Register as a timer</a> · Valley United Striders? VYC athletes ask from the <a class="underline text-blue-700" href="parent.html">Parent Dashboard</a>; high school athletes new to VYC use the <a class="underline text-blue-700" href="index.html?role=vus">high school form</a></p>
     </div>
 
   <!-- ================= PARENT: create a sign-in (step 3), then on to the Parent Dashboard ================= -->
@@ -109,7 +109,7 @@
     <div class="rolecards">
       <label class="rolecard"><input type="radio" name="season" value="Track & Field" checked><div><b>Track &amp; Field</b><span class="d">The spring Valley Youth Conference season.</span></div></label>
       <label class="rolecard"><input type="radio" name="season" value="Cross Country"><div><b>Cross Country</b><span class="d">The fall cross country season.</span></div></label>
-      <label class="rolecard"><input type="radio" name="season" value="vus"><div><b>Valley United Striders</b><span class="d">The postseason all-star team — its own form.</span></div></label>
+      <label class="rolecard"><input type="radio" name="season" value="vus"><div><b>Valley United Striders</b><span class="d">High school athletes new to VYC. VYC athletes ask from the Parent Dashboard.</span></div></label>
     </div>
   </div>
   <div id="xcNotice" class="hidden card text-sm"></div>
@@ -461,8 +461,9 @@
   <!-- ================= VALLEY UNITED STRIDERS FORM ================= -->
   <form id="vusForm" class="hidden">
   <div class="card" style="border:2px solid #7c3aed">
-    <h2 class="font-bold text-lg mb-2 text-purple-800">Valley United Striders — Postseason Team</h2>
-    <p class="text-sm text-gray-600">Valley United Striders is VYC's postseason all-star team (<a class="text-blue-600 underline" href="https://valleyunitedstriders.com/" target="_blank">valleyunitedstriders.com</a>). <b>Only VYC IEC qualified athletes will be invited on the team!! All High School athletes are welcome.</b> This is a separate application and a separate agreement from the regular-season Valley Conference contract.</p>
+    <h2 class="font-bold text-lg mb-2 text-purple-800">Valley United Striders — High School Athletes</h2>
+    <p class="text-sm text-gray-600">Valley United Striders is VYC's postseason team (<a class="text-blue-600 underline" href="https://valleyunitedstriders.com/" target="_blank">valleyunitedstriders.com</a>). <b>This form is for high school athletes (15 and up) who did not run for a VYC team this season</b> — all high school athletes are welcome. This is a separate application and a separate agreement from the regular-season Valley Conference contract.</p>
+    <p class="text-sm mt-2 rounded p-2" style="background:#faf5ff;border:1px solid #c4b5fd"><b>Ran for a VYC team this season?</b> Don't use this form. Sign in to the <a class="underline text-blue-700" href="parent.html">Parent Dashboard</a> and tap <b>Request Valley United</b> on your athlete — their season bests carry over automatically.</p>
   </div>
   <div class="card">
     <h2 class="font-bold text-lg mb-2">Athlete Information</h2>
@@ -472,26 +473,13 @@
       <div><label class="f req">Gender</label><select id="vGender" required><option>Girl</option><option>Boy</option></select></div>
       <div><label class="f req">Date of birth</label><input type="date" id="vDob" required></div>
       <div><label class="f req">Age division</label>
-        <select id="vDivision" required><option value="">Select…</option><option>5/6</option><option>7/8</option><option>9/10</option><option>11/12</option><option>13/14</option><option>15/16</option><option>17/18</option></select>
+        <select id="vDivision" required><option value="">Select…</option><option>15/16</option><option>17/18</option></select>
       </div>
     </div>
   </div>
   <div class="card">
     <h2 class="font-bold text-lg mb-2">Eligibility</h2>
-    <label class="f req">Which VYC team did they run for this season?</label>
-    <select id="vHomeTeam" required><option value="">Select…</option><option value="__HS">Not applicable — High school athlete (15+)</option></select>
-    <label class="flex items-center gap-2 text-sm mt-2"><input type="checkbox" id="vRanThisSeason"> This athlete already ran this current season for the VYC team selected above.</label>
-    <p class="text-xs text-gray-500 mt-1">Eligibility: an athlete must have already run this season for a Valley Conference team to run with Valley United Striders, unless they are age 15 or above.</p>
-    <p id="vEligWarn" class="text-sm text-red-600 mt-2 hidden">Based on your answers, this athlete may not be eligible for Valley United Striders. Please contact your team before submitting.</p>
-
-    <div class="mt-4 p-3 bg-gray-50 rounded border">
-      <label class="f req">Do they plan to return to their track team next season?</label>
-      <div class="flex gap-4 text-sm">
-        <label class="flex items-center gap-1"><input type="radio" name="vReturning" value="yes" required> I do plan on returning to my Track Team after post season</label>
-        <label class="flex items-center gap-1"><input type="radio" name="vReturning" value="no" required> I do not plan on returning to my Track Team after post season</label>
-      </div>
-      <p class="text-xs text-gray-600 mt-1">*Any athlete who runs post season with Valley United must return back to his/her team in which he/she ran with that year. If you select "I do plan on returning," you will not be able to change teams.</p>
-    </div>
+    <label class="flex items-start gap-2 text-sm"><input type="checkbox" id="vIsHs" class="mt-1"> <span>This athlete is a <b>high school student, age 15 or older</b>, and did <b>not</b> run for a VYC team this season.</span></label>
   </div>
   <div class="card">
     <h2 class="font-bold text-lg mb-2">Parent / Guardian Information</h2>
@@ -903,7 +891,7 @@ function fillTeams(sel){
 function fillAllTeams(){
   const T=window.VYC_TEAMS, track=T.filter(t=>t.active!==false), xc=T.filter(t=>t.xc), both=T.filter(t=>t.active!==false||t.xc);
   const lab=t=>`<option value="${t.code}">${t.name}${t.conference?` (${t.conference==='West'?'Western':'Eastern'})`:''}</option>`;
-  const lists={teamCode:isXC()?xc:track, cTeam:both, vHomeTeam:track, aTeam:both, startTeam:START_SPORT==='xc'?xc:track};
+  const lists={teamCode:isXC()?xc:track, cTeam:both, aTeam:both, startTeam:START_SPORT==='xc'?xc:track};
   Object.entries(lists).forEach(([id,L])=>{ const sel=$(id); if(!sel) return; const keep=sel.value; sel.innerHTML='<option value="">Select…</option>'+L.map(lab).join(''); sel.value=L.some(t=>t.code===keep)?keep:''; });
 }
 fillAllTeams(); if(window.leagueReady) window.leagueReady.then(fillAllTeams);
@@ -926,47 +914,7 @@ fillAllTeams(); if(window.leagueReady) window.leagueReady.then(fillAllTeams);
   else el.innerHTML=`<div class="card" style="background:#fef2f2;border:1px solid #dc2626"><p class="text-sm"><b>Registration for the ${season} season is closed</b> (it closed ${nice(cut)}). A late registration can only be allowed by your Conference President — ask your team, and once the president gives your athlete a late pass you can submit this form.</p></div>`;
 }catch(e){} })();
 
-// ---- signature widget (draw or type cursive) ----
-function makeSig(container){
-  const wrap=document.createElement('div');
-  wrap.innerHTML=`
-    <div class="flex gap-2 text-xs mb-1">
-      <button type="button" class="btn bg-gray-100 sigmode" data-m="draw">Draw</button>
-      <button type="button" class="btn bg-gray-100 sigmode" data-m="type">Type name</button>
-    </div>
-    <div class="sig-draw"><canvas width="400" height="100" aria-label="Sign here with your finger or mouse" style="display:block;width:100%;max-width:400px;height:auto;border:1px solid #d1d5db;border-radius:8px;background:#fff;touch-action:none"></canvas>
-      <button type="button" class="btn bg-gray-100 sigclear mt-1">Clear</button></div>
-    <div class="sig-type hidden"><input class="sigtypeinput" placeholder="Type full name"><div class="sig-font mt-1 sigpreview"></div></div>`;
-  container.appendChild(wrap);
-  const canvas=wrap.querySelector('canvas'), ctx=canvas.getContext('2d');
-  let drawing=false, hasDrawn=false, mode='draw';
-  ctx.lineWidth=2; ctx.lineCap='round'; ctx.strokeStyle='#111827';
-  function pos(e){ const r=canvas.getBoundingClientRect(); const p=e.touches?e.touches[0]:e; const k=r.width?canvas.width/r.width:1; return {x:(p.clientX-r.left)*k, y:(p.clientY-r.top)*k}; }
-  canvas.addEventListener('pointerdown',e=>{drawing=true;hasDrawn=true;const p=pos(e);ctx.beginPath();ctx.moveTo(p.x,p.y);});
-  canvas.addEventListener('pointermove',e=>{if(!drawing)return;const p=pos(e);ctx.lineTo(p.x,p.y);ctx.stroke();});
-  window.addEventListener('pointerup',()=>drawing=false);
-  wrap.querySelector('.sigclear').onclick=()=>{ctx.clearRect(0,0,canvas.width,canvas.height);hasDrawn=false;};
-  wrap.querySelectorAll('.sigmode').forEach(b=>b.onclick=()=>{
-    mode=b.dataset.m;
-    wrap.querySelector('.sig-draw').classList.toggle('hidden',mode!=='draw');
-    wrap.querySelector('.sig-type').classList.toggle('hidden',mode!=='type');
-  });
-  wrap.querySelector('.sigtypeinput').addEventListener('input',e=>wrap.querySelector('.sigpreview').textContent=e.target.value);
-  return {
-    get(){
-      if(mode==='type'){
-        const name=wrap.querySelector('.sigtypeinput').value.trim();
-        if(!name) return null;
-        const c=document.createElement('canvas'); c.width=400;c.height=100; const cx=c.getContext('2d');
-        cx.fillStyle='#fff'; cx.fillRect(0,0,400,100); cx.fillStyle='#111827'; cx.font="40px 'Dancing Script', cursive"; cx.fillText(name,10,60);
-        return {png:c.toDataURL('image/png'), method:'typed'};
-      }
-      if(!hasDrawn) return null;
-      return {png:canvas.toDataURL('image/png'), method:'drawn'};
-    },
-    clear(){ ctx.clearRect(0,0,canvas.width,canvas.height); hasDrawn=false; wrap.querySelector('.sigtypeinput').value=''; wrap.querySelector('.sigpreview').textContent=''; }
-  };
-}
+// ---- signature widget (draw or type cursive): window.makeSig, in shared.js ----
 const athleteSig=makeSig($('athleteSigWrap'));
 const parentSig=makeSig($('parentSigWrap'));
 const vusSig=makeSig($('vSigWrap'));
@@ -1230,14 +1178,7 @@ function addVusEventRow(){
 }
 $('vAddEvent').onclick=addVusEventRow;
 $('vDivision').addEventListener('change',()=>{ $('vEventsList').innerHTML=''; addVusEventRow(); });
-function vusEligibilityCheck(){
-  const div=$('vDivision').value, homeTeam=$('vHomeTeam').value, ran=$('vRanThisSeason').checked;
-  const is15plus = ['15/16','17/18'].includes(div) || homeTeam==='__HS';
-  const ok = is15plus || ran;
-  $('vEligWarn').classList.toggle('hidden', ok || !div || !homeTeam);
-  return ok;
-}
-['change'].forEach(ev=>{ $('vDivision').addEventListener(ev,vusEligibilityCheck); $('vHomeTeam').addEventListener(ev,vusEligibilityCheck); $('vRanThisSeason').addEventListener(ev,vusEligibilityCheck); });
+// This form is only for high school athletes (15+) with no VYC season; VYC athletes ask from the Parent Dashboard.
 
 // ---- upload helper ----
 async function uploadProof(file, prefix){
@@ -1438,8 +1379,7 @@ $('vusForm').addEventListener('submit', async(e)=>{
   e.preventDefault();
   const msg=$('vusMsg'); msg.textContent='Submitting…'; msg.className='text-sm mt-2 text-gray-600';
   try{
-    if(!vusEligibilityCheck() && !confirm('This athlete does not appear to meet the eligibility rule (already ran this season, or age 15+). Submit anyway for staff review?')) return;
-    const returning=document.querySelector('input[name=vReturning]:checked'); if(!returning) throw new Error('Please answer the "return to team next season" question.');
+    if(!$('vIsHs').checked) throw new Error('This form is only for high school athletes (15+) who did not run for a VYC team this season. VYC athletes: use Request Valley United on the Parent Dashboard.');
     const vSig=vusSig.get(); if(!vSig) throw new Error('Please provide the parent/guardian signature.');
     const rows=[...$('vEventsList').children].map(r=>({
       event:r.querySelector('.ve-event').value, mark:r.querySelector('.ve-mark').value.trim(),
@@ -1450,17 +1390,16 @@ $('vusForm').addEventListener('submit', async(e)=>{
     const row={
       season_year:CFG.SEASON_YEAR,
       first_name:$('vFirst').value.trim(), last_name:$('vLast').value.trim(), gender:$('vGender').value, dob:$('vDob').value,
-      vus_division:$('vDivision').value,
-      home_team_code: $('vHomeTeam').value==='__HS' ? null : $('vHomeTeam').value,
-      ran_this_season:$('vRanThisSeason').checked,
-      age_15_plus: ['15/16','17/18'].includes($('vDivision').value) || $('vHomeTeam').value==='__HS',
-      returning_next_season: returning.value==='yes',
+      age_division:$('vDivision').value,
+      vyc_home_team:'HS',                       // high school athlete, no VYC team this season
+      eligible_by_age:true, eligible_by_current_season_vyc:false, plans_to_return:null,
+      parent_name:$('vParent1Name').value.trim(), parent_phone:$('vPhone').value.trim(), parent_email:$('vEmail').value.trim(),
       parent1_name:$('vParent1Name').value.trim(), parent1_relationship:$('vParent1Rel').value,
       parent2_name:$('vParent2Name').value.trim()||null, parent2_relationship:$('vParent2Rel').value||null,
       phone:$('vPhone').value.trim(), email:$('vEmail').value.trim(),
       address:$('vAddress').value.trim(), city:$('vCity').value.trim(), state:$('vState').value.trim(), zip:$('vZip').value.trim(),
       events: rows, shirt_size:$('vShirt').value,
-      signature:vSig.png, signature_method:vSig.method, signed_at:new Date().toISOString(),
+      signature:vSig.png, signature_method:vSig.method, signature_date:new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'}),
       fee_amount_cents:25000, fee_paid:false, status:'submitted'
     };
     const {error}=await sb.from('postseason_registrations').insert(row);

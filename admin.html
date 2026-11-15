@@ -70,6 +70,7 @@ table.t td{padding:5px 6px;border-top:1px solid #f3f4f6;vertical-align:middle}
 <button class="tab" data-tab="athletes">Athletes</button>
 <button class="tab" data-tab="cert">Certification <span id="certBadge" class="pill warn hide"></span></button>
 <button class="tab" data-tab="xc">Cross Country</button>
+<button class="tab" data-tab="vus">Valley United</button>
 <button class="tab" data-tab="clearances">Transfer Requests <span id="clrBadge" class="pill warn hide"></span></button>
 <button class="tab" data-tab="fees">Fees &amp; Fines <span id="feeBadge" class="pill bad hide"></span></button>
 <button class="tab" data-tab="lockout">Results Lockout <span id="lockBadge" class="pill bad hide"></span></button>
@@ -140,6 +141,15 @@ const {data}=await sb.from('coaches').select('*').eq('email',s.user.email).eq('a
 SEASON=+(await window.currentSeason());
 const pres=data&&data.president_conference&&data.president_season===SEASON?data.president_conference:null;
 const comm=!!(data&&data.commissioner_season===SEASON), treas=!!(data&&data.treasurer_season===SEASON);
+VUSADM=!!(data&&data.is_admin)||(await sb.rpc('is_vus_admin').then(r=>r.data===true,()=>false));
+if(VUSADM&&!(data&&(data.is_admin||data.team_admin||pres||comm||treas))){
+// A Valley United admin who isn't a league or team admin only sees the Valley United tab.
+me=data||{email:s.user.email}; $('app').classList.remove('hide'); await loadTeams();
+document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('hide',b.dataset.tab!=='vus'));
+$('pgTitle').textContent='Valley United Admin'; document.title='Valley United Admin';
+$('pgIntro').textContent='Accept or decline Valley United Striders requests and manage the Postseason and Developmental rosters.';
+show('vus'); return;
+}
 if(!data||!(data.is_admin||data.team_admin||pres||comm||treas)){ window.clearRoleFlags(); $('deniedWho').textContent='Signed in as '+s.user.email+'. Ask a site admin or your team admin to give you access.'; $('denied').classList.remove('hide'); return; }
 window.setRoleFlags(data);
 me=data; SITE=!!data.is_admin; MYTEAM=data.team_code; PRES=pres; COMM=comm; TREAS=treas; $('app').classList.remove('hide');
@@ -168,7 +178,7 @@ refreshClrBadge(); refreshCertBadge(); showFeeNotice();
 });
 async function loadTeams(){ const {data}=await sb.from('league_teams').select('*').order('sort_order').order('name'); teams=data||[]; }
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>show(b.dataset.tab));
-function show(t){ tab=t; document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===t)); ({people:paintPeople,athletes:paintAthletes,cert:paintCert,xc:paintXc,clearances:paintClearances,fees:paintFees,lockout:paintLockout,payments:paintPayments,messages:paintMessages,schedule:paintSchedule,meets:paintMeets,meetadmin:paintMeetAdmin,records:paintRecords,league:paintLeague})[t](); }
+function show(t){ tab=t; document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===t)); ({people:paintPeople,athletes:paintAthletes,cert:paintCert,xc:paintXc,vus:paintVus,clearances:paintClearances,fees:paintFees,lockout:paintLockout,payments:paintPayments,messages:paintMessages,schedule:paintSchedule,meets:paintMeets,meetadmin:paintMeetAdmin,records:paintRecords,league:paintLeague})[t](); }
 
 /* ============================ PEOPLE & ACCESS ============================ */
 // NOTE: the `coaches` table has no `id` column — its primary key is `email`.
@@ -935,6 +945,100 @@ async function paintXc(){
     if(act==='reject'&&!confirm(`Reject ${r.first_name} ${r.last_name}'s cross country registration?`)) return;
     if(await run(sb.from('registrations').update({status:to}).eq('id',r.id),'Saved')) paintXc();
   });
+}
+
+/* ================================ VALLEY UNITED ================================ */
+// Valley United Striders (postseason). Parents ask from the athlete's track registration on the Parent Dashboard; the
+// database works out the placement from the season's results (met a qualifying standard / ran at league finals / ran at
+// IECs: any yes = Postseason team, none = Developmental) and carries the season bests over. Valley United admins (and site
+// admins) accept or decline; team admins see their own athletes' requests. High school athletes with no VYC season use the
+// separate high school form (postseason_registrations). See supabase/2026-11-14-valley-united-requests.sql.
+let VUSADM=false, vusSeasonSel=null, vusSub='requests', vusRows=[], vusHs=[];
+const VUS_PLACE={postseason:'Postseason team',developmental:'Developmental'};
+const yn=(v,t)=>`<span class="pill ${v?'ok':'gray'}" title="${t}">${v?'✓':'✗'} ${t}</span>`;
+function vusCsv(name,rows){
+  const q=v=>{ const s=String(v??''); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
+  const blob=new Blob([rows.map(r=>r.map(q).join(',')).join('\n')],{type:'text/csv'}); const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+async function paintVus(){
+  $('pane').innerHTML='<p class="text-sm text-gray-500">Loading…</p>';
+  const {data:ss}=await sb.from('vus_requests').select('season_year').order('season_year',{ascending:false}).limit(1);
+  const season=vusSeasonSel||(ss&&ss[0]?ss[0].season_year:SEASON);
+  const [{data:rq,error},{data:hs},{data:win},{data:st}]=await Promise.all([
+    sb.from('vus_requests').select('*').eq('season_year',season).order('last_name').order('first_name'),
+    sb.from('postseason_registrations').select('*').eq('season_year',season).order('last_name'),
+    sb.rpc('vus_window',{p_season:season}),
+    sb.from('app_settings').select('value').eq('key','vus_request_close_'+season).maybeSingle()]);
+  if(error){ $('pane').innerHTML='<p class="text-red-700">'+esc(error.message)+'</p>'; return; }
+  vusRows=rq||[]; vusHs=hs||[];
+  const w=win||{}, fmtD=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}):'';
+  const n={requests:vusRows.filter(r=>r.status==='submitted').length,
+           postseason:vusRows.filter(r=>r.status==='accepted'&&r.placement==='postseason').length,
+           developmental:vusRows.filter(r=>r.status==='accepted'&&r.placement==='developmental').length,
+           declined:vusRows.filter(r=>r.status==='declined').length, hs:vusHs.length};
+  const subs=[['requests','Requests'],['postseason','Postseason roster'],['developmental','Developmental roster'],['declined','Declined'],['hs','High school sign-ups'],...(VUSADM?[['settings','Settings']]:[])];
+  const list=vusSub==='requests'?vusRows.filter(r=>r.status==='submitted'):vusSub==='postseason'?vusRows.filter(r=>r.status==='accepted'&&r.placement==='postseason')
+    :vusSub==='developmental'?vusRows.filter(r=>r.status==='accepted'&&r.placement==='developmental'):vusSub==='declined'?vusRows.filter(r=>r.status==='declined'):[];
+  const evTxt=r=>(r.events||[]).map(e=>`${esc(e.event_name)} <b class="font-mono">${esc(e.mark)}</b>${e.q?' <span class="pill ok" style="padding:0 5px">Q</span>':''}`).join('<br>');
+  const head=`<div class="card"><div class="flex flex-wrap items-center gap-2"><h3 class="font-bold flex-1" style="color:#6b21a8">Valley United Striders — ${season} postseason</h3>
+    <label class="text-sm">Season <input id="vusSeason" type="number" value="${season}" style="width:6rem"></label></div>
+    <p class="text-sm text-gray-600 mt-1">Requests ${w.opens?`open on <b>${esc(fmtD(w.opens))}</b> (IEC day)`:'open on IEC day — <b>no IEC meet is marked for this season yet</b>'}${w.closes?` and close on <b>${esc(fmtD(w.closes))}</b>`:' and have no closing date'}.
+    Placement comes from the results: any of <b>met a qualifying standard</b>, <b>ran at league finals</b>, <b>ran at IECs</b> = Postseason team; none = Developmental. The athlete's regular-season team never changes.</p>
+    ${!VUSADM?'<p class="text-xs text-gray-500 mt-1">You can see your own team\'s athletes here. Valley United admins accept or decline the requests.</p>':''}
+    <div class="flex flex-wrap gap-1 mt-2">${subs.map(([k,l])=>`<button class="btn ${vusSub===k?'pri':'lite'}" data-vsub="${k}">${l}${n[k]!=null?` (${n[k]})`:''}</button>`).join('')}</div></div>`;
+  let body='';
+  if(['requests','postseason','developmental','declined'].includes(vusSub)){
+    body=list.length?`<div class="card"><div class="flex justify-end mb-2"><button class="btn lite" id="vusExport">Download CSV</button></div><div class="scroll"><table class="t"><thead><tr>
+      <th>Athlete</th><th>Regular-season team</th><th>Checks</th><th>Placement</th><th>Events (season best)</th><th>Shirt</th><th>Parent</th><th>Fee</th><th></th></tr></thead><tbody>
+      ${list.map(r=>`<tr data-id="${r.id}"><td><b>${esc(r.last_name)}, ${esc(r.first_name)}</b><div class="text-xs text-gray-500">${esc(r.gender||'')} · ${esc(r.division||'')} · born ${esc(r.dob||'')}</div></td>
+        <td>${esc(teamName(r.team_code))}</td>
+        <td><div class="flex flex-col gap-1 items-start">${yn(r.qualified,'Qualifying standard')}${yn(r.ran_league_final,'League finals')}${yn(r.ran_iec,'IECs')}</div></td>
+        <td><span class="pill ${r.placement==='postseason'?'ok':'warn'}">${VUS_PLACE[r.placement]}</span>${r.review_note?`<div class="text-xs text-gray-500 mt-1">${esc(r.review_note)}</div>`:''}</td>
+        <td class="text-xs">${evTxt(r)}<details class="mt-1"><summary class="cursor-pointer text-gray-500">All ${(r.best_marks||[]).length} season bests</summary>${(r.best_marks||[]).map(b=>`<div>${esc(b.event_name)} <b class="font-mono">${esc(b.mark)}</b>${b.q?' Q':''} <span class="text-gray-400">${esc(b.meet||'')}</span></div>`).join('')}</details></td>
+        <td>${esc(r.shirt_size||'')}</td>
+        <td class="text-xs">${esc(r.parent_name||'')}<br>${esc(r.phone||'')}<br>${esc(r.email||'')}</td>
+        <td>${VUSADM?`<label class="text-xs flex items-center gap-1"><input type="checkbox" data-vfee ${r.fee_paid?'checked':''}> Paid</label>`:(r.fee_paid?'<span class="pill ok">Paid</span>':'<span class="pill gray">Not paid</span>')}</td>
+        <td class="whitespace-nowrap">${VUSADM?`${r.status!=='accepted'?'<button class="btn grn" data-vact="accept">Accept</button> ':''}${r.status!=='declined'?'<button class="btn lite" data-vact="decline">Decline…</button> ':''}${r.status!=='submitted'?'<button class="btn lite" data-vact="reopen">Back to requests</button> ':''}<button class="btn lite" data-vact="recheck" title="Work the checks and season bests out again from the latest results">Re-check results</button>`:''}</td></tr>`).join('')}
+      </tbody></table></div></div>`:'<div class="card text-sm text-gray-500">Nobody here yet.</div>';
+  } else if(vusSub==='hs'){
+    body=vusHs.length?`<div class="card"><p class="text-xs text-gray-500 mb-2">High school athletes (15+) who didn't run for a VYC team — the separate high school form. Marks are as the parent entered them.</p><div class="scroll"><table class="t"><thead><tr><th>Athlete</th><th>Division</th><th>Events (as entered)</th><th>Shirt</th><th>Parent</th><th>Fee</th><th>Status</th></tr></thead><tbody>
+      ${vusHs.map(h=>`<tr><td><b>${esc(h.last_name)}, ${esc(h.first_name)}</b><div class="text-xs text-gray-500">${esc(h.gender)} · born ${esc(h.dob)}</div></td><td>${esc(h.age_division)}</td>
+        <td class="text-xs">${(h.events||[]).map(e=>`${esc(e.event)} <b class="font-mono">${esc(e.mark)}</b>`).join('<br>')}</td><td>${esc(h.shirt_size||'')}</td>
+        <td class="text-xs">${esc(h.parent_name||'')}<br>${esc(h.parent_phone||'')}<br>${esc(h.parent_email||'')}</td><td>${h.fee_paid?'<span class="pill ok">Paid</span>':'<span class="pill gray">Not paid</span>'}</td><td>${esc(h.status||'')}</td></tr>`).join('')}
+      </tbody></table></div></div>`:'<div class="card text-sm text-gray-500">No high school sign-ups for this season.</div>';
+  } else if(vusSub==='settings'){
+    const {data:ms}=await sb.from('meets').select('id,name,meet_date,is_championship,postseason_kind').eq('season_year',season).order('meet_date');
+    const champ=(ms||[]).filter(m=>m.is_championship||m.postseason_kind);
+    const {data:adm}=SITE?await sb.from('vus_admins').select('*').order('email'):{data:null};
+    body=`<div class="card"><h3 class="font-bold mb-1">Request window</h3><p class="text-xs text-gray-500 mb-2">Requests open on IEC day. Set the last day parents can ask (blank = no closing date).</p>
+      <div class="flex flex-wrap gap-2 items-end"><div><label class="text-xs font-bold">Requests close</label><br><input type="date" id="vusClose" value="${esc(st&&st.value||'')}"></div><button class="btn pri" id="vusCloseSave">Save</button></div></div>
+      <div class="card"><h3 class="font-bold mb-1">League finals and IECs</h3><p class="text-xs text-gray-500 mb-2">Which of this season's championship meets count as league finals and IECs for the Valley United checks.${SITE?'':' Only site admins can change these.'}</p>
+      ${champ.length?`<table class="t"><thead><tr><th>Meet</th><th>Date</th><th>Counts as</th></tr></thead><tbody>${champ.map(m=>`<tr data-mid="${m.id}"><td>${esc(m.name)}</td><td>${esc(m.meet_date)}</td><td><select data-vkind ${SITE?'':'disabled'}><option value="">— neither —</option><option value="league_final" ${m.postseason_kind==='league_final'?'selected':''}>League finals</option><option value="iec" ${m.postseason_kind==='iec'?'selected':''}>IECs</option></select></td></tr>`).join('')}</tbody></table>`
+        :'<p class="text-sm text-gray-500">No championship meets this season. Mark them as Conference Championship on the Meets page first.</p>'}</div>
+      ${SITE?`<div class="card"><h3 class="font-bold mb-1">Valley United admins</h3><p class="text-xs text-gray-500 mb-2">They can open this page to accept or decline requests and manage the rosters — nothing else. They sign in with this email.</p>
+        ${(adm||[]).length?`<table class="t mb-2"><tbody>${adm.map(a=>`<tr><td>${esc(a.email)}</td><td>${esc(a.name||'')}</td><td class="text-right"><button class="btn red" data-vadel="${esc(a.email)}">Remove</button></td></tr>`).join('')}</tbody></table>`:'<p class="text-sm text-gray-500 mb-2">None yet — site admins can always manage Valley United.</p>'}
+        <div class="flex flex-wrap gap-2 items-end"><div><label class="text-xs font-bold">Email</label><br><input id="vaEmail" type="email" style="width:16rem"></div><div><label class="text-xs font-bold">Name</label><br><input id="vaName" style="width:12rem"></div><button class="btn grn" id="vaAdd">Add</button></div></div>`:''}`;
+  }
+  $('pane').innerHTML=head+body;
+  $('vusSeason').onchange=e=>{ vusSeasonSel=+e.target.value||null; paintVus(); };
+  $('pane').querySelectorAll('[data-vsub]').forEach(b=>b.onclick=()=>{ vusSub=b.dataset.vsub; paintVus(); });
+  const ex=$('vusExport'); if(ex) ex.onclick=()=>vusCsv(`valley-united-${vusSub}-${season}.csv`,[['Last','First','Gender','Division','Birth date','Regular-season team','Placement','Status','Qualifying standard','League finals','IECs','Events','Shirt','Parent','Phone','Email','Fee paid'],
+    ...list.map(r=>[r.last_name,r.first_name,r.gender,r.division,r.dob,r.team_code,VUS_PLACE[r.placement],r.status,r.qualified?'yes':'no',r.ran_league_final?'yes':'no',r.ran_iec?'yes':'no',(r.events||[]).map(e=>e.event_name+' '+e.mark).join('; '),r.shirt_size,r.parent_name,r.phone,r.email,r.fee_paid?'yes':'no'])]);
+  $('pane').querySelectorAll('[data-vfee]').forEach(c=>c.onchange=async()=>{ const id=c.closest('tr').dataset.id; if(!await run(sb.from('vus_requests').update({fee_paid:c.checked}).eq('id',id),c.checked?'Marked paid':'Marked not paid')) c.checked=!c.checked; });
+  $('pane').querySelectorAll('[data-vact]').forEach(b=>b.onclick=async()=>{
+    const id=b.closest('tr').dataset.id, r=vusRows.find(x=>x.id===id), act=b.dataset.vact;
+    if(act==='recheck'){ const {data,error}=await sb.rpc('vus_recheck',{p_id:id}); if(error){ toast(error.message,true); return; }
+      toast(data.placement!==r.placement?`Re-checked: now ${VUS_PLACE[data.placement]}`:'Re-checked — no change in placement'); return paintVus(); }
+    if(act==='accept'&&!confirm(`Accept ${r.first_name} ${r.last_name} onto the Valley United ${VUS_PLACE[r.placement]}?`)) return;
+    let note=r.review_note; if(act==='decline'){ note=prompt(`Why is ${r.first_name} ${r.last_name}'s request declined? (the parent sees this)`,''); if(note===null) return; }
+    if(await run(sb.from('vus_requests').update({status:act==='accept'?'accepted':act==='decline'?'declined':'submitted',review_note:act==='decline'?note.trim()||null:act==='reopen'?null:r.review_note}).eq('id',id),act==='accept'?'Accepted':act==='decline'?'Declined':'Moved back to requests')) paintVus();
+  });
+  const cs=$('vusCloseSave'); if(cs) cs.onclick=()=>run(sb.from('app_settings').upsert({key:'vus_request_close_'+season,value:$('vusClose').value||''}),'Closing date saved').then(ok=>ok&&paintVus());
+  $('pane').querySelectorAll('[data-vkind]').forEach(s=>s.onchange=()=>run(sb.from('meets').update({postseason_kind:s.value||null}).eq('id',s.closest('tr').dataset.mid),'Saved'));
+  const va=$('vaAdd'); if(va) va.onclick=async()=>{ const email=$('vaEmail').value.trim().toLowerCase(); if(!email.includes('@')){ toast('Enter an email.',true); return; }
+    if(await run(sb.from('vus_admins').upsert({email,name:$('vaName').value.trim()||null,added_by:me.email}),'Valley United admin added')) paintVus(); };
+  $('pane').querySelectorAll('[data-vadel]').forEach(b=>b.onclick=async()=>{ if(!confirm('Remove '+b.dataset.vadel+' as a Valley United admin?')) return; if(await run(sb.from('vus_admins').delete().eq('email',b.dataset.vadel),'Removed')) paintVus(); });
 }
 
 /* ================================ LEAGUE SETUP ================================ */
