@@ -17,7 +17,8 @@ window.VYC_TEAMS = [
   {code:"TT",   name:"Thimsha Tigers", conference:"East"},
   {code:"VRTC", name:"Valley Raiders", conference:"West"},
   {code:"VC",   name:"Village Christian Schools", conference:"East"},
-  {code:"SCW",  name:"Santa Clarita Warriors", conference:"West"}
+  {code:"SCW",  name:"Santa Clarita Warriors", conference:"East"},
+  {code:"NVGB", name:"North Valley Golden Bears", conference:"West"}
 ];
 // Backward-compatible plain-name list, kept in case anything still expects window.TEAMS.
 // Some Hy-Tek files use a different code for the same team (e.g. RUSH for San Fernando Valley Rush = SFR); map them to the official code.
