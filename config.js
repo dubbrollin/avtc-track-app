@@ -9,6 +9,6 @@ window.APP_CONFIG = {
   SEED_WRITE_IN: "coaches",  // who may type a seed time when an athlete has no recorded result: "coaches" or "parents"
   SEASON_YEAR: 2027,
   // App notifications (web push) public key — the matching PRIVATE key is a msg-notify secret, never in this file.
-  LOOK_AROUND: true,  // "Look around without an account" buttons; leave out on a site without the demo logins
+  LOOK_AROUND: false, // "Look around without an account" buttons — off: the demo logins were switched off in the 2026-11-04 security pass
   VAPID_PUBLIC_KEY: "BIVCORMkf6OBKFUcpaOM-wkBGoc1LOVzWLYf9Q5rEC2TnMEAIfkagW0o95w_UsUZbD6kuH57QpjBQNqeqJwSyzg"
 };
