@@ -107,6 +107,29 @@
       <a href="meets-admin.html" class="btn bg-purple-600 text-white mt-3 inline-block">Upload results →</a>
       <button type="button" class="signout-btn btn bg-gray-200 mt-3 ml-2">Sign out</button>
     </div>
+    <!-- Valley United Striders coaches (approved by a Valley United admin): the accepted rosters with contact + medical details -->
+    <div id="vusCoachBox" style="display:none">
+      <div class="card flex flex-wrap items-center gap-2">
+        <div class="flex-1 min-w-0">
+          <h1 class="text-lg font-bold" style="color:#6b21a8">Valley United Striders <span class="text-gray-500 font-normal text-sm" id="vusCoachWho"></span></h1>
+          <p id="vusBgLine" class="text-xs mt-1"></p>
+        </div>
+        <label class="text-sm">Season <input id="vusCoachSeason" type="number" class="border rounded px-2 py-1" style="width:6rem"></label>
+        <a id="vusBackBtn" href="coach.html" class="btn bg-blue-600 text-white hidden">← Team Coach Dashboard</a>
+        <button type="button" class="signout-btn btn bg-gray-200">Sign out</button>
+      </div>
+      <div class="card">
+        <div class="flex flex-wrap gap-2 items-center mb-2">
+          <button type="button" class="btn bg-purple-700 text-white" data-vcsub="postseason">Postseason team</button>
+          <button type="button" class="btn bg-gray-200" data-vcsub="developmental">Developmental</button>
+          <button type="button" class="btn bg-gray-200" data-vcsub="hs">High school</button>
+          <input id="vusCoachQ" class="border rounded px-2 py-1 flex-1" style="min-width:10rem" placeholder="Search name or team">
+          <button type="button" id="vusCoachCsv" class="btn bg-gray-200">Download CSV</button>
+        </div>
+        <p class="text-xs text-gray-500 mb-2">Athletes a Valley United admin has accepted. Contact and medical details are private — use them only for Valley United.</p>
+        <div id="vusCoachList" class="text-sm"></div>
+      </div>
+    </div>
     <div id="coachApp" style="display:none">
       <div class="card flex flex-wrap items-center gap-2">
         <div class="flex-1 min-w-0">
@@ -233,6 +256,12 @@
 
           <div id="toolsSection">
 
+          <div class="card hidden" id="vusLinkCard" style="border:2px solid #c4b5fd">
+            <div class="col-head"><h2 style="color:#6b21a8">Valley United Striders</h2></div>
+            <p class="text-xs text-gray-500 mb-2">You're also a Valley United coach. See the accepted Postseason and Developmental rosters with contact and medical details.</p>
+            <a href="coach.html?view=vus" class="btn text-white inline-block" style="background:#7c3aed">Valley United roster →</a>
+          </div>
+
           <div class="card" id="teamAdminCard">
             <div class="col-head"><h2>Team admin</h2></div>
             <p class="text-xs text-gray-500 mb-2">Your team's roster and intake, your team's payment portal (fee, Stripe, Zelle…), and whether parents enter meet events themselves.</p>
@@ -308,7 +337,7 @@
 <script>
 const CFG=window.APP_CONFIG, $=id=>document.getElementById(id);
 let sb = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (name, acquireTimeout, fn) => fn() } });
-let rows=[], coachRows=[], user=null, myCoach=null, fullAccess=false;
+let rows=[], coachRows=[], user=null, myCoach=null, fullAccess=false, myVus=null;
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 // A coach is "full access" (sees documents/contact/medical info, can verify/reject, manage coaches) when
@@ -358,15 +387,21 @@ function bgStatus(c){
 async function loadMe(){
   if(window.leagueReady) await window.leagueReady;
   if(window.eventsReady) await window.eventsReady;
-  ['notCoachBox','pendingBox','coachApp','timerBox'].forEach(id=>$(id).style.display='none');
+  ['notCoachBox','pendingBox','coachApp','timerBox','vusCoachBox'].forEach(id=>$(id).style.display='none');
+  // Valley United Striders coach request (its own list; a person can coach a regular team AND Valley United)
+  try{ const {data:v}=await sb.from('vus_coaches').select('*').eq('email',(user.email||'').toLowerCase()).maybeSingle(); myVus=v||null; }catch(e){ myVus=null; }
+  const wantVus=new URLSearchParams(location.search).get('view')==='vus';
   const {data,error}=await sb.from('coaches').select('*').eq('email',user.email).eq('approved',true).maybeSingle();
   if(error){ $('ncEmail').textContent=user.email||''; $('notCoachBox').style.display='block'; return; }
+  if(myVus&&myVus.approved&&(wantVus||!data)) return showVusCoach(myVus,!!data);
   if(!data){
-    const {data:any}=await sb.from('coaches').select('*').eq('email',user.email).limit(1);
-    if(any && any.length){
-      const t=window.VYC_TEAMS.find(x=>x.code===any[0].team_code);
-      $('pendingInfo').textContent=`Signed in as ${user.email}`+(t?` · ${t.name}`:'')+` · ${roleLabel(any[0])}`;
-      if(any[0].usatf_certified&&!any[0].usatf_registry_checked_at){ try{ const {data:v}=await sb.functions.invoke('usatf-verify',{body:{email:any[0].email}}); if(v&&v.status) any[0].usatf_registry_status=v.status; }catch(e){} }
+    const {data:anyRows}=await sb.from('coaches').select('*').eq('email',user.email).limit(1);
+    const reg0=anyRows&&anyRows[0];
+    if(reg0||myVus){
+      const t=reg0?window.VYC_TEAMS.find(x=>x.code===reg0.team_code):null;
+      $('pendingInfo').textContent=`Signed in as ${user.email}`+(reg0?(t?` · ${t.name}`:'')+` · ${roleLabel(reg0)}${(reg0.sports||[]).length?' · '+reg0.sports.join(' + '):''}`:'')+(myVus?` · Valley United Striders ${vusRoleLabel(myVus)} (waiting for a Valley United admin)`:'');
+      const any=[reg0||myVus];
+      if(reg0&&any[0].usatf_certified&&!any[0].usatf_registry_checked_at){ try{ const {data:v}=await sb.functions.invoke('usatf-verify',{body:{email:any[0].email}}); if(v&&v.status) any[0].usatf_registry_status=v.status; }catch(e){} }
       const pst=bgStatus(any[0]); $('pendingBg').innerHTML=/current/.test(pst.label)?'':window.bgCheckLinkHtml('<b>While you wait:</b> you don\'t have a current background check on file. Start it now so it\'s ready when you\'re approved.');
       $('pendingBox').style.display='block';
     } else { $('ncEmail').textContent=user.email||''; $('notCoachBox').style.display='block'; }
@@ -374,6 +409,9 @@ async function loadMe(){
   }
   myCoach=data;
   window.setRoleFlags(myCoach);
+  $('vusLinkCard').classList.toggle('hidden',!(myVus&&myVus.approved));
+  // A coach who only coaches cross country starts on the cross country roster.
+  if(!isFullAccess(myCoach)&&!(myCoach.sports||['Track & Field']).includes('Track & Field')) rosterSport='Cross Country';
   if(myCoach.role_type==='timer' && !myCoach.is_admin && !myCoach.team_admin){ $('timerBox').style.display='block'; return; }
   // USATF coaches: verify against USATF's public lists if never checked, or last checked 30+ days ago.
   if(myCoach.usatf_certified && (!myCoach.usatf_registry_checked_at || Date.now()-new Date(myCoach.usatf_registry_checked_at)>30*864e5)){
@@ -423,6 +461,79 @@ async function loadMe(){
   if(WANT_TEAM_ADMIN && !fullAccess){ $('xferBanner').innerHTML='<div class="card" style="border:1px solid #f59e0b;background:#fffbeb"><b>Team Admin is for team admins.</b> Your account ('+esc(user.email)+') is approved as a coach but isn\'t a team admin yet — your team admin or a site admin can make you one on the Team Admin page (Roster &amp; intake → Coaches on my team). Here is your Coach Dashboard instead.</div>'; }
   await load();
   if(wantReg) await loadMeetsForReg();
+}
+
+// ---- Valley United Striders coach view (coach.html?view=vus, or the only view for a Valley United-only coach) ----
+// The roster comes from vus_coach_roster(): accepted requests only, with contact + medical details. The database
+// checks that the person is an approved Valley United coach (or a Valley United / site admin).
+let vusRoster=[], vusHsRoster=[], vusCoachSub='postseason', vusMySquads=['postseason'];
+// Valley United roles: no head coach — the Team President takes that role.
+function vusRoleLabel(v){
+  const div=`${v.division_or_age_group||'(no divisions yet)'}${v.coach_gender?' '+v.coach_gender:''}`;
+  return ({team_president:'Team President',division_head_coach:'Division Head Coach — '+div,assistant_coach:'Assistant Coach — '+div,
+    field_event_coach:'Field Event Coach — '+(v.event_specialty||'(no events yet)')})[v.role_type]||'Coach';
+}
+async function showVusCoach(v,alsoTeamCoach){
+  $('app').classList.remove('hidden'); $('vusCoachBox').style.display='block';
+  $('vusBackBtn').classList.toggle('hidden',!alsoTeamCoach);
+  // Only the roster(s) this coach is on (Valley United / site admins see both); the database also limits the athletes.
+  const isAdm=await sb.rpc('is_vus_admin').then(r=>r.data===true,()=>false);
+  vusMySquads=isAdm?['postseason','developmental']:(v.squads&&v.squads.length?v.squads:['postseason']);
+  if(!vusMySquads.includes(vusCoachSub)) vusCoachSub=vusMySquads[0];
+  document.querySelectorAll('[data-vcsub]').forEach(b=>b.classList.toggle('hidden',b.dataset.vcsub!=='hs'&&!vusMySquads.includes(b.dataset.vcsub)));
+  const sq=vusMySquads.map(s=>s==='postseason'?'Postseason team':'Developmental').join(' + ');
+  $('vusCoachWho').textContent='— '+[v.first_name,v.last_name].filter(Boolean).join(' ')+' · '+sq+' · '+vusRoleLabel(v)+(isAdm?' · Valley United admin':'');
+  const st=bgStatus(v);
+  $('vusBgLine').innerHTML=`Your background-check status: <span class="pill ${st.cls}">${st.label}</span>`+(/current/.test(st.label)?'':window.bgCheckLinkHtml('Your background check isn\'t current for this season.'));
+  const sEl=$('vusCoachSeason'); if(!sEl.value) sEl.value=CFG.SEASON_YEAR;
+  sEl.onchange=loadVusCoachRoster; $('vusCoachQ').oninput=paintVusCoachRoster;
+  document.querySelectorAll('[data-vcsub]').forEach(b=>b.onclick=()=>{ vusCoachSub=b.dataset.vcsub; paintVusCoachRoster(); });
+  $('vusCoachCsv').onclick=()=>{
+    const cols=[['last_name','Last'],['first_name','First'],['gender','Gender'],['division','Division'],['dob','Birth date'],['team_code','Regular-season team'],['placement','Placement'],['relay_ok','Willing to run relays'],['events','Parent picks'],['entries','Coach entries'],['shirt_size','Shirt'],['parent_name','Parent'],['phone','Phone'],['email','Email'],['parent2_name','Parent 2'],['address','Address'],['city','City'],['zip','Zip'],['emergency_name','Emergency contact'],['emergency_phone','Emergency phone'],['medical_option','Medical'],['medical_conditions','Medical conditions'],['insurance_carrier','Insurance'],['insurance_policy','Policy #'],['doctor_name','Doctor']];
+    const val=(r,k)=>k==='events'?(r.events||[]).map(e=>e.event_name+' '+e.mark).join('; '):k==='relay_ok'?(r.relay_ok===true?'yes':r.relay_ok===false?'no':''):k==='entries'?(r.entries?r.entries.map(x=>x.kind==='relay'?x.relay+(x.needs_mark?' (needs a '+x.race_name+' mark)':' ('+x.race_name+' '+x.race_mark+')'):x.event_name+' '+x.mark).join('; '):'not entered yet'):r[k];
+    const csv=[cols.map(c=>c[1]).join(',')].concat(vusRoster.map(r=>cols.map(([k])=>`"${String(val(r,k)??'').replace(/"/g,'""')}"`).join(','))).join('\n');
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download=`valley-united-roster-${sEl.value}.csv`; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000); };
+  await loadVusCoachRoster();
+}
+async function loadVusCoachRoster(){
+  $('vusCoachList').innerHTML='<p class="text-gray-500">Loading…</p>';
+  const season=+$('vusCoachSeason').value||CFG.SEASON_YEAR;
+  const [{data,error},{data:hs}]=await Promise.all([sb.rpc('vus_coach_roster',{p_season:season}),sb.rpc('vus_coach_hs_roster',{p_season:season})]);
+  if(error){ $('vusCoachList').innerHTML='<p class="text-red-700">Could not load the Valley United roster: '+esc(error.message)+'</p>'; return; }
+  vusRoster=data||[]; vusHsRoster=hs||[]; paintVusCoachRoster();
+}
+function paintVusCoachRoster(){
+  document.querySelectorAll('[data-vcsub]').forEach(b=>{ const k=b.dataset.vcsub, on=k===vusCoachSub; b.className='btn '+(on?'bg-purple-700 text-white':'bg-gray-200')+(k==='hs'?(vusHsRoster.length?'':' hidden'):(vusMySquads.includes(k)?'':' hidden'));
+    b.textContent=(k==='postseason'?'Postseason team':k==='developmental'?'Developmental':'High school')+' ('+(k==='hs'?vusHsRoster.length:vusRoster.filter(r=>r.placement===k).length)+')'; });
+  const q=$('vusCoachQ').value.trim().toLowerCase();
+  const tel=p=>p?`<a class="underline text-blue-700" href="tel:${esc(String(p).replace(/[^0-9+]/g,''))}">${esc(p)}</a>`:'—';
+  // High school athletes (15+, no VYC season): read-only. Marks are what the parent typed; Valley United admins check them on Athletic.net.
+  if(vusCoachSub==='hs'){
+    const hl=vusHsRoster.filter(h=>!q||`${h.first_name} ${h.last_name} ${h.high_school||''}`.toLowerCase().includes(q));
+    $('vusCoachList').innerHTML=hl.length?hl.map(h=>`<div class="border-t py-2">
+      <div class="flex flex-wrap items-baseline gap-2"><b class="text-base">${esc(h.last_name)}, ${esc(h.first_name)}</b><span class="text-gray-500">${esc(h.gender||'')} · <b>${esc(h.age_division==='17/18'?((h.gender==='Boy'||h.gender==='Male')?'Young Men (17/18)':'Young Women (17/18)'):(h.age_division||''))}</b> · born ${esc(h.dob||'')} · ${esc(h.high_school||'high school not given')}</span>${h.shirt_size?`<span class="pill bg-gray-100">Shirt ${esc(h.shirt_size)}</span>`:''}</div>
+      <div class="mt-1 text-xs">${h.cif_done?'High school season over':h.cif_season_end?'High school season ends '+esc(h.cif_season_end)+' — can\'t run with Valley United before then':'High school season end not given'}</div>
+      <div class="mt-1 text-xs">Relays: ${h.relay_ok===true?'<span style="color:#166534">✓ willing to run relays</span>':h.relay_ok===false?'<b style="color:#991b1b">No relays — individual events only</b>':'—'}</div>
+      <div class="mt-1"><span class="text-xs text-gray-500">Events (parent's marks):</span> ${(h.events||[]).map(e=>`${esc(e.event)} <b class="font-mono">${esc(e.mark)}</b> ${e.verified==='yes'?'<span class="pill bg-green-100 text-green-800">verified</span>':e.verified==='no'?'<span class="pill bg-red-100 text-red-800">can\'t verify — must run it</span>':'<span class="pill bg-yellow-100 text-yellow-800">not checked yet</span>'}`).join(' · ')||'—'}</div>
+      <div class="text-xs text-gray-700 mt-1">Parent: <b>${esc(h.parent_name||'—')}</b> · ${tel(h.phone)} · ${h.email?`<a class="underline text-blue-700" href="mailto:${esc(h.email)}">${esc(h.email)}</a>`:'—'}${h.parent2_name?' · Parent 2: '+esc(h.parent2_name):''}</div>
+      <div class="text-xs text-gray-500">Address: ${esc([h.address,h.city,h.zip].filter(Boolean).join(', ')||'—')}</div>
+    </div>`).join(''):'<p class="text-gray-500">No high school athletes for you this season.</p>';
+    return;
+  }
+  const list=vusRoster.filter(r=>r.placement===vusCoachSub&&(!q||`${r.first_name} ${r.last_name} ${r.team_code}`.toLowerCase().includes(q)));
+  if(!list.length){ $('vusCoachList').innerHTML=`<p class="text-gray-500">${vusRoster.length?'No athletes match.':'No accepted athletes for this season yet.'}</p>`; return; }
+  $('vusCoachList').innerHTML=list.map(r=>`<div class="border-t py-2">
+    <div class="flex flex-wrap items-baseline gap-2"><b class="text-base">${esc(r.last_name)}, ${esc(r.first_name)}</b><span class="text-gray-500">${esc(r.gender||'')} · <b>${esc(r.age_group==='17/18'?(r.gender==='Boy'?'Young Men (17/18)':'Young Women (17/18)'):(r.age_group||''))}</b> · born ${esc(r.dob||'')} · ${esc(TEAM_NAME(r.team_code))}</span>${r.shirt_size?`<span class="pill bg-gray-100">Shirt ${esc(r.shirt_size)}</span>`:''}</div>
+    <div class="mt-1 text-xs">Relays: ${r.relay_ok===true?'<span style="color:#166534">✓ willing to run relays</span>':r.relay_ok===false?'<b style="color:#991b1b">No relays — individual events only</b>':'—'}</div>
+    <div class="mt-1"><span class="text-xs text-gray-500">Parent picks:</span> ${(r.events||[]).map(e=>`${esc(e.event_name)} <b class="font-mono">${esc(e.mark)}</b>${e.q?' <span class="pill bg-green-100 text-green-800" style="padding:0 5px">Q</span>':''}`).join(' · ')||'—'}</div>
+    <div class="mt-1"><span class="text-xs text-gray-500">Coach entries:</span> ${r.entries?r.entries.map(x=>x.kind==='relay'?(x.needs_mark?`<b>${esc(x.relay)}</b> <span class="pill bg-yellow-100 text-yellow-800">needs a ${esc(x.race_name)} mark</span>`:`<b>${esc(x.relay)}</b> <span style="color:#166534">✓ ${esc(x.race_name)} ${esc(x.race_mark)}</span>`):`${esc(x.event_name)} <b class="font-mono">${esc(x.mark)}</b>`).join(' · '):'<span class="text-gray-500">not entered yet</span>'}</div>
+    <div class="text-xs text-gray-700 mt-1">Parent: <b>${esc(r.parent_name||'—')}</b> · ${tel(r.phone)} · ${r.email?`<a class="underline text-blue-700" href="mailto:${esc(r.email)}">${esc(r.email)}</a>`:'—'}${r.parent2_name?' · Parent 2: '+esc(r.parent2_name):''}</div>
+    <details class="text-xs mt-1"><summary class="cursor-pointer text-gray-600">Emergency &amp; medical</summary><div class="mt-1 rounded bg-gray-50 p-2">
+      Emergency: <b>${esc(r.emergency_name||'—')}</b> · ${tel(r.emergency_phone)}<br>
+      Medical: ${esc(r.medical_option||'—')}${r.medical_conditions?' — <b>'+esc(r.medical_conditions)+'</b>':''}<br>
+      Insurance: ${esc(r.insurance_carrier||'—')}${r.insurance_policy?' #'+esc(r.insurance_policy):''} · Doctor: ${esc(r.doctor_name||'—')}<br>
+      Address: ${esc([r.address,r.city,r.zip].filter(Boolean).join(', ')||'—')}</div></details>
+  </div>`).join('');
 }
 
 const wantRosterView=()=>new URLSearchParams(location.search).get('view')==='roster';
@@ -639,7 +750,8 @@ async function bringForward(ids){
 }
 function paintSportTabs(){
   const t=(window.VYC_TEAMS||[]).find(x=>myCoach&&x.code===myCoach.team_code), show=!!(t&&t.xc)||rows.some(r=>r.sport==='Cross Country');
-  document.querySelectorAll('.sportTabsR').forEach(bar=>{ bar.classList.toggle('hidden',!show); bar.querySelectorAll('[data-sp]').forEach(b=>{ b.classList.toggle('active',b.dataset.sp===rosterSport);
+  const mine=fullAccess?['Track & Field','Cross Country']:((myCoach&&myCoach.sports)||['Track & Field']); // regular coaches: only the sports they coach
+  document.querySelectorAll('.sportTabsR').forEach(bar=>{ bar.classList.toggle('hidden',!show); bar.querySelectorAll('[data-sp]').forEach(b=>{ b.classList.toggle('hidden',!mine.includes(b.dataset.sp)); b.classList.toggle('active',b.dataset.sp===rosterSport);
     const n=rows.filter(r=>(r.sport||'Track & Field')===b.dataset.sp).length; b.textContent=b.dataset.sp+' ('+n+')'; b.onclick=()=>{ rosterSport=b.dataset.sp; rosterSeason=0; render(); }; }); });
   paintSeasonTabs();
 }
@@ -751,12 +863,23 @@ function renderCoaches(){
         <span class="pill ${c.approved?'bg-green-600 text-white':'bg-gray-200'}">${c.approved?'Approved':'Pending approval'}</span>
         ${c.is_admin?'<span class="pill bg-red-100 text-red-800">Site admin</span>':c.team_admin?'<span class="pill bg-blue-100 text-blue-800">Team admin</span>':c.requested_team_admin?'<span class="pill bg-yellow-100 text-yellow-800">Requested team admin</span>':''}
       </div>
+      <div class="flex flex-wrap items-center gap-3 text-sm mt-1"><span class="text-xs text-gray-500">Coaches:</span>${['Track & Field','Cross Country'].map(s=>`<label class="flex items-center gap-1"><input type="checkbox" ${(c.sports||['Track & Field']).includes(s)?'checked':''} ${c.email.toLowerCase()===user.email.toLowerCase()?'disabled title="Another team admin changes your own sports"':''} onchange="setCoachSport('${esc(c.email)}','${s}',this)"> ${s}</label>`).join('')}${c.team_admin||c.is_admin?'<span class="text-xs text-gray-500">(admins see every sport)</span>':''}</div>
       ${c.email.toLowerCase()===user.email.toLowerCase()?'':`<div class="flex gap-2 mt-2">
         ${!c.approved?(c.requested_team_admin?`<button class="btn bg-green-600 text-white" onclick="setTeamAdmin('${esc(c.email)}',true)">Approve as team admin</button><button class="btn bg-gray-200" onclick="setCoachApproval('${esc(c.email)}',true)">Approve as coach only</button>`:`<button class="btn bg-green-600 text-white" onclick="setCoachApproval('${esc(c.email)}',true)">Approve</button>`):`<button class="btn bg-gray-200" onclick="setCoachApproval('${esc(c.email)}',false)">Revoke access</button>`}
         <button class="btn bg-gray-200" onclick="setTeamAdmin('${esc(c.email)}',${!c.team_admin})">${c.team_admin?'Remove team admin':'Make team admin'}</button>
       </div>`}
     </div>`;
   }).join('');
+}
+// Which sport(s) a coach coaches on this team — they only see those athletes (the database enforces it).
+async function setCoachSport(email,sport,box){
+  const c=coachRows.find(x=>x.email===email); if(!c) return;
+  const now=new Set(c.sports||['Track & Field']); if(box.checked) now.add(sport); else now.delete(sport);
+  if(!now.size){ box.checked=true; alert('A coach needs at least one sport. To remove them, use Revoke access.'); return; }
+  const sports=['Track & Field','Cross Country'].filter(s=>now.has(s));
+  const {error}=await sb.from('coaches').update({sports}).eq('email',email);
+  if(error){ box.checked=!box.checked; alert('Could not save: '+error.message); return; }
+  c.sports=sports;
 }
 async function setCoachApproval(email,approved){
   const {error}=await sb.from('coaches').update({approved}).eq('email',email);

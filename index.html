@@ -290,15 +290,64 @@
   <div class="card">
     <h2 class="font-bold text-lg mb-2">Coach registration</h2>
     <p class="text-sm text-gray-600 mb-2">Every coach — including a parent who wants to help coach — must register here to get coach dashboard access. Registration is reviewed and approved by your club before access is granted.</p>
+    <label class="f req">What do you coach?</label>
+    <div class="chips mb-1">
+      <label class="chip"><input type="checkbox" name="cSport" value="Track &amp; Field" checked> Track &amp; Field</label>
+      <label class="chip"><input type="checkbox" name="cSport" value="Cross Country"> Cross Country</label>
+      <label class="chip"><input type="checkbox" name="cSport" value="VUS"> Valley United Striders</label>
+    </div>
+    <p class="text-xs text-gray-500 mb-3">Pick all that apply. Track &amp; field and cross country coaches are approved by their team's team admin. Valley United Striders coaches are approved by a Valley United admin — you can coach a regular team and Valley United with the same sign-in.</p>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div><label class="f req">First name</label><input id="cFirst" required></div>
       <div><label class="f req">Last name</label><input id="cLast" required></div>
       <div><label class="f req">Phone</label><input id="cPhone" type="tel" inputmode="tel" autocomplete="tel" required></div>
-      <div><label class="f req">Team</label><select id="cTeam" required></select></div>
+      <div id="cTeamWrap"><label class="f req">Team</label><select id="cTeam"></select></div>
+    </div>
+    <div id="cVusWrap" class="subpick hidden mt-3">
+      <label class="f req">Which Valley United Striders roster do you coach?</label>
+      <div class="chips">
+        <label class="chip"><input type="checkbox" name="cVusSquad" value="postseason" checked> Postseason team</label>
+        <label class="chip"><input type="checkbox" name="cVusSquad" value="developmental"> Developmental</label>
+      </div>
+      <label class="f req" style="margin-top:12px">Your Valley United role</label>
+      <div class="rolecards">
+        <label class="rolecard"><input type="radio" name="cVusRole" value="team_president"><span><b>Team President</b><span class="d">Runs Valley United and takes the head coach's role — every division.</span></span></label>
+        <label class="rolecard"><input type="radio" name="cVusRole" value="division_head_coach"><span><b>Division Head Coach</b><span class="d">Leads a division — boys, girls, or both.</span></span></label>
+        <label class="rolecard"><input type="radio" name="cVusRole" value="assistant_coach" checked><span><b>Assistant Coach</b><span class="d">Helps a division's head coach.</span></span></label>
+        <label class="rolecard"><input type="radio" name="cVusRole" value="field_event_coach"><span><b>Field Event Coach</b><span class="d">Coaches specific field events.</span></span></label>
+      </div>
+      <div id="cVusEvtWrap" class="hidden">
+        <label class="f req" style="margin-top:12px">Which field events do you coach for Valley United?</label>
+        <div class="chips">
+          <label class="chip"><input type="checkbox" name="cVusEvt" value="Long Jump"> Long Jump</label>
+          <label class="chip"><input type="checkbox" name="cVusEvt" value="High Jump"> High Jump</label>
+          <label class="chip"><input type="checkbox" name="cVusEvt" value="Shot Put"> Shot Put</label>
+          <label class="chip"><input type="checkbox" name="cVusEvt" value="Javelin Throw"> Javelin</label>
+        </div>
+      </div>
+      <div id="cVusDivWrap">
+        <label class="f req" style="margin-top:12px">Which Valley United age groups do you coach?</label>
+        <div class="chips">
+          <label class="chip"><input type="checkbox" name="cVusDiv" value="5/6"> 5/6</label>
+          <label class="chip"><input type="checkbox" name="cVusDiv" value="7/8"> 7/8</label>
+          <label class="chip"><input type="checkbox" name="cVusDiv" value="9/10"> 9/10</label>
+          <label class="chip"><input type="checkbox" name="cVusDiv" value="11/12"> 11/12</label>
+          <label class="chip"><input type="checkbox" name="cVusDiv" value="13/14"> 13/14</label>
+          <label class="chip"><input type="checkbox" name="cVusDiv" value="15/16"> 15/16</label>
+          <label class="chip"><input type="checkbox" name="cVusDiv" value="17/18"> 17/18 <span class="text-xs text-gray-500">Young Men / Young Women</span></label>
+        </div>
+        <p class="text-xs text-gray-500 mt-1">Age on Dec 31 of the season. High school athletes are 15/16 or 17/18. A Valley United admin confirms your age groups and boys/girls when they approve you.</p>
+        <label class="f req" style="margin-top:12px">Boys, girls, or both?</label>
+        <div class="chips">
+          <label class="chip"><input type="checkbox" name="cVusGender" value="Boys"> Boys</label>
+          <label class="chip"><input type="checkbox" name="cVusGender" value="Girls"> Girls</label>
+        </div>
+      </div>
+      <p class="text-xs text-gray-500 mt-2">You'll only see the athletes on the roster and divisions you coach. A Valley United admin confirms this when they approve you.</p>
     </div>
   </div>
-  <div class="card">
-    <h2 class="font-bold text-lg mb-1">What kind of coach are you?</h2>
+  <div class="card" id="cKindCard">
+    <h2 class="font-bold text-lg mb-1">What kind of coach are you<span class="cKindFor"></span>?</h2>
     <p class="text-sm text-gray-600 mb-3">Every coach can see their athletes' names, divisions and status, enter athletes into meets, and see results. Private registration details stay with the team admin.</p>
     <div class="rolecards">
       <label class="rolecard"><input type="radio" name="cRole" value="head_coach" checked><span><b>Head Coach</b><span class="d">You coach the whole team — every division, boys and girls.</span></span></label>
@@ -333,9 +382,9 @@
   </div>
   <div class="card">
     <h2 class="font-bold text-lg mb-2">Background check</h2>
-    <p class="text-sm text-gray-600 mb-2">Background checks are valid for 2 years and must fall within the last 2 years of the current season. If you can't provide a verifiable date, you'll have 90 days to complete one before losing coach access.</p>
+    <p class="text-sm text-gray-600 mb-2">Background checks are valid for 2 years and must fall within the last 2 years of the current season. <b>Coaches without a USA Track &amp; Field member number must complete the VYC background check through TC LogiQ</b> (link below). If you can't provide a verifiable date, you'll have 90 days to complete one before losing coach access.</p>
     <label class="flex items-center gap-2 text-sm mb-2"><input type="checkbox" id="cUsatf"> I am a USA Track &amp; Field certified coach (certification is valid 3 years).</label>
-    <div id="cBgDateWrap"><label class="f">Date of last background check</label><input type="date" id="cBgDate"></div>
+    <div id="cBgDateWrap"><label class="f">Date of last VYC (TC LogiQ) background check</label><input type="date" id="cBgDate"></div>
     <div id="cUsatfDateWrap" class="hidden"><label class="f req">Date of USATF certification</label><input type="date" id="cUsatfDate"></div>
     <div id="cBgWarn" class="text-sm text-amber-700 mt-2"></div>
     <div class="mt-3"><label class="f">SafeSport training — date completed</label><input type="date" id="cSafeSport">
@@ -393,9 +442,9 @@
   </div>
   <div class="card">
     <h2 class="font-bold text-lg mb-2">Background check</h2>
-    <p class="text-sm text-gray-600 mb-2">Team admins can see athletes' private information, so the same background-check rules as coaches apply: valid for 2 years (3 years for USATF-certified coaches). If you can't provide a verifiable date, you'll have 90 days to complete one.</p>
+    <p class="text-sm text-gray-600 mb-2">Team admins can see athletes' private information, so the same background-check rules as coaches apply: valid for 2 years (3 years for USATF-certified coaches). <b>If you don't have a USA Track &amp; Field member number, complete the VYC background check through TC LogiQ</b> (link below). If you can't provide a verifiable date, you'll have 90 days to complete one.</p>
     <label class="flex items-center gap-2 text-sm mb-2"><input type="checkbox" id="aUsatf"> I am a USA Track &amp; Field certified coach (certification is valid 3 years).</label>
-    <div id="aBgDateWrap"><label class="f">Date of last background check</label><input type="date" id="aBgDate"></div>
+    <div id="aBgDateWrap"><label class="f">Date of last VYC (TC LogiQ) background check</label><input type="date" id="aBgDate"></div>
     <div id="aUsatfDateWrap" class="hidden"><label class="f req">Date of USATF certification</label><input type="date" id="aUsatfDate"></div>
     <div id="aBgWarn" class="text-sm text-amber-700 mt-2"></div>
   </div>
@@ -473,7 +522,7 @@
       <div><label class="f req">Gender</label><select id="vGender" required><option>Girl</option><option>Boy</option></select></div>
       <div><label class="f req">Date of birth</label><input type="date" id="vDob" required></div>
       <div><label class="f req">Age division</label>
-        <select id="vDivision" required><option value="">Select…</option><option>15/16</option><option>17/18</option></select>
+        <select id="vDivision" required><option value="">Select…</option><option value="15/16">15/16</option><option value="17/18">17/18 — Young Men / Young Women</option></select>
       </div>
     </div>
   </div>
@@ -498,10 +547,27 @@
   </div>
   <div class="card">
     <h2 class="font-bold text-lg mb-2">Events</h2>
-    <p class="text-sm text-gray-600 mb-2">Athletes age 13 and up (13/14, 15/16, 17/18 divisions) may enter up to <b>4</b> events. All younger divisions (5/6 – 11/12) may enter up to <b>3</b> events only.</p>
+    <p class="text-sm text-gray-600 mb-2">List the <b>individual events</b> you want your athlete to run for Valley United — <b>up to 3</b>, for every age. Every event needs a mark from this season.</p>
+    <p class="text-sm mb-2 rounded p-2" style="background:#faf5ff;border:1px solid #c4b5fd"><b>Relays are the coaches' decision</b>, based on each athlete's skill — you don't list them here. To run a relay an athlete needs a mark in its race: the <b>4x100</b> needs a <b>100m</b> mark, the <b>4x400</b> a <b>400m</b> mark and the <b>4x800</b> an <b>800m</b> mark. A high school athlete without a verified mark in that race must run it at the first Valley United meet after their high school season; no mark there means they can't run on that relay.</p>
+    <div class="mb-3 rounded border p-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div><label class="f req" for="vHighSchool">High school</label><input id="vHighSchool" placeholder="e.g. Antelope Valley High School"></div>
+      <div><label class="f req">When does the high school (CIF) track season end?</label>
+        <input type="date" id="vCifEnd">
+        <label class="flex items-center gap-2 text-sm mt-1"><input type="checkbox" id="vCifDone"> It's already over (or not running high school track this year)</label></div>
+      <div class="sm:col-span-2"><label class="f" for="vAthNet">Athletic.net profile link <span class="font-normal text-gray-500">(if you have it)</span></label>
+        <input id="vAthNet" type="url" inputmode="url" placeholder="https://www.athletic.net/athlete/…" autocomplete="off">
+        <p class="text-xs text-gray-600 mt-1">High school times aren't in our system, so Valley United checks every mark below on Athletic.net. The link makes that quicker: find your athlete on <a class="underline text-blue-700" href="https://www.athletic.net/" target="_blank" rel="noopener">athletic.net</a>, open their profile and copy the address. No link? Leave it blank — we'll look them up by name and school.</p></div>
+      <p class="sm:col-span-2 text-sm rounded p-2" style="background:#fffbeb;border:1px solid #f59e0b"><b>If we can't verify a time</b>, your athlete will be required to run that race at the <b>next available Valley United meet</b>. High school athletes can sign up now, but can't run with Valley United until their high school (CIF) season is over — so that's the first Valley United meet after it ends.</p>
+    </div>
     <div id="vEventsList" class="space-y-2"></div>
     <button type="button" id="vAddEvent" class="btn bg-gray-200 mt-2">+ Add event</button>
     <p id="vEventWarn" class="text-sm text-red-600 mt-1 hidden"></p>
+    <div class="mt-3 rounded border p-2">
+      <label class="f req">Is your athlete willing to run on relays?</label>
+      <p class="text-xs text-gray-600 mb-1">Relays take a different kind of commitment — relay practices, being at every meet the team is counting on you for, and running whatever leg the coaches need. The coaches decide who runs relays, but they need to know ahead of time who is willing.</p>
+      <label class="flex items-start gap-2 text-sm py-1"><input type="radio" name="vRelayOk" value="yes" class="mt-1"> <span><b>Yes</b> — willing to run on relays if the coaches choose them.</span></label>
+      <label class="flex items-start gap-2 text-sm py-1"><input type="radio" name="vRelayOk" value="no" class="mt-1"> <span><b>No</b> — individual events only, no relays.</span></label>
+    </div>
   </div>
   <div class="card">
     <h2 class="font-bold text-lg mb-2">Uniform &amp; Fees</h2>
@@ -559,8 +625,36 @@ $('coachGoogleBtn').onclick=async()=>{
   await sb.auth.signInWithOAuth({provider:'google', options:{redirectTo:location.href.split('#')[0].split('?')[0]+'?role=coach'}});
 };
 // Reads + checks the coach questions. Throws a plain-English error if something's missing.
+function coachPicks(){ const p=[...document.querySelectorAll('input[name=cSport]:checked')].map(x=>x.value); return {sports:p.filter(x=>x!=='VUS'), vus:p.includes('VUS')}; }
+function paintCoachSports(){
+  const {sports,vus}=coachPicks(), regular=sports.length>0;
+  $('cTeamWrap').classList.toggle('hidden',!regular); $('cKindCard').classList.toggle('hidden',!regular); $('cVusWrap').classList.toggle('hidden',!vus);
+  document.querySelectorAll('.cKindFor').forEach(s=>s.textContent=regular&&vus?' on your team':'');
+  const vRole=(document.querySelector('input[name=cVusRole]:checked')||{}).value;
+  const vusHead=vus&&(vRole==='team_president'||vRole==='division_head_coach'); // VYC rule II.D.9: head coaches 21+
+  $('cVusDivWrap').classList.toggle('hidden',vRole==='team_president'||vRole==='field_event_coach');
+  $('cVusEvtWrap').classList.toggle('hidden',vRole!=='field_event_coach');
+  const role=(document.querySelector('input[name=cRole]:checked')||{}).value;
+  $('cAge21Wrap').classList.toggle('hidden',!((regular&&role==='head_coach')||vusHead));
+}
+document.querySelectorAll('input[name=cSport],input[name=cVusRole]').forEach(x=>x.addEventListener('change',paintCoachSports));
 function collectCoach(){
-  const role=document.querySelector('input[name=cRole]:checked').value; // head_coach | division_coach | event_specialist
+  const {sports,vus}=coachPicks();
+  if(!sports.length&&!vus) throw new Error('Pick what you coach: Track & Field, Cross Country, Valley United Striders, or more than one.');
+  const vusRole=vus?((document.querySelector('input[name=cVusRole]:checked')||{}).value||'assistant_coach'):null;
+  let vusSquads=null, vusDivs=null, vusGender=null, vusEvents=null;
+  if(vus){
+    vusSquads=[...document.querySelectorAll('input[name=cVusSquad]:checked')].map(x=>x.value);
+    if(!vusSquads.length) throw new Error('Pick the Valley United roster you coach: Postseason team, Developmental, or both.');
+    if(vusRole==='field_event_coach'){
+      const ev=[...document.querySelectorAll('input[name=cVusEvt]:checked')].map(x=>x.value); if(!ev.length) throw new Error('Please check at least one Valley United field event you coach.'); vusEvents=ev.join(', ');
+    }
+    if(vusRole==='division_head_coach'||vusRole==='assistant_coach'){
+      const dv=[...document.querySelectorAll('input[name=cVusDiv]:checked')].map(x=>x.value); if(!dv.length) throw new Error('Please check at least one Valley United division you coach.'); vusDivs=dv.join(', ');
+      const g=[...document.querySelectorAll('input[name=cVusGender]:checked')].map(x=>x.value); if(!g.length) throw new Error('Valley United: please check boys, girls, or both.'); vusGender=g.join(', ');
+    }
+  }
+  const role=sports.length?document.querySelector('input[name=cRole]:checked').value:null; // head_coach | division_coach | event_specialist
   let gender=null, events=null;
   let divs=null;
   if(role==='division_coach'){
@@ -571,22 +665,42 @@ function collectCoach(){
     const ev=[...document.querySelectorAll('input[name=cEvt]:checked')].map(x=>x.value);
     if(!ev.length) throw new Error('Please check at least one field event you coach.'); events=ev.join(', ');
   }
-  if(!$('cTeam').value) throw new Error('Please select a team.');
+  if(sports.length&&!$('cTeam').value) throw new Error('Please select a team.');
   if($('cUsatf').checked && !$('cUsatfDate').value) throw new Error('Please provide your USATF certification date.');
-  if(role==='head_coach' && !$('cAge21').checked) throw new Error('VYC rule II.D.9: the Head Coach must be 21 or older — please confirm your age.');
-  return { first:$('cFirst').value.trim(), last:$('cLast').value.trim(), phone:$('cPhone').value.trim(), team:$('cTeam').value, role,
+  if((role==='head_coach'||vusRole==='team_president'||vusRole==='division_head_coach') && !$('cAge21').checked) throw new Error('VYC rule II.D.9: the Head Coach must be 21 or older — please confirm your age.');
+  return { first:$('cFirst').value.trim(), last:$('cLast').value.trim(), phone:$('cPhone').value.trim(), team:sports.length?$('cTeam').value:null, role, sports, vus, vusRole, vusSquads, vusDivs, vusGender, vusEvents,
     division: divs, gender, events,
     bg: $('cUsatf').checked ? null : ($('cBgDate').value||null), usatf:$('cUsatf').checked, usatfDate:$('cUsatf').checked?($('cUsatfDate').value||null):null,
     safesport:$('cSafeSport').value||null, age21:$('cAge21').checked };
 }
 async function saveCoachViaLogin(client, d){
-  const r=await client.rpc('submit_coach_profile',{ p_first:d.first, p_last:d.last, p_phone:d.phone, p_team:d.team, p_role:d.role,
-    p_division:d.division, p_gender:d.gender, p_events:d.events, p_bg_date:d.bg, p_usatf:d.usatf, p_usatf_date:d.usatfDate, p_contract:true });
-  // SafeSport date / 21+ are saved on the coach's own row right after (a coach may always update their own record).
-  if(!r.error && (d.safesport||d.age21)){ const {data:s}=await client.auth.getSession(); if(s&&s.session) await client.from('coaches').update({safesport_date:d.safesport, age_21_attested:d.age21}).eq('email',s.session.user.email); }
+  const sports=d.sports||['Track & Field']; // answers saved before the sport question existed were track
+  if(sports.length){
+    const r=await client.rpc('submit_coach_profile',{ p_first:d.first, p_last:d.last, p_phone:d.phone, p_team:d.team, p_role:d.role,
+      p_division:d.division, p_gender:d.gender, p_events:d.events, p_bg_date:d.bg, p_usatf:d.usatf, p_usatf_date:d.usatfDate, p_contract:true, p_sports:sports });
+    if(r.error) return r;
+    // SafeSport date / 21+ are saved on the coach's own row right after (a coach may always update their own record).
+    if(d.safesport||d.age21){ const {data:s}=await client.auth.getSession(); if(s&&s.session) await client.from('coaches').update({safesport_date:d.safesport, age_21_attested:d.age21}).eq('email',s.session.user.email); }
+  }
+  if(d.vus){ const {data:s}=await client.auth.getSession(); const em=s&&s.session&&s.session.user.email;
+    if(!em) return {error:{message:'Please sign in first.'}};
+    const r2=await saveVusCoach(client,d,em); if(r2.error) return r2; }
+  return {error:null};
+}
+// Valley United Striders coach request: its own list, approved by a Valley United admin.
+async function saveVusCoach(client,d,email){
+  const r=await client.from('vus_coaches').insert({ email:email.trim().toLowerCase(), first_name:d.first, last_name:d.last, phone:d.phone, role_type:d.vusRole||'assistant_coach',
+    squads:d.vusSquads||['postseason'], division_or_age_group:d.vusDivs||null, coach_gender:d.vusGender||null, event_specialty:d.vusEvents||null,
+    background_check_date:d.bg, usatf_certified:!!d.usatf, usatf_cert_date:d.usatfDate, safesport_date:d.safesport, age_21_attested:!!d.age21,
+    contract_signed_at:new Date().toISOString(), contract_version:'VYC-2026', season_year:CFG.SEASON_YEAR });
+  if(r.error&&/duplicate|unique/i.test(r.error.message)) return {error:{message:'You already have a Valley United coach request on file.'}};
   return r;
 }
-document.querySelectorAll('input[name=cRole]').forEach(r=>r.addEventListener('change',()=>$('cAge21Wrap').classList.toggle('hidden',r.value!=='head_coach'||!r.checked)));
+const coachWhoApproves=d=>{ const s=d.sports||['Track & Field']; return s.length&&d.vus?'Your team admin will review your team coaching, and a Valley United admin will review your Valley United coaching.':s.length?'Your team admin (or a VYC site admin) will review and approve you.':'A Valley United admin will review and approve you.'; };
+document.querySelectorAll('input[name=cRole]').forEach(r=>r.addEventListener('change',paintCoachSports));
+// index.html?role=coach&coach=vus (link for Valley United coaches) / &coach=xc: start with that box ticked instead of track
+{ const want=new URLSearchParams(location.search).get('coach'); if(want==='vus'||want==='xc') document.querySelectorAll('input[name=cSport]').forEach(x=>x.checked=x.value===(want==='vus'?'VUS':'Cross Country')); }
+paintCoachSports();
 // When Google sends the person back, finish the registration with the answers we saved.
 let resumed=false;
 window.resumeGoogleCoach=resumeGoogleCoach;
@@ -598,19 +712,19 @@ async function resumeGoogleCoach(){
   document.querySelector('#roleTabs .roletab[data-role=coach]').click();
   const msg=$('coachMsg'); msg.textContent='Finishing your registration…'; msg.className='text-sm mt-2 text-gray-600';
   const c2=supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth:{ lock:(n,t,f)=>f() } }); // fresh client — the first one can hang after a Google redirect
-  const {error}=await saveCoachViaLogin(c2,d); if(!error) verifyUsatfAfterSignup(d,c2);
+  const {error}=await saveCoachViaLogin(c2,d); if(!error&&(d.sports||['Track & Field']).length) verifyUsatfAfterSignup(d,c2);
   if(error){ msg.textContent='Could not finish: '+error.message; msg.className='text-sm mt-2 text-red-600'; return; }
-  msg.innerHTML=`Registration submitted, and you're signed in as ${authSession.user.email}. Your team admin (or a VYC site admin) will review and approve you. <a class="underline" href="coach.html">Check your status</a>${coachNeedsBgCheck(d)?window.bgCheckLinkHtml('<b class="text-gray-900">Next step: your background check.</b> You don\'t have a current one on file — start it now so your access isn\'t paused.'):''}`; msg.className='text-sm mt-2 text-green-700 font-semibold';
+  msg.innerHTML=`Registration submitted, and you're signed in as ${authSession.user.email}. ${coachWhoApproves(d)} <a class="underline" href="coach.html">Check your status</a>${vycBgNextStep(d)}`; msg.className='text-sm mt-2 text-green-700 font-semibold';
 }
 if(new URLSearchParams(location.search).get('role')==='coach') document.querySelector('#roleTabs .roletab[data-role=coach]').click();
 
 // ---- TEAM ADMIN registration (its own tab). Saved as a pending request; a site admin or the team's
 // existing team admin approves it, which grants team-admin access. ----
 $('aTitle').onchange=()=>$('aTitleOtherWrap').classList.toggle('hidden',$('aTitle').value!=='Other');
-const adminBgNext=d=>coachNeedsBgCheck({usatf:d.usatf,bg:d.bg,usatfDate:d.usatfDate})?window.bgCheckLinkHtml('<b class="text-gray-900">Next step: your background check.</b> You don\'t have a current one on file — start it now.'):'';
+const adminBgNext=d=>vycBgNextStep({usatf:d.usatf,bg:d.bg,usatfDate:d.usatfDate},'admin');
 function adminBgHint(){
   const d={usatf:$('aUsatf').checked, bg:$('aBgDate').value||null, usatfDate:$('aUsatfDate').value||null};
-  $('aBgWarn').innerHTML=coachNeedsBgCheck(d)&&!(d.usatf&&!d.usatfDate)?window.bgCheckLinkHtml(d.bg||d.usatfDate?"This isn't current for this season — renew your background check:":"No background check on file? Team admins need a current one. Start it now:"):(d.bg||d.usatfDate?'Background check looks current for this season.':'');
+  $('aBgWarn').innerHTML=coachNeedsBgCheck(d)&&!(d.usatf&&!d.usatfDate)?window.bgCheckLinkHtml(d.bg||d.usatfDate?"This isn't current for this season — renew your background check:":"No background check on file? Team admins need a current one. Start it now:"):(!d.usatf?window.bgCheckLinkHtml(VYC_CHECK_IF_DATED):(d.usatfDate?'Background check looks current for this season.':''));
 }
 $('aUsatf').onchange=()=>{ $('aUsatfDateWrap').classList.toggle('hidden',!$('aUsatf').checked); $('aBgDateWrap').classList.toggle('hidden',$('aUsatf').checked); adminBgHint(); };
 ['aBgDate','aUsatfDate'].forEach(id=>$(id).addEventListener('change',adminBgHint));
@@ -1138,8 +1252,15 @@ function bgCheckHint(){
     if(!d){ warn.innerHTML=window.bgCheckLinkHtml("No background check date? You'll have 90 days from approval to complete one, or coach access will be paused until you do. Start it now:"); return; }
     const years=(CFG.SEASON_YEAR - new Date(d).getFullYear());
     if(years>2){ warn.innerHTML=window.bgCheckLinkHtml("This background check is more than 2 years old and isn't valid for this season. You'll have 90 days to renew it — start now:"); return; }
-    warn.textContent='Background check looks current for this season.';
+    warn.innerHTML=window.bgCheckLinkHtml(VYC_CHECK_IF_DATED);
   }
+}
+// Coaches without USATF must use the VYC's own TC LogiQ check, so they always get the link — even with a date.
+const VYC_CHECK_IF_DATED="That date looks current for this season. If it's from your VYC background check through TC LogiQ, you're covered. If it was done through another organization, you still need to complete the VYC check:";
+function vycBgNextStep(d, who){
+  if(coachNeedsBgCheck(d)) return window.bgCheckLinkHtml('<b class="text-gray-900">Next step: your background check.</b> You don\'t have a current one on file — start it now'+(who==='admin'?'.':' so your access isn\'t paused.'));
+  if(!d.usatf) return window.bgCheckLinkHtml('<b class="text-gray-900">Next step: your VYC background check.</b> Every coach without a USA Track &amp; Field member number completes the VYC background check through TC LogiQ. If you already did it through TC LogiQ, you\'re set.');
+  return '';
 }
 // USATF-certified sign-ups: check USATF's public Safe Sport Compliance list right away (needs a signed-in session;
 // if there isn't one yet, the Coach Dashboard runs the same check at their first sign-in).
@@ -1158,8 +1279,8 @@ $('cUsatfDate').addEventListener('change',bgCheckHint);
 
 // ---- VUS event rows ----
 const VUS_MAX_4 = ['13/14','15/16','17/18'];
-const VUS_EVENT_OPTIONS = ["100m","200m","400m","800m","1500m","3000m","80m Hurdles","100m Hurdles","110m Hurdles","200m Hurdles","400m Hurdles","4x100m Relay","4x400m Relay","Long Jump","Triple Jump","High Jump","Pole Vault","Shot Put","Discus","Javelin","Hammer Throw"];
-function vusMaxEvents(){ return VUS_MAX_4.includes($('vDivision').value) ? 4 : 3; }
+const VUS_EVENT_OPTIONS = ["100m","200m","400m","800m","1500m","3000m","80m Hurdles","100m Hurdles","110m Hurdles","200m Hurdles","400m Hurdles","Long Jump","Triple Jump","High Jump","Pole Vault","Shot Put","Discus","Javelin","Hammer Throw"];
+function vusMaxEvents(){ return 3; } // Valley United: up to 3 individual events for every age (relays are the coaches' decision)
 function addVusEventRow(){
   const max=vusMaxEvents();
   const rows=$('vEventsList').children.length;
@@ -1351,26 +1472,29 @@ $('coachForm').addEventListener('submit', async(e)=>{
     const d=collectCoach();
     if(authSession){
       // already signed in (e.g. Google) — save through the signed-in route, no password needed
-      const {error}=await saveCoachViaLogin(sb,d); if(error) throw error; verifyUsatfAfterSignup(d);
-      msg.innerHTML=`Coach registration submitted! Your team admin (or a VYC site admin) will review and approve you.${coachNeedsBgCheck(d)?window.bgCheckLinkHtml('<b class="text-gray-900">Next step: your background check.</b> You don\'t have a current one on file — start it now so your access isn\'t paused.'):''}`; msg.className='text-sm mt-2 text-green-700 font-semibold';
-      e.target.reset(); bgCheckHint(); return;
+      const {error}=await saveCoachViaLogin(sb,d); if(error) throw error; if(d.sports.length) verifyUsatfAfterSignup(d);
+      msg.innerHTML=`Coach registration submitted! ${coachWhoApproves(d)}${vycBgNextStep(d)}`; msg.className='text-sm mt-2 text-green-700 font-semibold';
+      e.target.reset(); bgCheckHint(); paintCoachSports(); return;
     }
     const email=$('cEmail').value.trim(), cp1=$('cPass').value, cp2=$('cPass2').value;
     if(!email) throw new Error('Please enter your email, or use "Finish with Google."');
     if(!cp1||!cp2) throw new Error('Please choose a password, or use "Finish with Google."');
     if(cp1.length<6) throw new Error('Password must be at least 6 characters.');
     if(cp1!==cp2) throw new Error('Passwords do not match.');
-    const row={
-      season_year:CFG.SEASON_YEAR, first_name:d.first, last_name:d.last, email, phone:d.phone, team_code:d.team,
-      role_type:d.role, division_or_age_group:d.division, coach_gender:d.gender, event_specialty:d.events,
-      background_check_date:d.bg, usatf_certified:d.usatf, usatf_cert_date:d.usatfDate, safesport_date:d.safesport, age_21_attested:d.age21,
-      approved:false, contract_signed_at:new Date().toISOString(), contract_version:'VYC-2026'
-    };
-    const {error}=await sb.from('coaches').insert(row);
-    if(error) throw error;
-    msg.innerHTML=`Coach registration submitted! Your team admin (or a VYC site admin) will review and approve access — you will be notified once approved.${coachNeedsBgCheck(d)?window.bgCheckLinkHtml('<b class="text-gray-900">Next step: your background check.</b> You don\'t have a current one on file — start it now so your access isn\'t paused.'):''}`; msg.className='text-sm mt-2 text-green-700 font-semibold';
-    await ensureAccount(email, cp1, msg); verifyUsatfAfterSignup(d);
-    e.target.reset(); bgCheckHint();
+    if(d.sports.length){
+      const row={
+        season_year:CFG.SEASON_YEAR, first_name:d.first, last_name:d.last, email, phone:d.phone, team_code:d.team,
+        role_type:d.role, division_or_age_group:d.division, coach_gender:d.gender, event_specialty:d.events,
+        background_check_date:d.bg, usatf_certified:d.usatf, usatf_cert_date:d.usatfDate, safesport_date:d.safesport, age_21_attested:d.age21,
+        approved:false, contract_signed_at:new Date().toISOString(), contract_version:'VYC-2026', sports:d.sports
+      };
+      const {error}=await sb.from('coaches').insert(row);
+      if(error) throw error;
+    }
+    if(d.vus){ const {error}=await saveVusCoach(sb,d,email); if(error) throw error; }
+    msg.innerHTML=`Coach registration submitted! ${coachWhoApproves(d)} You'll get access once approved.${vycBgNextStep(d)}`; msg.className='text-sm mt-2 text-green-700 font-semibold';
+    await ensureAccount(email, cp1, msg); if(d.sports.length) verifyUsatfAfterSignup(d);
+    e.target.reset(); bgCheckHint(); paintCoachSports();
   }catch(err){ msg.textContent='Error: '+(err.message||err); msg.className='text-sm mt-2 text-red-600'; }
 });
 
@@ -1386,7 +1510,12 @@ $('vusForm').addEventListener('submit', async(e)=>{
       meet_date:r.querySelector('.ve-date').value||null, state:r.querySelector('.ve-state').value.trim()
     }));
     if(!rows.length) throw new Error('Please add at least one event.');
-    const max=vusMaxEvents(); if(rows.length>max) throw new Error(`Maximum ${max} events for this age division.`);
+    const max=vusMaxEvents(); if(rows.length>max) throw new Error(`Maximum ${max} individual events.`);
+    const relayOk=document.querySelector('input[name=vRelayOk]:checked'); if(!relayOk) throw new Error('Please answer whether your athlete is willing to run on relays.');
+    const athNet=$('vAthNet').value.trim(); if(athNet&&!/^https?:\/\/([a-z0-9-]+\.)*athletic\.net\//i.test(athNet)) throw new Error("That link isn't an Athletic.net link (it starts with https://www.athletic.net/). Leave it blank if you don't have it.");
+    const hs=$('vHighSchool').value.trim(); if(!hs) throw new Error("Please enter the athlete's high school.");
+    const cifDone=$('vCifDone').checked, cifEnd=cifDone?null:($('vCifEnd').value||null);
+    if(!cifDone&&!cifEnd) throw new Error("Please tell us when the high school (CIF) season ends, or tick that it's already over.");
     const row={
       season_year:CFG.SEASON_YEAR,
       first_name:$('vFirst').value.trim(), last_name:$('vLast').value.trim(), gender:$('vGender').value, dob:$('vDob').value,
@@ -1398,7 +1527,7 @@ $('vusForm').addEventListener('submit', async(e)=>{
       parent2_name:$('vParent2Name').value.trim()||null, parent2_relationship:$('vParent2Rel').value||null,
       phone:$('vPhone').value.trim(), email:$('vEmail').value.trim(),
       address:$('vAddress').value.trim(), city:$('vCity').value.trim(), state:$('vState').value.trim(), zip:$('vZip').value.trim(),
-      events: rows, shirt_size:$('vShirt').value,
+      events: rows, relay_ok:relayOk.value==='yes', athletic_net_url:athNet||null, high_school:hs, cif_season_end:cifEnd, cif_done:cifDone, shirt_size:$('vShirt').value,
       signature:vSig.png, signature_method:vSig.method, signature_date:new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'}),
       fee_amount_cents:25000, fee_paid:false, status:'submitted'
     };
@@ -1409,7 +1538,7 @@ $('vusForm').addEventListener('submit', async(e)=>{
   }catch(err){ msg.textContent='Error: '+(err.message||err); msg.className='text-sm mt-2 text-red-600'; }
 });
 
-bgCheckHint(); addVusEventRow();
+bgCheckHint(); adminBgHint(); addVusEventRow();
 </script>
 </body>
 </html>

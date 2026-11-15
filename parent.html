@@ -54,6 +54,7 @@
     <!-- With Team Messenger on, wide screens show the messages to the RIGHT of the athletes so a parent with several kids doesn't scroll for them. -->
     <!-- New-message notice: stays at the top until the messages have been read -->
     <button type="button" id="msgAlert" class="hidden w-full text-left rounded-lg mb-3 font-semibold" style="background:#D2451E;color:#fff;padding:.7rem 1rem;border:0;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.18)"></button>
+    <div id="vusPreview"></div>
     <div id="lockBanner"></div>
     <!-- League rule: every family volunteers at every meet. Reminder when the athlete is coming but nobody has signed up. -->
     <div id="volNudge"></div>
@@ -130,6 +131,7 @@ sb.auth.onAuthStateChange(async(_e,session)=>{
   window.mountMessenger($('msgMount'),{sb, onUnread:n=>{ const b=document.getElementById('msgBadge'); if(b){ b.textContent=n||''; b.style.display=n?'':'none'; } const a=document.getElementById('msgAlert'); if(a){ a.classList.toggle('hidden',!n); a.textContent=n?`🔔 You have ${n} new message${n>1?'s':''} — tap here to read ${n>1?'them':'it'} ↓`:''; } }}).then(st=>{ if(st==='none') return; $('msgCard').classList.remove('hidden'); $('wrap').classList.add('wide'); if(location.hash==='#messages') $('msgCard').scrollIntoView({block:'start'}); }).catch(()=>{});
   window.Livestream.mount($('liveMount'),{sb}).then(st=>{ if(st==='on') $('liveCard').classList.remove('hidden'); }).catch(()=>{}); // Livestream (Paid extras): hidden when no team has it
   try{ await window.mountParentImports($('importBox'),{sb}); }catch(e){}   // athletes a team imported: link with a code / finish registration
+  loadVusPreview().catch(e=>{ $('vusPreview').innerHTML='<div class="card text-sm text-red-700">Preview failed: '+esc(e.message)+'</div>'; });
   await loadMyAthletes();
   await loadMyResults();
   await loadMeets();
@@ -169,7 +171,7 @@ async function loadMyAthletes(){
 // ---- Valley United Striders (postseason): the parent asks from the athlete's TRACK registration. The regular-season
 // team never changes. The database answers the three questions from the season's results (met a qualifying standard?
 // ran at league finals? ran at IECs?): any yes = Postseason team, no to all = Developmental. Season bests carry over.
-// Shown from the IEC meet date until the closing date a Valley United admin sets. ----
+// Shown from the opening day (the season's Invitational, or a date a Valley United admin sets) until the closing date. ----
 const VUS_SHIRTS=['YS','YM','YL','AS','AM','AL','AXL'];
 const todayLA=()=>new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
 const niceDay=d=>d?new Date(String(d).slice(0,10)+'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}):'';
@@ -197,7 +199,8 @@ function vusStatus(el,reg,q){
     :q.status==='declined'?'<span class="pill bg-red-600 text-white">Not accepted</span>'
     :`<span class="pill bg-gray-200">Waiting for Valley United review — ${VUS_PLACE[q.placement]}</span>`;
   el.innerHTML=`<div class="vus-box"><div class="flex flex-wrap items-center gap-2"><b style="color:#6b21a8" class="text-sm">Valley United Striders</b>${st}</div>
-    <p class="text-sm mt-1">Events: ${(q.events||[]).map(e=>`<b>${esc(e.event_name)}</b> ${esc(e.mark)}`).join(' · ')||'—'}</p>
+    <p class="text-sm mt-1">You asked for: ${(q.events||[]).map(e=>`<b>${esc(e.event_name)}</b> ${esc(e.mark)}`).join(' · ')||'—'}</p>
+    ${q.relay_ok!=null?`<p class="text-sm">Relays: ${q.relay_ok?'willing to run on relays':'individual events only — no relays'}</p>`:''}
     ${q.status==='declined'&&q.review_note?`<p class="text-sm mt-1 text-red-700">${esc(q.review_note)}</p>`:''}
     ${q.status==='accepted'?`<p class="text-xs text-gray-600 mt-1">Fee: $${(q.fee_amount_cents/100).toFixed(0)} — ${q.fee_paid?'paid. Thank you!':'Valley United will send payment instructions.'}</p>`:''}
     ${q.status==='submitted'?'<button type="button" class="text-xs underline text-gray-600 mt-1" data-vus-withdraw>Withdraw this request</button>':''}</div>`;
@@ -205,15 +208,39 @@ function vusStatus(el,reg,q){
   if(wd) wd.onclick=async()=>{ if(!confirm('Withdraw the Valley United request for '+reg.first_name+'?')) return;
     const {error}=await sb.from('vus_requests').delete().eq('id',q.id); if(error){ alert(error.message); return; } loadVus(); };
 }
-async function vusForm(el,reg){
+// Admin preview (parent.html?vuspreview=<registration id>, opened from Site Admin > Valley United): a site admin or
+// Valley United admin sees exactly what that athlete's parent sees, any time of year — even before requests open.
+// Nothing is sent from the preview.
+async function loadVusPreview(){
+  const id=new URLSearchParams(location.search).get('vuspreview'); if(!id) return;
+  const box=$('vusPreview');
+  const {data:ok}=await sb.rpc('is_vus_admin');
+  if(ok!==true){ box.innerHTML='<div class="card text-sm text-red-700">The Valley United preview is for site admins and Valley United admins.</div>'; return; }
+  const {data:reg,error}=await sb.from('registrations').select('*').eq('id',id).maybeSingle();
+  if(error||!reg){ box.innerHTML='<div class="card text-sm text-red-700">Could not load that athlete'+(error?': '+esc(error.message):'.')+'</div>'; return; }
+  const {data:w}=await sb.rpc('vus_window',{p_season:reg.season_year}); const t=todayLA(), win=w||{};
+  const openNow=win.opens&&t>=win.opens&&!(win.closes&&t>win.closes);
+  box.innerHTML=`<div class="card" style="border:2px dashed #7c3aed"><h2 class="font-bold" style="color:#6b21a8">Admin preview — what ${esc(reg.first_name)} ${esc(reg.last_name)}'s parent sees</h2>
+    <p class="text-sm text-gray-600 mt-1">${openNow?'Requests are open right now, so parents see this button today.':`Parents <b>don't see this yet</b>: requests open ${win.opens?'on '+esc(niceDay(win.opens)):'on the Invitational (no Invitational is marked for the '+esc(reg.season_year)+' season yet)'}${win.closes?' and close '+esc(niceDay(win.closes)):''}.`} Nothing is sent from this preview. <a class="underline" href="admin.html?tab=vus">Back to Site Admin</a></p>
+    <div class="mt-2" id="vusPrevMount"></div></div>`;
+  const el=$('vusPrevMount');
+  el.innerHTML=`<div class="vus-box flex flex-wrap items-center gap-2"><div class="flex-1 min-w-0 text-sm"><b style="color:#6b21a8">Valley United Striders</b> — postseason requests are open${win.closes?` until ${esc(niceDay(win.closes))}`:''}. ${esc(reg.first_name)} stays on ${esc(reg.team_code)} for the regular season.</div>
+    <button type="button" class="btn text-white text-sm" style="background:#7c3aed" data-vus-open>Request Valley United</button></div>`;
+  el.querySelector('[data-vus-open]').onclick=()=>vusForm(el,reg,{preview:true,back:loadVusPreview});
+}
+async function vusForm(el,reg,opt={}){
   el.innerHTML='<div class="vus-box text-sm text-gray-600">Checking this season\'s results…</div>';
   const {data:e,error}=await sb.rpc('vus_eligibility',{p_reg:reg.id});
   if(error||!e){ el.innerHTML=`<div class="vus-box text-sm text-red-700">Could not check results: ${esc(error?error.message:'not found')}</div>`; return; }
   const yes=v=>v?'<b class="y">✓ Yes</b>':'<b class="n">✗ No</b>';
   const qEvents=(e.bests||[]).filter(b=>b.q).map(b=>b.event_name);
-  const post=e.placement==='postseason', max=e.max_events;
+  const post=e.placement==='postseason', max=3, W=e.window||{}; // Valley United: up to 3 individual events, every age
+  const dlMeet=W.relay_deadline_meet||'the first postseason meet', dlTxt=esc(dlMeet)+(W.relay_deadline_date?' ('+esc(niceDay(W.relay_deadline_date))+')':'');
   el.innerHTML=`<div class="vus-box">
     <h3 class="font-bold" style="color:#6b21a8">Valley United Striders — request for ${esc(reg.first_name)} ${esc(reg.last_name)}</h3>
+    <div class="rounded p-2 mb-2 text-sm" style="background:#fff;border:2px solid #7c3aed">
+      <b>Before you start — the rules.</b> Pick the <b>individual events</b> you want ${esc(reg.first_name)} to run for Valley United — <b>up to 3</b> (every age). By rule, every event needs a mark from this season.
+      <span class="block mt-1"><b>Relays are the coaches' decision</b>, based on each athlete's skill — you don't pick them here. To run a relay, an athlete needs a mark in its race: the <b>4x100</b> needs a <b>100m</b> mark, the <b>4x400</b> a <b>400m</b> mark, the <b>4x800</b> an <b>800m</b> mark. An athlete without that mark (for example, missed it because of an injury) must run that race at <b>${dlTxt}</b> — <b>no mark by then = not eligible for that relay.</b></span></div>
     <p class="text-xs text-gray-600 mb-2">${esc(reg.first_name)} stays on <b>${esc(reg.team_code)}</b> for the regular season — this is not a transfer. Their season bests carry over to Valley United.</p>
     <div class="rounded border bg-white p-2 mb-2">
       <div class="vus-chk">${yes(e.qualified)}<span>Met a VYC qualifying standard${qEvents.length?` (${esc(qEvents.join(', '))})`:''}</span></div>
@@ -222,12 +249,20 @@ async function vusForm(el,reg){
     </div>
     <div class="rounded p-2 mb-2 text-sm" style="${post?'background:#dcfce7;border:1px solid #16a34a':'background:#fffbeb;border:1px solid #f59e0b'}">
       ${post?'<b>Eligible for the Postseason team.</b>':'<b>Developmental athlete.</b> To run on the Postseason team an athlete must have met a qualifying standard, run at league finals, or run at IECs. '+esc(reg.first_name)+' can still join Valley United Striders as a developmental athlete.'}
-      <span class="block text-xs text-gray-600 mt-1">Worked out from the posted results. Something missing? Ask your team to check the meet results.</span></div>
-    ${(e.bests||[]).length?`<p class="text-sm font-semibold">Pick up to ${max} events <span class="font-normal text-gray-500">(from this season's bests)</span></p>
-    <table class="w-full text-sm mt-1 mb-2 bg-white rounded border">${e.bests.map((b,i)=>`<tr class="border-t">
-      <td class="py-1 px-2 w-6"><input type="checkbox" data-ev="${i}"></td><td class="py-1">${esc(b.event_name)}${b.q?' <span style="display:inline-block;font-size:10px;font-weight:800;border-radius:4px;padding:0 5px;background:#dcfce7;color:#166534">Q</span>':''}</td>
+      <span class="block text-xs text-gray-600 mt-1">Worked out from the results posted so far.${!e.ran_iec?' Asking before league finals and IECs is fine — Valley United re-checks the results later, so a Developmental athlete can still move up to the Postseason team.':''} Something missing? Ask your team to check the meet results.</span></div>
+    ${(e.bests||[]).length?`<p class="text-sm font-semibold">Which individual events do you want ${esc(reg.first_name)} to run for Valley United? <span class="font-normal text-gray-500">Pick up to 3.</span></p>
+    <p class="text-xs text-gray-500 mb-1">By rule, every event needs a mark from this season, so only events ${esc(reg.first_name)} competed in are listed. Only the events you pick (and their marks) go to Valley United — the coaches for those events see ${esc(reg.first_name)} on their list.</p>
+    <table class="w-full text-sm mt-1 mb-2 bg-white rounded border">${e.bests.map(b=>`<tr class="border-t">
+      <td class="py-1 px-2 w-6"><input type="checkbox" data-ev="${esc(b.event_code)}"></td><td class="py-1">${esc(b.event_name)}${b.q?' <span style="display:inline-block;font-size:10px;font-weight:800;border-radius:4px;padding:0 5px;background:#dcfce7;color:#166534">Q</span>':''}</td>
       <td class="py-1 text-right font-mono"><b>${esc(b.mark)}</b></td><td class="py-1 px-2 text-right text-xs text-gray-500 hidden sm:table-cell">${esc(b.meet||'')} · ${esc(niceDay(b.meet_date))}</td></tr>`).join('')}</table>`
-    :'<p class="text-sm text-red-700 mb-2">No results are posted for this athlete this season, so there are no marks to carry over. Ask your team to check the meet results.</p>'}
+    :'<p class="text-sm text-red-700 mb-2">No results are posted for this athlete this season. By rule, every Valley United event needs a mark from this season, so there are no individual events to pick yet. Ask your team to check the meet results.</p>'}
+    <p class="text-xs text-gray-500 -mt-1 mb-2" data-count></p>
+    <div class="rounded border bg-white p-2 mb-2 text-sm">
+      <p class="font-semibold">Is ${esc(reg.first_name)} willing to run on relays?</p>
+      <p class="text-xs text-gray-600 mb-1">Relays take a different kind of commitment — relay practices, being at every meet the team is counting on you for, and running whatever leg the coaches need. The coaches decide who runs relays, but they need to know ahead of time who is willing. This doesn't change the individual events above.</p>
+      <label class="flex items-start gap-2 py-1"><input type="radio" name="relayok-${esc(reg.id)}" value="yes" data-relayok class="mt-1"> <span><b>Yes</b> — ${esc(reg.first_name)} is willing to run on relays if the coaches choose them.</span></label>
+      <label class="flex items-start gap-2 py-1"><input type="radio" name="relayok-${esc(reg.id)}" value="no" data-relayok class="mt-1"> <span><b>No</b> — individual events only, please don't put ${esc(reg.first_name)} on a relay.</span></label>
+    </div>
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
       <div><label class="text-xs font-bold">Shirt size</label><select data-f="shirt" class="border rounded p-2 w-full"><option value="">Select…</option>${VUS_SHIRTS.map(s=>`<option>${s}</option>`).join('')}</select></div>
       <div><label class="text-xs font-bold">Parent/guardian name</label><input data-f="parent" class="border rounded p-2 w-full" value="${esc(reg.parent1_name||'')}"></div>
@@ -239,18 +274,23 @@ async function vusForm(el,reg){
     <div class="flex flex-wrap gap-2 mt-2"><button type="button" class="btn text-white" style="background:#7c3aed" data-go>Send request</button><button type="button" class="btn bg-gray-200" data-cancel>Cancel</button></div>
     <p class="text-sm mt-1" data-msg></p></div>`;
   const sig=window.makeSig(el.querySelector('[data-sig]')), f=k=>el.querySelector(`[data-f="${k}"]`), msg=el.querySelector('[data-msg]');
-  el.querySelectorAll('[data-ev]').forEach(c=>c.onchange=()=>{ if(el.querySelectorAll('[data-ev]:checked').length>max){ c.checked=false; msg.textContent=`Up to ${max} events for this age division.`; msg.className='text-sm mt-1 text-red-700'; } else msg.textContent=''; });
-  el.querySelector('[data-cancel]').onclick=()=>loadVus();
+  const used=()=>el.querySelectorAll('[data-ev]:checked').length;
+  const paintCount=()=>{ el.querySelector('[data-count]').textContent=`${used()} of ${max} individual events picked.`; };
+  el.querySelectorAll('[data-ev]').forEach(c=>c.onchange=()=>{ if(used()>max){ c.checked=false; msg.textContent='Pick up to 3 individual events.'; msg.className='text-sm mt-1 text-red-700'; } else msg.textContent=''; paintCount(); });
+  paintCount();
+  el.querySelector('[data-cancel]').onclick=()=>(opt.back||loadVus)();
   el.querySelector('[data-go]').onclick=async ev=>{
-    const picks=[...el.querySelectorAll('[data-ev]:checked')].map(c=>({event_code:e.bests[+c.dataset.ev].event_code}));
+    const picks=[...el.querySelectorAll('[data-ev]:checked')].map(c=>({event_code:c.dataset.ev}));
     const s=sig.get(), err=t=>{ msg.textContent=t; msg.className='text-sm mt-1 text-red-700'; };
-    if(!picks.length) return err('Please pick at least one event.');
+    if(!picks.length) return err('Please pick at least one individual event.');
+    const ro=el.querySelector('[data-relayok]:checked'); if(!ro) return err(`Please answer whether ${reg.first_name} is willing to run on relays.`);
     if(!f('shirt').value) return err('Please pick a shirt size.');
     if(!f('parent').value.trim()||!f('phone').value.trim()) return err('Please fill in the parent/guardian name and phone.');
     if(!f('returns').checked||!f('agree').checked) return err('Please check both boxes.');
     if(!s) return err('Please sign.');
+    if(opt.preview){ msg.textContent='Preview: the form is filled in correctly. A parent pressing Send would create the request now — nothing was sent.'; msg.className='text-sm mt-1 text-green-700 font-semibold'; return; }
     ev.target.disabled=true; msg.textContent='Sending…'; msg.className='text-sm mt-1 text-gray-600';
-    const {error}=await sb.from('vus_requests').insert({registration_id:reg.id, events:picks, shirt_size:f('shirt').value,
+    const {error}=await sb.from('vus_requests').insert({registration_id:reg.id, events:picks, relay_ok:ro.value==='yes', shirt_size:f('shirt').value,
       parent_name:f('parent').value.trim(), phone:f('phone').value.trim(), returns_to_team:true,
       signature:s.png, signature_method:s.method, signed_at:new Date().toISOString(), placement:e.placement});
     if(error){ ev.target.disabled=false; return err(error.message); }
