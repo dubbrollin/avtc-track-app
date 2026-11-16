@@ -182,7 +182,8 @@ const isXcReg=r=>r.sport==='Cross Country';
 const vusSportName=r=>isXcReg(r)?'Cross Country':'Track & Field';
 // Request window: track = Invitational (or set date) to closing date; cross country = the XC league registration window (blank = no limit)
 const vusWin=async reg=>{ const {data:w}=await sb.rpc(isXcReg(reg)?'vus_xc_window':'vus_window',{p_season:reg.season_year}); return w||{}; };
-const vusOpenNow=(reg,w)=>{ const t=todayLA(); return isXcReg(reg)?(!(w.opens&&t<w.opens)&&!(w.closes&&t>w.closes)):!!(w.opens&&t>=w.opens&&!(w.closes&&t>w.closes)); };
+// Open all year unless Settings has an opening date; the closing date still applies.
+const vusOpenNow=(reg,w)=>{ const t=todayLA(); return !(w.opens&&t<w.opens)&&!(w.closes&&t>w.closes); };
 async function loadVus(){
   const regs=myRegs.filter(r=>r.status!=='rejected'); if(!regs.length) return;
   const {data}=await sb.from('vus_requests').select('*').in('registration_id',regs.map(r=>r.id));
@@ -203,11 +204,11 @@ async function loadVus(){
 function vusClosedBox(reg,w){ const t=todayLA(), past=w.closes&&t>w.closes;
   const when=past?`requests for ${reg.season_year} closed ${esc(niceDay(w.closes))}.`
     :w.opens?`requests open <b>${esc(niceDay(w.opens))}</b>${w.closes?` and close ${esc(niceDay(w.closes))}`:''}.`
-    :isXcReg(reg)?'requests open with cross country registration.':'requests open at the Invitational (around week 3 of the season).';
+    :'requests aren\'t open right now.';
   return `<div class="vus-box text-sm"><b style="color:#6b21a8">Valley United Striders — ${vusSportName(reg)}</b> — ${when} The <b>Request Valley United ${isXcReg(reg)?'Cross Country':'Track &amp; Field'}</b> button appears here then. ${esc(reg.first_name)} stays on ${esc(reg.team_code)} for the regular season.</div>`; }
 // The Valley United box on an athlete: which Valley United (Track & Field or Cross Country) comes from the registration it's on.
 function vusAskBox(reg,w){ const xc=isXcReg(reg);
-  return `<div class="vus-box flex flex-wrap items-center gap-2"><div class="flex-1 min-w-0 text-sm"><b style="color:#6b21a8">Valley United Striders — ${vusSportName(reg)}</b> — requests are open${w.closes?` until ${esc(niceDay(w.closes))}`:''}. ${esc(reg.first_name)} stays on ${esc(reg.team_code)} for the regular season.</div>
+  return `<div class="vus-box flex flex-wrap items-center gap-2"><div class="flex-1 min-w-0 text-sm"><b style="color:#6b21a8">Valley United Striders — ${vusSportName(reg)}</b> — requests are open${w.closes?` until ${esc(niceDay(w.closes))}`:''}. ${esc(reg.first_name)} stays on ${esc(reg.team_code)} for the regular season. <a class="underline" href="vus.html${xc?'?sport=xc':''}">About Valley United</a></div>
     <button type="button" class="btn text-white text-sm" style="background:#7c3aed" data-vus-open>Request Valley United ${xc?'Cross Country':'Track &amp; Field'}</button></div>`; }
 function vusStatus(el,reg,q){
   el.classList.remove('hidden');
@@ -215,7 +216,7 @@ function vusStatus(el,reg,q){
     :q.status==='declined'?'<span class="pill bg-red-600 text-white">Not accepted</span>'
     :`<span class="pill bg-gray-200">Waiting for Valley United review — ${VUS_PLACE[q.placement]}</span>`;
   el.innerHTML=`<div class="vus-box"><div class="flex flex-wrap items-center gap-2"><b style="color:#6b21a8" class="text-sm">Valley United Striders — ${q.sport==='Cross Country'?'Cross Country':'Track &amp; Field'}</b>${st}</div>
-    ${q.sport==='Cross Country'?'':`<p class="text-sm mt-1">You asked for: ${(q.events||[]).map(e=>`<b>${esc(e.event_name)}</b> ${esc(e.mark)}`).join(' · ')||'—'}</p>
+    ${q.sport==='Cross Country'?'':`<p class="text-sm mt-1">You asked for: ${(q.events||[]).map(e=>`<b>${esc(e.event_name)}</b> ${e.mark?esc(e.mark):'<span style="color:#92400e">(needs a season mark)</span>'}`).join(' · ')||'—'}</p>
     ${q.relay_ok!=null?`<p class="text-sm">Relays: ${q.relay_ok?'willing to run on relays':'individual events only — no relays'}</p>`:''}`}
     ${q.status==='declined'&&q.review_note?`<p class="text-sm mt-1 text-red-700">${esc(q.review_note)}</p>`:''}
     ${q.status==='accepted'?`<p class="text-xs text-gray-600 mt-1">Fee: $${(q.fee_amount_cents/100).toFixed(0)} — ${q.fee_paid?'paid. Thank you!':'Valley United will send payment instructions.'}</p>`:''}
@@ -281,11 +282,15 @@ async function vusForm(el,reg,opt={}){
   const yes=v=>v?'<b class="y">✓ Yes</b>':'<b class="n">✗ No</b>';
   const qEvents=(e.bests||[]).filter(b=>b.q).map(b=>b.event_name);
   const post=e.placement==='postseason', max=3, W=e.window||{}; // Valley United: up to 3 individual events, every age
+  // Every individual event for the athlete's division: their mark if they have one, else "needs a season mark" (they can ask before competing).
+  const evList=(()=>{ const m=new Map(); (e.bests||[]).forEach(b=>m.set(b.event_code,b));
+    ((window.eventsFor&&window.eventsFor(reg.division,reg.gender))||[]).filter(x=>!x.relay).forEach(x=>{ if(!m.has(x.code)) m.set(x.code,{event_code:x.code,event_name:x.name,mark:null}); });
+    return [...m.values()]; })();
   const dlMeet=W.relay_deadline_meet||'the first postseason meet', dlTxt=esc(dlMeet)+(W.relay_deadline_date?' ('+esc(niceDay(W.relay_deadline_date))+')':'');
   el.innerHTML=`<div class="vus-box">
     <h3 class="font-bold" style="color:#6b21a8">Valley United Striders — request for ${esc(reg.first_name)} ${esc(reg.last_name)}</h3>
     <div class="rounded p-2 mb-2 text-sm" style="background:#fff;border:2px solid #7c3aed">
-      <b>Before you start — the rules.</b> Pick the <b>individual events</b> you want ${esc(reg.first_name)} to run for Valley United — <b>up to 3</b> (every age). By rule, every event needs a mark from this season.
+      <b>Before you start — the rules.</b> Pick the <b>individual events</b> you want ${esc(reg.first_name)} to run for Valley United — <b>up to 3</b> (every age). By rule, every event needs a mark from this season — but you can ask now, before ${esc(reg.first_name)} has one: events without a mark show as <b>needs a season mark</b> until results come in. Valley United makes the final decision after the regular season.
       <span class="block mt-1"><b>Relays are the coaches' decision</b>, based on each athlete's skill — you don't pick them here. To run a relay, an athlete needs a mark in its race: the <b>4x100</b> needs a <b>100m</b> mark, the <b>4x400</b> a <b>400m</b> mark, the <b>4x800</b> an <b>800m</b> mark. An athlete without that mark (for example, missed it because of an injury) must run that race at <b>${dlTxt}</b> — <b>no mark by then = not eligible for that relay.</b></span></div>
     <p class="text-xs text-gray-600 mb-2">${esc(reg.first_name)} stays on <b>${esc(reg.team_code)}</b> for the regular season — this is not a transfer. Their season bests carry over to Valley United.</p>
     <div class="rounded border bg-white p-2 mb-2">
@@ -296,11 +301,11 @@ async function vusForm(el,reg,opt={}){
     <div class="rounded p-2 mb-2 text-sm" style="${post?'background:#dcfce7;border:1px solid #16a34a':'background:#fffbeb;border:1px solid #f59e0b'}">
       ${post?'<b>Eligible for the Postseason team.</b>':'<b>Developmental athlete.</b> To run on the Postseason team an athlete must have met a qualifying standard, run at league finals, or run at IECs. '+esc(reg.first_name)+' can still join Valley United Striders as a developmental athlete.'}
       <span class="block text-xs text-gray-600 mt-1">Worked out from the results posted so far.${!e.ran_iec?' Asking before league finals and IECs is fine — Valley United re-checks the results later, so a Developmental athlete can still move up to the Postseason team.':''} Something missing? Ask your team to check the meet results.</span></div>
-    ${(e.bests||[]).length?`<p class="text-sm font-semibold">Which individual events do you want ${esc(reg.first_name)} to run for Valley United? <span class="font-normal text-gray-500">Pick up to 3.</span></p>
-    <p class="text-xs text-gray-500 mb-1">By rule, every event needs a mark from this season, so only events ${esc(reg.first_name)} competed in are listed. Only the events you pick (and their marks) go to Valley United — the coaches for those events see ${esc(reg.first_name)} on their list.</p>
-    <table class="w-full text-sm mt-1 mb-2 bg-white rounded border">${e.bests.map(b=>`<tr class="border-t">
-      <td class="py-1 px-2 w-6"><input type="checkbox" data-ev="${esc(b.event_code)}"></td><td class="py-1">${esc(b.event_name)}${b.q?' <span style="display:inline-block;font-size:10px;font-weight:800;border-radius:4px;padding:0 5px;background:#dcfce7;color:#166534">Q</span>':''}</td>
-      <td class="py-1 text-right font-mono"><b>${esc(b.mark)}</b></td><td class="py-1 px-2 text-right text-xs text-gray-500 hidden sm:table-cell">${esc(b.meet||'')} · ${esc(niceDay(b.meet_date))}</td></tr>`).join('')}</table>`
+    ${evList.length?`<p class="text-sm font-semibold">Which individual events do you want ${esc(reg.first_name)} to run for Valley United? <span class="font-normal text-gray-500">Pick up to 3.</span></p>
+    <p class="text-xs text-gray-500 mb-1">Events ${esc(reg.first_name)} already has a mark in show it; the others show <b>needs a season mark</b>. Only the events you pick (and their marks) go to Valley United — the coaches for those events see ${esc(reg.first_name)} on their list.</p>
+    <table class="w-full text-sm mt-1 mb-2 bg-white rounded border">${evList.map(b=>`<tr class="border-t">
+      <td class="py-1 px-2 w-6"><input type="checkbox" data-ev="${esc(b.event_code)}" data-evname="${esc(b.event_name)}"></td><td class="py-1">${esc(b.event_name)}${b.q?' <span style="display:inline-block;font-size:10px;font-weight:800;border-radius:4px;padding:0 5px;background:#dcfce7;color:#166534">Q</span>':''}</td>
+      <td class="py-1 text-right font-mono">${b.mark?`<b>${esc(b.mark)}</b>`:'<span class="text-xs font-sans" style="color:#92400e">needs a season mark</span>'}</td><td class="py-1 px-2 text-right text-xs text-gray-500 hidden sm:table-cell">${b.mark?`${esc(b.meet||'')} · ${esc(niceDay(b.meet_date))}`:''}</td></tr>`).join('')}</table>`
     :'<p class="text-sm text-red-700 mb-2">No results are posted for this athlete this season. By rule, every Valley United event needs a mark from this season, so there are no individual events to pick yet. Ask your team to check the meet results.</p>'}
     <p class="text-xs text-gray-500 -mt-1 mb-2" data-count></p>
     <div class="rounded border bg-white p-2 mb-2 text-sm">
@@ -326,7 +331,7 @@ async function vusForm(el,reg,opt={}){
   paintCount();
   el.querySelector('[data-cancel]').onclick=()=>(opt.back||loadVus)();
   el.querySelector('[data-go]').onclick=async ev=>{
-    const picks=[...el.querySelectorAll('[data-ev]:checked')].map(c=>({event_code:c.dataset.ev}));
+    const picks=[...el.querySelectorAll('[data-ev]:checked')].map(c=>({event_code:c.dataset.ev,event_name:c.dataset.evname}));
     const s=sig.get(), err=t=>{ msg.textContent=t; msg.className='text-sm mt-1 text-red-700'; };
     if(!picks.length) return err('Please pick at least one individual event.');
     const ro=el.querySelector('[data-relayok]:checked'); if(!ro) return err(`Please answer whether ${reg.first_name} is willing to run on relays.`);

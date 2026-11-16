@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#001C3B"><link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="VYC Track"><meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Valley United Striders</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css?v=b3">
+<script src="theme.js?v=b3"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script><script src="shared.js"></script>
+<style>
+  body{background:#f3f4f6}
+  .card{background:#fff;border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .vu-hero{background:linear-gradient(135deg,#4c1d95,#7c3aed);color:#fff;border-radius:14px;padding:22px 18px;margin-bottom:14px}
+  .vu-tab{display:inline-block;padding:8px 14px;border-radius:999px;font-weight:600;font-size:14px;text-decoration:none;background:rgba(255,255,255,.18);color:#fff}
+  .vu-tab.on{background:#fff;color:#5b21b6}
+  .btn{display:inline-block;border-radius:8px;padding:8px 14px;font-weight:600;font-size:14px;cursor:pointer;text-decoration:none}
+  .btn-p{background:#7c3aed;color:#fff}.btn-g{background:#e5e7eb;color:#111827}.btn-r{background:#fee2e2;color:#991b1b}
+  .post{border-top:1px solid #ede9fe;padding:14px 0}
+  .post:first-child{border-top:0;padding-top:4px}
+  .body-text{white-space:pre-wrap;word-wrap:break-word}
+  .pin{display:inline-block;font-size:11px;font-weight:700;background:#ede9fe;color:#5b21b6;border-radius:6px;padding:1px 7px;margin-left:6px}
+  input.f,textarea.f{width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:15px}
+  textarea.f{min-height:140px}
+</style>
+</head>
+<body class="text-gray-900">
+<header class="topnav"><div class="topnav-inner">
+  <a class="brand" href="home.html">VYC <b>Track &amp; Field</b></a>
+  <nav>
+    <a href="home.html">Home</a>
+    <a href="index.html">Register</a>
+    <a href="coach.html">Coach Dashboard</a>
+    <a href="meets-admin.html?view=timer">Timer</a>
+    <a href="entries.html">Meet Register</a>
+    <a href="schedule.html">Schedule</a>
+    <a href="team.html">Teams</a>
+    <a href="results.html">Results</a>
+    <a href="howto.html">How-To</a>
+    <a href="faq.html">FAQ</a>
+  </nav>
+</div></header>
+
+<div class="max-w-3xl mx-auto p-3">
+  <div class="vu-hero">
+    <div class="text-sm font-semibold" style="opacity:.85">Valley United Striders</div>
+    <h1 class="text-2xl font-bold mt-1" id="vuTitle">Valley United Track &amp; Field</h1>
+    <p class="text-sm mt-1" style="opacity:.9" id="vuSub"></p>
+    <div class="flex flex-wrap gap-2 mt-3">
+      <a class="vu-tab" data-sp="track" href="vus.html">Track &amp; Field</a>
+      <a class="vu-tab" data-sp="xc" href="vus.html?sport=xc">Cross Country</a>
+    </div>
+  </div>
+
+  <div class="card" id="welcomeCard"><p class="text-sm text-gray-500">Loading…</p></div>
+
+  <div class="card" style="border:2px solid #c4b5fd">
+    <h2 class="font-bold text-lg" style="color:#6b21a8">Join Valley United</h2>
+    <p class="text-sm text-gray-700 mt-1" id="joinIntro"></p>
+    <ul class="text-sm text-gray-700 mt-2" style="list-style:disc;padding-left:1.2rem">
+      <li><b>VYC athletes:</b> sign in on your <a class="underline text-purple-800" href="parent.html">Parent Dashboard</a> — each registered athlete has a Valley United box with the <b>Request</b> button.</li>
+      <li><b>High school athletes new to VYC:</b> use the <a class="underline text-purple-800" href="index.html?role=vus">high school sign-up form</a>.</li>
+      <li><b>Coaches:</b> already a VYC coach? Use <b>Request to coach Valley United</b> at the top of your <a class="underline text-purple-800" href="coach.html">Coach Dashboard</a>. New? <a class="underline text-purple-800" href="index.html?role=coach&amp;coach=vus">Register as a Valley United coach</a>.</li>
+    </ul>
+    <p class="text-xs text-gray-500 mt-2">Requests are open all year. Valley United makes the final decisions after the regular season.</p>
+  </div>
+
+  <div class="card">
+    <div class="flex flex-wrap items-center gap-2 mb-2">
+      <h2 class="font-bold text-lg flex-1" style="color:#6b21a8">News &amp; updates</h2>
+      <button type="button" class="btn btn-p hidden" id="newPostBtn">+ New post</button>
+    </div>
+    <div id="postEditor" class="hidden mb-3 p-3 rounded" style="background:#faf5ff;border:1px solid #c4b5fd"></div>
+    <div id="posts"><p class="text-sm text-gray-500">Loading…</p></div>
+  </div>
+
+  <div class="card">
+    <h2 class="font-bold text-lg mb-2" style="color:#6b21a8">Coaches &amp; staff</h2>
+    <div id="staff" class="text-sm"><p class="text-gray-500">Loading…</p></div>
+  </div>
+
+  <div class="card text-sm" id="writerCard">
+    <details id="signInBox"><summary class="cursor-pointer text-gray-600">Valley United president or admin? Sign in to write on this page.</summary><div id="vuLogin" class="mt-2"></div></details>
+    <p id="writerNote" class="hidden text-gray-600"></p>
+  </div>
+</div>
+
+<script>
+const CFG=window.APP_CONFIG, $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// Plain text with line breaks kept and web links clickable.
+const rich=s=>esc(s).replace(/(https?:\/\/[^\s<]+)/g,'<a class="underline text-purple-800" href="$1" target="_blank" rel="noopener">$1</a>');
+const XC=new URLSearchParams(location.search).get('sport')==='xc';
+const SPORT=XC?'Cross Country':'Track & Field', SPORT_H=XC?'Cross Country':'Track &amp; Field';
+const ROLE={team_president:'Team President',division_head_coach:'Division Head Coach',assistant_coach:'Assistant Coach',field_event_coach:'Field Event Coach'};
+const ageTxt=a=>String(a||'').split(',').map(x=>x.trim()).filter(Boolean).map(x=>x==='17/18'?'17/18 (Young Men / Young Women)':x).join(', ');
+const when=d=>new Date(d).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+let sb=supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{auth:{lock:(n,t,fn)=>fn()}});
+let canWrite=false, me=null, page=null, posts=[];
+
+document.title='Valley United '+SPORT;
+$('vuTitle').innerHTML='Valley United '+SPORT_H;
+$('vuSub').textContent=XC?'The Valley United cross country team — one team; every athlete runs the race for their age group.':'The Valley United postseason track & field team. Athletes stay on their regular-season team.';
+document.querySelectorAll('.vu-tab').forEach(a=>a.classList.toggle('on',(a.dataset.sp==='xc')===XC));
+$('joinIntro').innerHTML=XC?'Valley United Cross Country is one team — no events to pick. Parents ask from their athlete\'s <b>cross country</b> registration.'
+  :'Parents pick up to <b>3 individual events</b>. Relays are the coaches\' decision. Events without a mark yet show as "needs a season mark" until results come in.';
+
+function paintWelcome(){
+  const t=page&&page.welcome_title, w=page&&page.welcome;
+  $('welcomeCard').innerHTML=`<div class="flex flex-wrap items-center gap-2"><h2 class="font-bold text-lg flex-1" style="color:#6b21a8">${esc(t||'Welcome to Valley United '+SPORT)}</h2>${canWrite?'<button type="button" class="btn btn-g" id="editWelcome">Edit welcome</button>':''}</div>
+    ${w?`<div class="body-text text-sm text-gray-800 mt-2">${rich(w)}</div>`:`<p class="text-sm text-gray-500 mt-2">${canWrite?'No welcome message yet — press <b>Edit welcome</b> to write one for parents.':'A welcome message from Valley United is coming soon.'}</p>`}
+    ${page&&page.updated_at&&w?`<p class="text-xs text-gray-400 mt-2">Updated ${esc(when(page.updated_at))}</p>`:''}`;
+  const b=$('editWelcome'); if(b) b.onclick=()=>{
+    $('welcomeCard').innerHTML=`<h2 class="font-bold text-lg mb-2" style="color:#6b21a8">Edit welcome</h2>
+      <label class="text-xs font-bold">Heading</label><input class="f mb-2" id="wTitle" value="${esc(t||'Welcome to Valley United '+SPORT)}">
+      <label class="text-xs font-bold">Message to parents</label><textarea class="f" id="wBody" placeholder="Welcome parents and athletes…">${esc(w||'')}</textarea>
+      <div class="flex gap-2 mt-2"><button type="button" class="btn btn-p" id="wSave">Save</button><button type="button" class="btn btn-g" id="wCancel">Cancel</button></div><p class="text-sm mt-1" id="wMsg"></p>`;
+    $('wCancel').onclick=paintWelcome;
+    $('wSave').onclick=async()=>{ const row={sport:SPORT,welcome_title:$('wTitle').value.trim()||null,welcome:$('wBody').value.trim()||null};
+      const {data,error}=await sb.from('vus_pages').upsert(row,{onConflict:'sport'}).select().maybeSingle();
+      if(error){ $('wMsg').textContent=error.message; $('wMsg').className='text-sm mt-1 text-red-700'; return; }
+      page=data||row; paintWelcome(); };
+  };
+}
+
+function paintPosts(){
+  $('newPostBtn').classList.toggle('hidden',!canWrite);
+  $('posts').innerHTML=posts.length?posts.map(p=>`<div class="post" data-id="${esc(p.id)}">
+      <div class="font-bold">${esc(p.title)}${p.pinned?'<span class="pin">Pinned</span>':''}</div>
+      <div class="text-xs text-gray-500 mb-1">${esc(when(p.created_at))}${p.author_name?' · '+esc(p.author_name):''}</div>
+      <div class="body-text text-sm text-gray-800">${rich(p.body)}</div>
+      ${canWrite?`<div class="flex gap-2 mt-2"><button type="button" class="btn btn-g" data-act="edit">Edit</button><button type="button" class="btn btn-g" data-act="pin">${p.pinned?'Unpin':'Pin to top'}</button><button type="button" class="btn btn-r" data-act="del">Delete</button></div>`:''}</div>`).join('')
+    :`<p class="text-sm text-gray-500">${canWrite?'No posts yet — press <b>+ New post</b> to write the first one.':'No news yet. Check back soon.'}</p>`;
+}
+function editor(p){
+  const ed=$('postEditor'); ed.classList.remove('hidden');
+  ed.innerHTML=`<label class="text-xs font-bold">Title</label><input class="f mb-2" id="pTitle" value="${esc(p?p.title:'')}">
+    <label class="text-xs font-bold">Message</label><textarea class="f" id="pBody">${esc(p?p.body:'')}</textarea>
+    <label class="flex items-center gap-2 text-sm mt-2"><input type="checkbox" id="pPin" ${p&&p.pinned?'checked':''}> Pin to the top</label>
+    <div class="flex gap-2 mt-2"><button type="button" class="btn btn-p" id="pSave">${p?'Save changes':'Post'}</button><button type="button" class="btn btn-g" id="pCancel">Cancel</button></div><p class="text-sm mt-1" id="pMsg"></p>`;
+  $('pCancel').onclick=()=>ed.classList.add('hidden');
+  $('pSave').onclick=async()=>{ const title=$('pTitle').value.trim(), body=$('pBody').value.trim(), m=$('pMsg');
+    if(!title||!body){ m.textContent='Please fill in the title and message.'; m.className='text-sm mt-1 text-red-700'; return; }
+    const row={sport:SPORT,title,body,pinned:$('pPin').checked};
+    if(!p) row.author_name=me&&me.name||null;
+    const r=p?await sb.from('vus_posts').update(row).eq('id',p.id):await sb.from('vus_posts').insert(row);
+    if(r.error){ m.textContent=r.error.message; m.className='text-sm mt-1 text-red-700'; return; }
+    ed.classList.add('hidden'); loadPosts(); };
+  $('pTitle').focus();
+}
+$('newPostBtn').onclick=()=>editor(null);
+$('posts').addEventListener('click',async e=>{ const b=e.target.closest('[data-act]'); if(!b) return;
+  const p=posts.find(x=>x.id===b.closest('[data-id]').dataset.id); if(!p) return;
+  if(b.dataset.act==='edit') return editor(p);
+  if(b.dataset.act==='pin'){ const {error}=await sb.from('vus_posts').update({pinned:!p.pinned}).eq('id',p.id); if(error) return alert(error.message); return loadPosts(); }
+  if(b.dataset.act==='del'){ if(!confirm('Delete the post "'+p.title+'"?')) return; const {error}=await sb.from('vus_posts').delete().eq('id',p.id); if(error) return alert(error.message); loadPosts(); }
+});
+
+async function loadPosts(){
+  const {data,error}=await sb.from('vus_posts').select('*').eq('sport',SPORT).order('pinned',{ascending:false}).order('created_at',{ascending:false});
+  if(error){ $('posts').innerHTML=`<p class="text-sm text-red-700">${esc(error.message)}</p>`; return; }
+  posts=data||[]; paintPosts();
+}
+async function loadPage(){
+  const {data}=await sb.from('vus_pages').select('*').eq('sport',SPORT).maybeSingle(); page=data||null; paintWelcome();
+}
+async function loadStaff(){
+  const {data,error}=await sb.rpc('vus_public_staff',{p_sport:SPORT});
+  if(error){ $('staff').innerHTML=`<p class="text-red-700">${esc(error.message)}</p>`; return; }
+  const L=data||[];
+  $('staff').innerHTML=L.length?`<ul class="space-y-2">${L.map(c=>`<li><b>${esc(c.first_name)} ${esc(c.last_name)}</b> — ${c.is_president?`<span style="color:#6b21a8;font-weight:700">Valley United ${SPORT_H} President</span>${c.role_type!=='team_president'?' · '+esc(ROLE[c.role_type]||''):''}`:esc(ROLE[c.role_type]||'Coach')}
+      ${c.division_or_age_group?`<span class="text-gray-500"> · ${esc(ageTxt(c.division_or_age_group))}${c.coach_gender?' '+esc(c.coach_gender):''}</span>`:''}${c.event_specialty?`<span class="text-gray-500"> · ${esc(c.event_specialty)}</span>`:''}</li>`).join('')}</ul>`
+    :'<p class="text-gray-500">Coaches will be listed here once Valley United approves them.</p>';
+}
+async function whoAmI(){
+  const {data:{session}}=await sb.auth.getSession(); const u=session&&session.user;
+  if(!u){ canWrite=false; return; }
+  const [{data:ok},{data:v},{data:c}]=await Promise.all([sb.rpc('can_post_vus',{p_sport:SPORT}),
+    sb.from('vus_coaches').select('first_name,last_name').eq('email',(u.email||'').toLowerCase()).maybeSingle(),
+    sb.from('coaches').select('first_name,last_name,name').eq('email',u.email).maybeSingle()]);
+  canWrite=ok===true; const p=v||c; me={email:u.email,name:p?((p.first_name||p.name||'')+' '+(p.last_name||'')).trim():null};
+  $('signInBox').classList.add('hidden'); $('writerNote').classList.remove('hidden');
+  $('writerNote').innerHTML=canWrite?`Signed in as <b>${esc(u.email)}</b> — you can write the welcome and posts on this page.`
+    :`Signed in as <b>${esc(u.email)}</b>. Only the Valley United ${SPORT_H} President and Valley United admins write on this page.`;
+}
+async function boot(){ await whoAmI(); await Promise.all([loadPage(),loadPosts(),loadStaff()]); }
+window.mountLoginWidget(sb,$('vuLogin'),{hint:'Sign in with the email on your Valley United coach record.'});
+sb.auth.onAuthStateChange((ev)=>{ if(ev==='SIGNED_IN'||ev==='SIGNED_OUT') boot(); });
+boot();
+</script>
+</body>
+</html>
