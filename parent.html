@@ -193,12 +193,18 @@ async function loadVus(){
     if(reqs[reg.id]){ vusStatus(el,reg,reqs[reg.id]); continue; }
     const wk=vusSportName(reg)+reg.season_year; if(!(wk in wins)) wins[wk]=await vusWin(reg);
     const w=wins[wk];
-    if(!vusOpenNow(reg,w)){ el.classList.add('hidden'); continue; }
+    if(!vusOpenNow(reg,w)){ el.classList.remove('hidden'); el.innerHTML=vusClosedBox(reg,w); continue; }
     el.classList.remove('hidden');
     el.innerHTML=vusAskBox(reg,w);
     el.querySelector('[data-vus-open]').onclick=()=>isXcReg(reg)?vusXcForm(el,reg):vusForm(el,reg);
   }
 }
+// Requests not open (yet, or any more): show the box anyway so parents know Valley United exists and when to ask.
+function vusClosedBox(reg,w){ const t=todayLA(), past=w.closes&&t>w.closes;
+  const when=past?`requests for ${reg.season_year} closed ${esc(niceDay(w.closes))}.`
+    :w.opens?`requests open <b>${esc(niceDay(w.opens))}</b>${w.closes?` and close ${esc(niceDay(w.closes))}`:''}.`
+    :isXcReg(reg)?'requests open with cross country registration.':'requests open at the Invitational (around week 3 of the season).';
+  return `<div class="vus-box text-sm"><b style="color:#6b21a8">Valley United Striders — ${vusSportName(reg)}</b> — ${when} The <b>Request Valley United ${isXcReg(reg)?'Cross Country':'Track &amp; Field'}</b> button appears here then. ${esc(reg.first_name)} stays on ${esc(reg.team_code)} for the regular season.</div>`; }
 // The Valley United box on an athlete: which Valley United (Track & Field or Cross Country) comes from the registration it's on.
 function vusAskBox(reg,w){ const xc=isXcReg(reg);
   return `<div class="vus-box flex flex-wrap items-center gap-2"><div class="flex-1 min-w-0 text-sm"><b style="color:#6b21a8">Valley United Striders — ${vusSportName(reg)}</b> — requests are open${w.closes?` until ${esc(niceDay(w.closes))}`:''}. ${esc(reg.first_name)} stays on ${esc(reg.team_code)} for the regular season.</div>
