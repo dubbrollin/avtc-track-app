@@ -263,10 +263,15 @@ end $$;
 grant execute on function public.vus_recheck(uuid) to authenticated;
 
 -- "Look around" demo logins stay view-only here too.
+-- (Only where the demo logins exist: the server copy never had them.)
 drop trigger if exists zz_demo_readonly on public.vus_requests;
-create trigger zz_demo_readonly before insert or update or delete on public.vus_requests for each row execute function public.demo_readonly();
 drop trigger if exists zz_demo_readonly on public.vus_admins;
-create trigger zz_demo_readonly before insert or update or delete on public.vus_admins for each row execute function public.demo_readonly();
+do $demo$ begin
+  if to_regprocedure('public.demo_readonly()') is not null then
+    execute 'create trigger zz_demo_readonly before insert or update or delete on public.vus_requests for each row execute function public.demo_readonly()';
+    execute 'create trigger zz_demo_readonly before insert or update or delete on public.vus_admins for each row execute function public.demo_readonly()';
+  end if;
+end $demo$;
 
 -- Valley United admins set the request closing date (only that setting).
 drop policy if exists "vus admins set vus dates" on public.app_settings;
