@@ -16,8 +16,21 @@
     if (cur) lines.push(cur); return lines;
   }
 
+  // The official Valley Youth Conference Player Contract (VYC Form 001, from valleyconference.org/forms/PLAYER_CONTRACT.pdf),
+  // kept next to the app as forms/PLAYER_CONTRACT.pdf. We fill its own form fields and place the signatures on its signature lines.
+  let templateBytes = null;
+  async function contractTemplate() {
+    if (templateBytes) return templateBytes;
+    if (typeof window !== "undefined") {
+      const res = await fetch("forms/PLAYER_CONTRACT.pdf"); if (!res.ok) throw new Error("Could not load the Player Contract form (" + res.status + ")");
+      templateBytes = new Uint8Array(await res.arrayBuffer());
+    } else templateBytes = require("fs").readFileSync(require("path").join(__dirname, "forms", "PLAYER_CONTRACT.pdf"));
+    return templateBytes;
+  }
+
+  // clubName = the athlete's own team (Conference Member Organization)
   async function build(reg, clubName) {
-    const doc = await PDFDocument.create();
+    const doc = await PDFDocument.load(await contractTemplate());
     const F = await doc.embedFont(StandardFonts.Helvetica);
     const B = await doc.embedFont(StandardFonts.HelveticaBold);
     const aSig = await doc.embedPng(reg.athlete_signature);
@@ -25,6 +38,7 @@
     const W = 612, H = 792, M = 40;
     const athlete = `${reg.first_name} ${reg.last_name}`;
     const signed = fmt(reg.created_at) || today();
+    const parentName = reg.parent1_name || reg.parent_name || "";
 
     // helpers per page
     function pageTools(page) {
@@ -51,45 +65,46 @@
       return { get y() { return y; }, set y(v) { y = v; }, t, para, field, box, sig, chk, page };
     }
 
-    // ================= PAGE 1: PLAYER CONTRACT =================
-    let p = pageTools(doc.addPage([W, H]));
-    p.t("PLAYER CONTRACT", M, 14, B); p.y -= 16;
-    p.t("VALLEY YOUTH CONFERENCE, INC. — A YOUTH SPORTS ATHLETIC ASSOCIATION", M, 9, B); p.y -= 14;
-    p.t("SPORT:", M, 9, B); p.chk(reg.sport === "Track & Field", "Track & Field", M + 45); p.chk(reg.sport === "Cross Country", "Cross Country", M + 140); p.y -= 14;
-    p.t(`Player Season Application for ${reg.season_year} Season.   Conference Member Organization: ${clubName}`, M); p.y -= 13;
-    p.t(`Age: ${reg.age_on_dec31}`, M); p.chk(reg.gender === "Boy", "Boy", M + 60); p.chk(reg.gender === "Girl", "Girl", M + 110); p.t(`Name of Sport Division: ${reg.division}`, M + 170); p.y -= 18;
-    p.para("PLEASE READ CAREFULLY — NOTE: Completion of this application DOES NOT guarantee applicant a position on a team. No applicant will be allowed to participate in any activity until this form has been completed in full and accepted by the above named member organization. Members organization acceptance is subject to final approval and certification by the sport. PLAYER AND PARENTS TAKE NOTE: All rules concerning certification, eligibility, playing rules, sport/conference procedures, and any dispute arising from these rules are procedures rests solely with the sport and/or conference. The final arbitration is the Valley Youth Conference, Inc. Executive Board. I agree to abide to all conference decisions.", 7.5);
-    p.t("SECTION 1. APPLICANT'S STATEMENT", M, 9, B); p.y -= 11;
-    p.para("I will faithfully keep and abide by the following rules and carry them out to the best of my ability.", 8);
-    [
-      "1. I will maintain at least a \"C\" average throughout the school year.",
-      "2. I will play any position assigned and do my best for the team.",
-      "3. When my team is not playing I will stay off the playing field completely and will not interfere with those playing.",
-      "4. I solemnly pledge that I will not in any way damage, or deface any property, building or equipment.",
-      "5. I agree to abide by all decisions of game officials and will not create any unsportmanlike gestures at any time.",
-      "6. I promise that I will be a lady/gentleman at all times and I will refrain from using any foul language.",
-      "7. I agree that I will remain a member of the team and the organization until properly released.",
-      "8. I agree to return the uniform and other equipment issued to me in as good a condition as when received, except for normal wear and tear.",
-    ].forEach(r => p.para(r, 8));
-    p.y -= 4;
-    p.field("Player's Name (Print in Full)", athlete, M, 200); p.field("Date of Birth", fmt(reg.dob), M + 215, 80); p.field("Age", reg.age_on_dec31, M + 305, 40); p.field("Date Signed", signed, M + 355, 90); p.y -= 28;
-    p.field("Player's Address", reg.address, M, 300); p.field("City & Zip", `${reg.city} ${reg.zip}`, M + 315, 200); p.y -= 28;
-    p.field("Phone", reg.phone, M, 140); p.field("Email", reg.email, M + 150, 200); p.y -= 2; p.sig(aSig, M + 365, 160, "Player Signature", reg.athlete_signature_method); p.y -= 46;
-    p.field("Cell Phone/Emergency #", reg.emergency_phone, M, 200); p.field("Contact", reg.emergency_name, M + 215, 250); p.y -= 34;
+    // ================= PAGE 1: OFFICIAL PLAYER CONTRACT =================
+    const form = doc.getForm();
+    const FP = "topmostSubform[0].Page1[0]."; // the form's fields all sit under this prefix
+    const setText = (name, v) => { try { const f = form.getTextField(FP + name); f.setFontSize(0); f.setText(String(v ?? "")); } catch (e) {} };
+    const setCheck = (name, on) => { try { const f = form.getCheckBox(FP + name); on ? f.check() : f.uncheck(); } catch (e) {} };
+    setCheck("track[0]", (reg.sport || "Track & Field") === "Track & Field");
+    setCheck("cross_country[0]", reg.sport === "Cross Country");
+    setCheck("boy[0]", reg.gender === "Boy"); setCheck("girl[0]", reg.gender === "Girl");
+    setText("Age[0]", reg.age_on_dec31);
+    let divDrawn = false;
+    try { const d = form.getDropdown(FP + "Divisions[0]"); if (reg.division) { if (!d.getOptions().includes(reg.division)) d.addOptions([reg.division]); d.select(reg.division); } divDrawn = true; } catch (e) {}
+    setText("Players_Name[0]", athlete); setText("Date_of_Birth[0]", fmt(reg.dob)); setText("Age_2[0]", reg.age_on_dec31); setText("Date_Signed[0]", signed);
+    setText("Players_Address[0]", reg.address); setText("City__Zip[0]", `${reg.city || ""} ${reg.zip || ""}`.trim());
+    setText("Phone[0]", reg.phone); setText("Email[0]", reg.email);
+    setText("Cell_PhoneEmergency[0]", reg.emergency_phone); setText("Contact[0]", reg.emergency_name);
+    setText("Carrier[0]", reg.insurance_carrier || "none"); setText("Policy_Number[0]", reg.insurance_policy); setText("Employer[0]", reg.insurance_employer);
+    setText("I_declare_under_penalty_of_perjury_that_I_am_a_parent_or_guardian_of[0]", athlete);
+    setText("Name_Parent_or_Guardian_print[0]", parentName); setText("Date[0]", signed);
+    // Section III (member organization use): only what the registration already knows
+    if (reg.doctor_date) setText("MEDICAL_EXAM__SPORT__DATE[0]", `${reg.sport || "Track & Field"} ${fmt(reg.doctor_date)}`);
+    if (reg.ran_for_other_team && reg.prior_team) setText("PREVIOUS_CLUB[0]", reg.prior_team);
+    try { form.updateFieldAppearances(F); } catch (e) {}
+    form.flatten();
 
-    p.t("SECTION II. PARENTS/GUARDIANS ACKNOWLEDGEMENT, AUTHORIZATION AND CONSENT", M, 9, B); p.y -= 11;
-    p.para("RELEASE: I/WE the parents/guardians of the above named applicant, hereby give my/our approval to his/her participation in all conference and member organizations activities during the specified season. I/WE assume all risks and hazards incidental to such participation including transportation to and from the activities and I/WE do hereby waive, release, absolve, indemnify and agree to hold harmless the conference, member organization, organizers, sponsors, supervisors, participants, and persons transporting the applicant to and from activities, from any claim arising out of an injury to the applicant.", 7);
-    p.para("ATTEST: I/WE hereby acknowledge that the information provided in this application is factual and accurate, that I/WE understand that if applicant is accepted to member organization and is certified by the Conference the applicant must remain with the member organization until released, such release is subject to approval of the conference. I/WE have read the foregoing statement and understand them, and sign them voluntarily.", 7);
-    p.para("MEDIA RELEASED: I/WE hereby give permission to the Valley Youth Conference to reproduce, adapt, and display in any and all media my child's name, and/or photographs, silhouettes, or other reproductions of my child's physical image. I further give permission to the Valley Youth Conference to reproduce, adapt, and display record of the sporting performance of my child that it may obtain as it pertains to the Valley Youth Conference Sport that he or she is participating in, on or about the above dates. I hereby release the Valley Youth Conference from any and all claims and liabilities that I or my child by reason of the publication in any media whatsoever (including publication in or by any news media), use, adaptation display or such use of my child's name and/or likeness.", 7);
-    p.para("INSURANCE: I/WE hereby acknowledge and represent that I understand that the Conference, or member organizations upon approval of the Conference, maintains Group Accident Coverage for medical/hospital expenses, and that I have been advised and understand the limits and provisions of such coverage, including that such coverage may be considered as \"secondary\" coverage when there is any other valid and collectible coverage provided by applicant's parents/guardians separate insurance specified below if known. I/WE understand that any claim for medical service which arises out of an injury from a Conference or member organization activity must be reported to the member organization Coach/Manager of applicant's assigned team within ten days of the date of injury. Other Insurance is specified below; if none specify \"none\".", 7);
-    p.field("Carrier", reg.insurance_carrier, M, 170); p.field("Policy Number", reg.insurance_policy, M + 185, 170); p.field("Employer", reg.insurance_employer, M + 370, 160); p.y -= 28;
-    p.para("MEDICAL TREATMENT AUTHORIZATION: In the event of injury or illness to the above named applicant, I/WE hereby grant authority to a qualified physician to render such medical treatment to the applicant as said physician deems necessary under the circumstances upon presentation of this consent form.", 7);
-    p.t(`I declare under penalty of perjury that I am a parent or guardian of:  ${athlete}`, M, 8.5); p.y -= 20;
-    p.sig(pSig, M, 180, "Parent or Guardian Signature", reg.parent_signature_method); p.field("Name Parent or Guardian (print)", reg.parent_name, M + 200, 190); p.field("Date", signed, M + 405, 100); p.y -= 52;
-    p.t("SECTION III. MEMBER ORGANIZATION USE ONLY", M, 9, B); p.y -= 12;
-    p.t(`Organization: ${clubName}    Returning athlete: ${reg.is_returning ? "Yes" : "No"}${reg.ran_for_other_team ? `  (previously: ${reg.prior_team})` : ""}`, M, 8); p.y -= 12;
-    p.t(`Proof of birth on file: ${reg.status === "verified" ? "VERIFIED by " + (reg.verified_by || "coach") : "pending"}    DOB auto-check: ${reg.dob_check_status}`, M, 8);
+    const p1 = doc.getPage(0);
+    const fit = (s, maxW, size) => { s = String(s ?? ""); while (size > 4 && F.widthOfTextAtSize(s, size) > maxW) size -= 0.25; return size; };
+    // Blanks on the form that aren't fill-in fields: season year ("20__") and the member organization (athlete's team)
+    p1.drawText(String(reg.season_year || "").slice(-2), { x: 259, y: 600, size: 8, font: B });
+    p1.drawText(String(clubName || ""), { x: 432, y: 600, size: fit(clubName, 80, 8), font: B });
+    if (!divDrawn && reg.division) p1.drawText(reg.division, { x: 400, y: 578, size: 8, font: B });
+    // Signatures on the form's own signature lines
+    const sig = (img, x, y, w, h) => { const sc = Math.min(w / img.width, h / img.height); p1.drawImage(img, { x, y, width: img.width * sc, height: img.height * sc }); };
+    sig(aSig, 432, 343, 74, 18);   // Player: "Signature ____" on the Phone / Email line
+    sig(pSig, 80, 104, 150, 20);   // Parent or Guardian: "Signature ____"
+    const note = (s, x, y) => p1.drawText(s, { x, y, size: 4.5, font: F, color: rgb(.35, .35, .35) });
+    if (reg.athlete_signature_method === "typed") note("typed e-signature", 432, 338);
+    if (reg.parent_signature_method === "typed") note("typed e-signature", 80, 99);
+    note(`Signed electronically ${signed} through VYC online registration. Registration ID ${reg.id || ""}`, 300, 712);
 
+    let p;
     // ================= PAGE 2: CODE OF CONDUCT / MEDICAL =================
     p = pageTools(doc.addPage([W, H]));
     p.t("VALLEY YOUTH CONFERENCE, INC.", M, 13, B); p.y -= 15;

@@ -882,7 +882,7 @@ function render(){
     <div class="flex flex-wrap gap-2 mt-3">
       ${r.proof_path?`<button class="btn bg-gray-200" onclick="viewProof('${r.id}')">View proof of birth${window.proofTypeLabel(r)?' ('+esc(window.proofTypeLabel(r))+')':''}</button>`:'<span class="pill bg-green-100 text-green-800">Returning — verified from last season\'s record (no proof needed)</span>'}
       <button class="btn bg-gray-200" onclick="details('${r.id}')">Details</button>
-      <button class="btn bg-gray-200" onclick="makePdf('${r.id}')">Download forms PDF</button>
+      <button class="btn bg-gray-200" onclick="makePdf('${r.id}')">View player contract</button>
       ${arch?(r.status==='verified'&&rosterSport==='Track & Field'&&!backState(r)?`<button class="btn bg-blue-600 text-white" onclick="bringForward(['${r.id}'])">Bring to ${cur}</button>`:''):`
       ${r.status==='submitted'||r.status==='rejected'?(clearIn[r.id]&&clearIn[r.id].vus&&!['cleared','not_same'].includes(clearIn[r.id].status)
         ?`<span class="text-xs text-purple-800 font-semibold">Can't review yet — waiting for ${esc(TEAM_NAME(clearIn[r.id].from_team))} to approve the Valley United move</span>`
@@ -893,6 +893,7 @@ function render(){
       ${canDeleteAthlete(r)?`<button class="btn bg-red-600 text-white" onclick="deleteAthlete('${r.id}')">Delete athlete</button>`:''}`}
     </div>
     <div id="proof-${r.id}" class="mt-2"></div>
+    <div id="contract-${r.id}" class="mt-2"></div>
     <div id="det-${r.id}" class="mt-2 text-sm hidden"></div>
   </div>`; }).join('');
 }
@@ -1007,11 +1008,18 @@ async function runChecks(list,force){
 }
 $('runChecks').onclick=()=>runChecks(rows.filter(r=>r.dob_check_status==='pending'||r.dob_check_status==='error'));
 
+// Opens the signed Player Contract (the conference's official VYC Form 001, filled in) right on the roster, like the proof of birth.
 async function makePdf(id){
-  const r=rows.find(x=>x.id===id);
-  const bytes=await buildRegistrationPdf(r, CFG.CLUB_NAME);
-  const blob=new Blob([bytes],{type:'application/pdf'}); const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob); a.download=`VYC_${r.last_name}_${r.first_name}_${r.season_year}.pdf`; a.click();
+  const r=rows.find(x=>x.id===id); const box=$('contract-'+id);
+  if(box.innerHTML){ const f=box.querySelector('iframe'); if(f&&f.dataset.url) URL.revokeObjectURL(f.dataset.url); box.innerHTML=''; return; }
+  box.innerHTML='<p class="text-sm text-gray-500">Opening the player contract…</p>';
+  try{
+    const bytes=await buildRegistrationPdf(r, TEAM_NAME(r.team_code)||CFG.CLUB_NAME);
+    const url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
+    const name=`VYC_Player_Contract_${r.last_name}_${r.first_name}_${r.season_year}.pdf`.replace(/[^\w.-]+/g,'_');
+    box.innerHTML=`<iframe src="${url}" data-url="${url}" title="player contract" class="rounded border bg-white" style="width:100%;min-width:min(520px,80vw);height:80vh"></iframe>
+      <div class="text-xs mt-1"><a class="underline text-blue-700" href="${url}" download="${esc(name)}">Download</a> · <a class="underline text-blue-700" href="${url}" target="_blank" rel="noopener">Open in a new tab</a> (page 2 is the Code of Conduct and medical clearance)</div>`;
+  }catch(e){ box.innerHTML='<p class="text-sm text-red-700">Could not open the player contract: '+esc(e.message||String(e))+'</p>'; }
 }
 $('exportHytek').onclick=()=>{
   const f=$('filter').value; const shown=visibleRows();
