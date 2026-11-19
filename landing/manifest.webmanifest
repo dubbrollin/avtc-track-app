@@ -1,14 +1,14 @@
 {
   "id": "./",
-  "name": "Track Manager",
+  "name": "My Track Manager",
   "short_name": "Track Manager",
   "description": "Youth track & field club app: registration, team fees, meet entries, live results, team messages and volunteer sign-ups in one place.",
   "start_url": "./?source=app",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#F4F6F9",
-  "theme_color": "#001C3B",
+  "background_color": "#fbf7ef",
+  "theme_color": "#3b0a0c",
   "categories": ["sports", "education"],
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
