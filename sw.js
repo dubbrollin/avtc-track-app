@@ -26,7 +26,6 @@ self.addEventListener('fetch', function (e) {
   // On the server (vycregistration.avyouthathletics.org) app data, sign-in, uploads, live updates and functions share this address: never cache them.
   if (url.origin === self.location.origin && /^\/(rest|auth|storage|realtime|functions)\/v1\//.test(url.pathname)) return;
   // Same-site pages and files: network first (always checked with the server, so a new version is never hidden by the browser's cache), fall back to the saved copy, then to the Home page.
-  // Same-site pages and files: network first, fall back to the saved copy, then to the Home page.
   if (url.origin === self.location.origin) {
     e.respondWith(fetch(req, { cache: 'no-cache' }).then(function (res) {
       if (res && res.ok) { var copy = res.clone(); caches.open(VERSION).then(function (c) { c.put(req, copy); }); }
