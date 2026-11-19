@@ -76,15 +76,14 @@
     const [p2] = await doc.copyPages(coc, [0]); doc.addPage(p2);
     const put = (s, x, y, maxW, size = 9) => { if (s) p2.drawText(String(s), { x, y, size: fit(s, maxW, size), font: B }); };
     const sig2 = (img, x, y, w, h) => { const sc = Math.min(w / img.width, h / img.height); p2.drawImage(img, { x, y, width: img.width * sc, height: img.height * sc }); };
-    if (reg.medical_option === "conditions") {
-      put(athlete, 78, 210, 168);                                // My Child ____
-      put(reg.medical_conditions, 40, 197, 525, 8);              // conditions line
-      put(reg.doctor_name, 92, 156, 190);                        // DR. ____
-      put(fmt(reg.doctor_date), 327, 156, 185);                  // DATED: ____
-    } else {
-      put(athlete, 125, 245, 155);                               // PLAYER ____ (no known conditions)
-      put(clubName, 393, 245, 160);                              // CLUB ____
-    }
+    // The whole medical section is filled every time, so the form is complete: the player and club,
+    // the child's conditions ("None" when the parent listed none), and the physical exam's doctor and date (both required at sign-up).
+    put(athlete, 125, 245, 155);                                 // PLAYER ____
+    put(clubName, 393, 245, 160);                                // CLUB ____
+    put(athlete, 78, 210, 168);                                  // My Child ____
+    put(reg.medical_option === "conditions" && reg.medical_conditions ? reg.medical_conditions : "None", 40, 197, 525, 8); // conditions line
+    put(reg.doctor_name, 92, 156, 190);                          // DR. ____ (examining doctor)
+    put(fmt(reg.doctor_date), 327, 156, 185);                    // DATED: ____ (date of the physical)
     put(athlete, 38, 84, 144);                                   // Player Name (Please Print)
     put(parentName, 193, 84, 178);                               // Parent's Name (Please Print)
     put(reg.verified_by, 387, 84, 176);                          // Coach/Club Official's Name, once verified
