@@ -419,14 +419,14 @@ aLoad(true);
 }
 async function aLoad(reset){
 if(reset){ aRows=[]; aFrom=0; }
-let q=sb.from('registrations').select('id,first_name,last_name,gender,division,team_code,status,dob,age_on_dec31,contract_version,created_at,comp_number,season_year,is_late',{count:'exact'}).order('last_name').order('first_name').range(aFrom,aFrom+99);
+let q=sb.from('registrations').select('id,first_name,last_name,gender,division,team_code,status,dob,age_on_dec31,contract_version,created_at,comp_number,season_year,is_late',{count:'exact'}).eq('season_year',SEASON).order('last_name').order('first_name').range(aFrom,aFrom+99); // this season only: earlier seasons stay in the database for the returning-athlete check
 const t=SITE?$('aTeam').value:MYTEAM, s=$('aStat').value, d=$('aDiv').value, qq=$('aQ').value.trim();
 if(t) q=q.eq('team_code',t); if(s) q=q.eq('status',s); if(d) q=q.eq('division',d);
 if(qq) q=q.or(`last_name.ilike.%${qq.replace(/[%,()]/g,'')}%,first_name.ilike.%${qq.replace(/[%,()]/g,'')}%`);
 const {data,error,count}=await q; if(error){ toast(error.message,true); return; }
 aRows=aRows.concat(data||[]); aFrom=aRows.length; aTotal=count||0;
-$('aInfo').textContent=`Showing ${aRows.length} of ${aTotal} athletes`; $('aMore').classList.toggle('hide',aRows.length>=aTotal);
-$('aBody').innerHTML=aRows.map(r=>`<tr data-id="${r.id}"><td class="font-mono">${r.comp_number??''}<span class="text-xs text-gray-400"> ${r.season_year??''}</span></td><td><b>${esc(r.last_name)}</b>, ${esc(r.first_name)} <span class="text-xs text-gray-500">${r.gender==='Girl'?'F':'M'}${r.dob?' · '+esc(r.dob):''}</span></td><td>${esc(teamName(r.team_code))}</td><td>${esc(r.division||'')}</td>
+$('aInfo').textContent=`${SEASON} season — showing ${aRows.length} of ${aTotal} athletes`; $('aMore').classList.toggle('hide',aRows.length>=aTotal);
+$('aBody').innerHTML=aRows.map(r=>`<tr data-id="${r.id}"><td class="font-mono">${r.comp_number??''}</td><td><b>${esc(r.last_name)}</b>, ${esc(r.first_name)} <span class="text-xs text-gray-500">${r.gender==='Girl'?'F':'M'}${r.dob?' · '+esc(r.dob):''}</span></td><td>${esc(teamName(r.team_code))}</td><td>${esc(r.division||'')}</td>
 <td>${statusPill(r.status)}${r.is_late?' <span class="pill bad">Late</span>':''}</td>
 <td class="whitespace-nowrap"><button class="btn lite" data-act="edit">${SITE&&!isPresFor(r.team_code)?'Request change':isPresFor(r.team_code)?'Edit':'Review'}</button> ${canDelete(r)?'<button class="btn red" data-act="del">Delete</button>':''}</td></tr>`).join('')||'<tr><td colspan="6" class="p-3 text-gray-500">No athletes match.</td></tr>';
 }
