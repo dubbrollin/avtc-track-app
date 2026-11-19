@@ -1,7 +1,7 @@
 // Service worker for the installable app. Pages and app files are fetched fresh whenever there is a connection
 // (so every push shows up right away) and the last good copy is kept for when there isn't.
 // Supabase (all app data, sign-in, uploads) is never cached — it always goes straight to the network.
-var VERSION = 'vyc-app-79';
+var VERSION = 'vyc-app-80';
 var SHELL = ['./', 'home.html', 'index.html', 'parent.html', 'coach.html', 'entries.html', 'results.html', 'labels.html', 'labels.js', 'schedule.html', 'team.html', 'vus.html', 'howto.html', 'faq.html', 'team-hub.js',
   'theme.css', 'theme.js', 'config.js', 'shared.js', 'events.js', 'logo.png', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/apple-touch-icon.png'];
@@ -25,10 +25,10 @@ self.addEventListener('fetch', function (e) {
   var url = new URL(req.url);
   // On the server (vycregistration.avyouthathletics.org) app data, sign-in, uploads, live updates and functions share this address: never cache them.
   if (url.origin === self.location.origin && /^\/(rest|auth|storage|realtime|functions)\/v1\//.test(url.pathname)) return;
-
+  // Same-site pages and files: network first (always checked with the server, so a new version is never hidden by the browser's cache), fall back to the saved copy, then to the Home page.
   // Same-site pages and files: network first, fall back to the saved copy, then to the Home page.
   if (url.origin === self.location.origin) {
-    e.respondWith(fetch(req).then(function (res) {
+    e.respondWith(fetch(req, { cache: 'no-cache' }).then(function (res) {
       if (res && res.ok) { var copy = res.clone(); caches.open(VERSION).then(function (c) { c.put(req, copy); }); }
       return res;
     }).catch(function () {
