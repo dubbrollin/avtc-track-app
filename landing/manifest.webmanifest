@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "Track Club App",
-  "short_name": "Track Club",
+  "name": "Track Manager",
+  "short_name": "Track Manager",
   "description": "Youth track & field club app: registration, team fees, meet entries, live results, team messages and volunteer sign-ups in one place.",
   "start_url": "./?source=app",
   "scope": "./",
