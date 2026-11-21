@@ -82,9 +82,6 @@ p{margin:0 0 1rem}
 .hero h1 em{font-style:normal;color:#7FB2F0}
 .lead{font-size:1.15rem;color:#D3E1F4;max-width:36em;margin:1.2rem 0 1.6rem}
 .ctas{display:flex;flex-wrap:wrap;gap:.75rem}
-.used-by{display:flex;align-items:center;gap:.75rem;margin-top:1.8rem;color:#B9CBE3;font-size:.92rem}
-.used-by img{width:44px;height:44px;border-radius:50%;background:#fff;flex:none}
-.used-by b{color:#fff;font-weight:600}
 
 /* store / install buttons */
 .stores{display:flex;flex-wrap:wrap;gap:.6rem;margin-top:1.6rem}
@@ -206,11 +203,8 @@ p{margin:0 0 1rem}
 .who-card:nth-child(2){border-color:var(--clay)}.who-card:nth-child(3){border-color:var(--navy)}.who-card:nth-child(4){border-color:var(--ok)}
 .who-card h3{margin:0 0 8px;font-size:1.15rem}
 .who-card p{color:var(--muted);margin:0;font-size:.95rem}
-.proof{margin-top:26px;display:flex;align-items:center;gap:18px;background:var(--soft);border:1px solid var(--line);border-radius:var(--r);padding:18px 22px}
-.proof img{width:64px;height:64px;border-radius:50%;flex:none;background:#fff}
-.proof p{margin:0;color:var(--ink)}
 @media (max-width:1000px){.who-grid{grid-template-columns:repeat(2,1fr)}}
-@media (max-width:600px){.who-grid{grid-template-columns:1fr}.proof{flex-direction:column;text-align:center}}
+@media (max-width:600px){.who-grid{grid-template-columns:1fr}}
 
 /* faq */
 .q{background:#fff;border:1px solid var(--line);border-radius:12px;margin:0 0 10px}
@@ -288,7 +282,6 @@ footer a{color:#C9D8EC}
         <a class="btn btn-ghost" href="#what">See what it does</a>
       </div>
       <div class="store-slot"></div>
-      <div class="used-by"><img src="vyc-logo.png" alt="Valley Youth Conference logo"><span>Built for and used every season by the <b>Valley Youth Conference</b>, a league of 17 youth track clubs in Southern California.</span></div>
     </div>
 
     <div class="phone" aria-hidden="true">
@@ -494,8 +487,8 @@ footer a{color:#C9D8EC}
 <section class="sec alt" id="features">
   <div class="wrap">
     <p class="kicker">Main features</p>
-    <h2 class="h2">Built from a real season, not a sales pitch</h2>
-    <p class="sub">Every feature here is already in use by clubs running real meets.</p>
+    <h2 class="h2">Everything a track season needs</h2>
+    <p class="sub">Registration, meets, results and team communication in one app.</p>
     <div class="feats">
       <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 15l2 2 4-4"/></svg></div><div><h3>Online registration</h3><p>Proof of birth, insurance and physical details, emergency contacts, and signed agreements, code of conduct and consent forms.</p></div></div>
       <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></div><div><h3>Returning athletes</h3><p>Type a last name and reuse last season's details. Returning athletes on the same team skip proof of birth.</p></div></div>
@@ -545,10 +538,6 @@ footer a{color:#C9D8EC}
       <div class="who-card"><h3>Postseason teams</h3><p>All-star or travel teams that pick athletes from the regular season using qualifying standards and season marks.</p></div>
       <div class="who-card"><h3>Cross country programs</h3><p>Fall cross country seasons that run alongside, or instead of, a spring track season.</p></div>
     </div>
-    <div class="proof">
-      <img src="vyc-logo.png" alt="Valley Youth Conference logo">
-      <p><b>Built for and used by the Valley Youth Conference.</b> The app runs registration, certification, meets, results and the postseason team for the conference's 17 youth track clubs. The version for other clubs has the same features, with your club's own name, colours and logo.</p>
-    </div>
   </div>
 </section>
 
@@ -562,7 +551,7 @@ footer a{color:#C9D8EC}
     <details class="q"><summary>Do families have to download anything?</summary><p>No. It works in any phone or computer browser. Families can also add it to their home screen so it opens like an app. App Store and Google Play versions are on the way.</p></details>
     <details class="q"><summary>Does it work with Hy-Tek Meet Manager and Team Manager?</summary><p>Yes. Meet entries download in Hy-Tek format, results come back from Meet Manager live or from a file, meet backups upload in one step, and Team Manager rosters can be imported.</p></details>
     <details class="q"><summary>How do card payments work?</summary><p>Each team connects its own Stripe account, so card payments and payment plans go straight to the team's bank. Stripe charges its standard card fee. Teams can also take Zelle, Cash App, Venmo, check or cash and mark them received.</p></details>
-    <details class="q"><summary>Can it run a whole league, not just one club?</summary><p>Yes. That's how it's used today: league officials certify athletes, approve transfers, set up the schedule and event limits, track league fees, and keep records and conference standings across every club.</p></details>
+    <details class="q"><summary>Can it run a whole league, not just one club?</summary><p>Yes. League officials can certify athletes, approve transfers, set up the schedule and event limits, track league fees, and keep records and conference standings across every club.</p></details>
     <details class="q"><summary>Who can see a child's private details?</summary><p>Access depends on the role. Team admins can see full registrations, including documents. Other coaches see names, divisions and status only, and division coaches see just their own division. Parents see only their own children.</p></details>
     <details class="q"><summary>Can we move our athletes over from another system?</summary><p>Yes. Upload a Team Manager roster or a CSV or Excel file. Each family gets a 6-letter code, connects with it, and finishes a short form to complete their registration.</p></details>
   </div>

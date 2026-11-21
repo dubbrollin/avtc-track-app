@@ -1,6 +1,6 @@
 // Service worker for the product page, so browsers offer "Install app".
 // Always fetches fresh from the server; keeps the last good copy for when there's no connection.
-var VERSION = 'track-landing-1';
+var VERSION = 'track-landing-2';
 self.addEventListener('install', function (e) { self.skipWaiting(); });
 self.addEventListener('activate', function (e) {
   e.waitUntil(caches.keys().then(function (keys) {
