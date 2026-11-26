@@ -281,7 +281,7 @@ declare r record; evid uuid; who text := 'staging:' || coalesce(auth.jwt()->>'em
 begin
   -- who should be entered in this event (individual athletes, and relay runners with their team letter + leg)
   create temp table if not exists _want (reg uuid, relay text, leg int, code text, name text, is_relay boolean, seed text) on commit drop;
-  delete from _want;
+  delete from _want where true;   -- (live database requires a WHERE on every DELETE)
   insert into _want
     select l.registration_id, null, null, h.event_code, h.event_name, false, l.seed_mark
       from public.stage_heats h join public.stage_lanes l on l.heat_id = h.id
@@ -333,7 +333,7 @@ begin
 
   -- keep "already in Meet Manager" for athletes/relays who stay in this heat; tell the laptop to scratch any that leave
   create temp table if not exists _old (lane int, registration_id uuid, relay_letter text, team_code text, runners uuid[], exported_at timestamptz) on commit drop;
-  delete from _old;
+  delete from _old where true;
   insert into _old select l.lane, l.registration_id, l.relay_letter, l.team_code, l.runners, l.exported_at from public.stage_lanes l where l.heat_id = hid;
   delete from public.stage_lanes where heat_id = hid;
   for x in select * from jsonb_array_elements(coalesce(p->'lanes','[]'::jsonb)) loop
