@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="theme.css?v=b3">
 <script src="theme.js?v=b3"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="config.js"></script><script src="shared.js"></script><script src="staging.js?v=1"></script>
+<script src="config.js"></script><script src="shared.js"></script><script src="staging.js?v=2"></script>
 <style>
   .btn{padding:.5rem .9rem;border-radius:.5rem;font-weight:600}
   .btn-sm{padding:.3rem .6rem;border-radius:.4rem;font-weight:600;font-size:.85rem}
@@ -580,11 +580,55 @@ async function renderMM(){
     ${scr.length?`<div class="card mb-2 border-2 border-red-400"><b class="text-red-700">Scratch in Meet Manager (${scr.length})</b>${scr.map(s=>`<div class="flex items-center gap-2 border-t py-1 text-sm"><span>${esc(s.event_name)} — <b>${esc(s.who)}</b> (${esc(s.team_code||'')})</span><button class="btn-sm border bg-white ml-auto" data-scr="${s.id}">Done</button></div>`).join('')}</div>`:''}
     <div class="card mb-2"><div class="flex items-center gap-2 flex-wrap"><b>Heat sheet — sent heats (${sent.length})</b><button class="btn-sm border bg-white ml-auto" id="dlAll">Download every sent heat again</button></div>
       ${sent.length?mmSheet(sent):'<p class="text-sm text-gray-500 mt-1">No heats sent yet.</p>'}</div>
-    <div class="card"><b>Field event marks (${fieldDone.length})</b><p class="text-xs text-gray-500">Marks in Meet Manager's English format (feet-inches; high jump height + O/X/P per height) — enter them on the Run screen for each flight. The official results still come from Meet Manager after the meet.</p>${mmField()}</div>`;
+    ${flCard()}
+    <div class="card"><b>Field event marks (${fieldDone.length})</b><p class="text-xs text-gray-500">Marks in Meet Manager's English format (feet-inches; high jump height + O/X/P per height). With the FieldLynx folder connected above, Meet Manager takes them with F3; otherwise type them on the Run screen. The official results still come from Meet Manager after the meet.</p>${mmField()}</div>`;
   $('dlNew')?.addEventListener('click',async()=>{ try{ const rows=await rpc('staging_export',{p_meet:MEET_ID,p_mark:true}); if(!rows.length) return flash('Nothing new.'); download(rows,'new'); await loadAll(); renderMM(); }catch(e){ flash(e.message,true); } });
   $('dlAll').onclick=()=>{ const rows=[]; sent.forEach(h=>h.lanes.forEach(l=>rows.push(fullRow(h,l)))); if(!rows.length) return flash('No heats sent yet.'); download(rows,'all-sent'); };
   document.querySelectorAll('[data-scr]').forEach(b=>b.onclick=async()=>{ try{ await rpc('staging_scratch_done',{p_id:b.dataset.scr}); renderMM(); }catch(e){ flash(e.message,true); } });
+  $('flConnect')?.addEventListener('click',flPick);
+  $('flNow')?.addEventListener('click',async()=>{ await flWrite(true); renderMM(); });
+  $('flStop')?.addEventListener('click',()=>{ flDir=null; flLast={}; flStatus=''; renderMM(); });
   mmTimer=setInterval(async()=>{ if(mode!=='mm'||document.hidden) return; try{ const p=await rpc('staging_export',{p_meet:MEET_ID,p_mark:false}); if(p.length!==pending.length){ await loadAll(); renderMM(); } }catch(e){} },15000);
+}
+// ---------- Field marks -> Meet Manager (FieldLynx File Sharing) ----------
+// Chrome/Edge on the Meet Manager laptop: connect the folder Meet Manager uses for FieldLynx; every 15 seconds the page writes
+// one <event#>-1-1.lff per field event that has marks (only when it changed). In Meet Manager's Run screen: pick the event, F3.
+let flDir=null, flLast={}, flStatus='', flFiles=[];
+async function flPick(){
+  if(!window.showDirectoryPicker) return flash('Open this page in Chrome or Edge on the Meet Manager laptop to connect the folder.',true);
+  try{ flDir=await window.showDirectoryPicker({id:'vyc-fieldlynx', mode:'readwrite'}); }catch(e){ return; }
+  flLast={}; await flWrite(true); renderMM();
+}
+async function flWrite(force){
+  if(!flDir) return;
+  try{ const f=await rpc('staging_field',{p_meet:MEET_ID}); if(Array.isArray(f)) fieldRows=f; }catch(e){}
+  flFiles=S.fieldLynxFiles(fieldRows, athById, teamName);
+  let n=0;
+  try{
+    for(const x of flFiles){
+      if(!force&&flLast[x.name]===x.text) continue;
+      const fh=await flDir.getFileHandle(x.name,{create:true}); const w=await fh.createWritable(); await w.write(x.text); await w.close();
+      flLast[x.name]=x.text; n++;
+    }
+    flStatus=`Last checked ${new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit',second:'2-digit'})}${n?` · ${n} event${n>1?'s':''} updated — press F3 on ${n>1?'them':'it'} in Meet Manager`:' · no changes'}`;
+  }catch(e){ flStatus='Could not write to the folder: '+e.message; }
+  const el=$('flStatus'); if(el) el.textContent=flStatus;
+}
+setInterval(()=>{ if(flDir) flWrite(false); },15000);
+function flCard(){
+  if(!flDir) return `<div class="card mb-2"><b>Send field marks to Meet Manager</b>
+    <p class="text-sm text-gray-600 mt-1">Marks typed at the field events go straight into Meet Manager — no retyping. On the Meet Manager laptop (Chrome or Edge), connect the folder Meet Manager uses for FieldLynx. This page then keeps a results file there for every field event; in Meet Manager's Run screen pick the event and press <b>F3 (Get Marks)</b>. Press F3 again any time to pick up new marks.</p>
+    <button class="btn bg-blue-600 text-white mt-2" id="flConnect">Connect Meet Manager's FieldLynx folder</button>
+    <details class="mt-2 text-sm"><summary class="cursor-pointer font-semibold">One-time Meet Manager setup</summary><ol class="list-decimal ml-5 mt-1 space-y-1">
+      <li>Make a folder, e.g. <b>C:\FieldLynx</b>.</li>
+      <li>Meet Manager: <b>Set-up › Field Event Interface</b> → <b>FieldLynx File Sharing</b>.</li>
+      <li><b>Run › Interfaces › Field Event Scoring › Update Start Lists</b> → <b>Change Data Location</b> → that folder → tick <b>Activate update of start lists</b> → OK.</li>
+      <li>Every field athlete needs their competition number in Meet Manager (the app sends it with each entry).</li></ol></details></div>`;
+  return `<div class="card mb-2 border-2 border-green-600"><div class="flex items-center gap-2 flex-wrap"><b>Field marks → Meet Manager: connected</b> <span class="text-sm text-gray-600">folder: ${esc(flDir.name)}</span>
+      <span class="ml-auto flex gap-2"><button class="btn-sm border bg-white" id="flNow">Write now</button><button class="btn-sm border bg-white" id="flStop">Disconnect</button></span></div>
+    <div class="text-sm text-green-800 mt-1" id="flStatus">${esc(flStatus)}</div>
+    <div class="text-xs text-gray-500">Keep this tab open. It writes every 15 seconds when marks change. In Meet Manager's Run screen: pick the field event, press <b>F3</b>.</div>
+    ${flFiles.length?`<table class="st mt-2"><thead><tr><th>Event</th><th>File</th><th>Athletes</th><th></th></tr></thead><tbody>${flFiles.map(x=>`<tr><td>Ev ${x.event} · ${esc(x.label)}</td><td class="font-mono text-xs">${esc(x.name)}</td><td>${x.count}</td><td>${x.skipped.length?`<span class="err">No competition # — not sent: ${esc(x.skipped.join(', '))}</span>`:''}</td></tr>`).join('')}</tbody></table>`:'<p class="text-sm text-gray-500 mt-1">No field marks yet.</p>'}</div>`;
 }
 function fullRow(h,l){ const a=athById[l.registration_id];
   return {is_relay:h.is_relay, event_code:h.event_code, seed_mark:l.seed_mark, team_code:l.team_code, relay_letter:l.relay_letter,

@@ -46,6 +46,26 @@ Meet Manager's import file carries entries and seed times but **not lanes**. Mee
    - The red list shows anyone taken out after Meet Manager already had them. Scratch them there, then click Done.
    - Field marks are listed in Meet Manager's format, ready to type on the Run screen.
 
+## Field marks into Meet Manager automatically (FieldLynx)
+Your Meet Manager license includes the **Field Event Interface** (checked Nov 26, 2026: Gold, with Photo Finish, Field Event, Button Finish and Multi-User).
+
+**One-time setup on the Meet Manager laptop:**
+1. Make a folder, e.g. `C:\FieldLynx`.
+2. **Set-up › Field Event Interface** → **FieldLynx File Sharing**.
+3. **Run › Interfaces › Field Event Scoring › Update Start Lists** → **Change Data Location** → that folder → tick **Activate update of start lists** → OK.
+
+**On meet day:**
+1. On the laptop, open the staging page's **Meet Manager table** tab in Chrome or Edge. Click **Connect Meet Manager's FieldLynx folder** and pick the same folder. Keep the tab open.
+2. Every 15 seconds the page writes one results file per field event that has marks, named `<event#>-1-1.lff`, and only rewrites a file when its marks change.
+3. In Meet Manager's Run screen, pick the field event and press **F3 (Get Marks)**. The marks, every attempt, the bests and the places all come in. Press F3 again any time to pick up new marks.
+
+Tested in Meet Manager 6.0 on a copy of VYC-26-28:
+- Long jump: attempts, FOUL, PASS, best and places.
+- A changed mark, re-sent and picked up.
+- High jump: heights with O/XO/XXX, including a new bar height.
+
+Athletes need their competition number in Meet Manager. Any athlete without one is listed on the panel and not sent.
+
 ## Practice meets
 A meet marked **practice** (`meets.is_practice`) is for trying the page out. Its lists use **last season's** certified athletes and their last-season best marks. It's hidden from parents, coaches, the schedule and results; the fee check is skipped, but event limits still apply. The staging page shows a PRACTICE label.
 

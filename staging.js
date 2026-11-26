@@ -86,6 +86,43 @@ window.STAGE.emptyLane = function(heat, track){
   for(const l of CHART[heat.lanes_total][track.chart]) if(!used.has(l)) return l; return null;
 };
 
+// ---------- Field marks to Meet Manager: FieldLynx result files (.lff) ----------
+// Meet Manager's Field Event Interface ("FieldLynx File Sharing") reads <event#>-1-<flight>.lff from its shared folder when the
+// operator presses F3 (Get Marks). Format from the FieldLynx release notes; verified by import into Meet Manager 6.0 on
+// 2026-11-26: English marks 12-04.25, foul F, pass -, blank wind; high jump header SH,<heights>,EH and O/X/P per height.
+// Lines end CRLF (LF-only files are rejected). Athlete ID = competition number (it must match Meet Manager's).
+// rows: field_marks rows; ath: id -> athlete; returns [{name, text, event, label, skipped:[names without a comp #]}]
+window.STAGE.fieldLynxFiles = function(rows, ath, teamName){
+  const out=[], c=s=>String(s??'').replace(/[,\r\n]/g,' ').trim();
+  for(const ev of FIELD){
+    const groups={};
+    rows.filter(r=>r.event_code===ev.code&&r.checked_in&&(r.attempts||[]).length).forEach(r=>(groups[r.division+'|'+r.gender]??=[]).push(r));
+    for(const [k,list] of Object.entries(groups)){
+      const [division,gender]=k.split('|'), evno=ev.base+2*DIVS.indexOf(division)+(gender==='Boy'?1:0);
+      if(DIVS.indexOf(division)<0) continue;
+      const label=`${gender==='Girl'?'Girls':'Boys'} ${ev.name} ${DIVSHORT[division]}`;
+      const skipped=[]; const ok=list.filter(r=>{ const a=ath[r.registration_id]; if(!a||a.comp_number==null){ skipped.push(a?a.first_name+' '+a.last_name:'?'); return false; } return true; });
+      // places: best mark first; ties share a place; no mark = no place
+      const ranked=[...ok].sort((a,b)=>(b.best_value??-1)-(a.best_value??-1)); const place={}; let last=null, p=0;
+      ranked.forEach((r,i)=>{ if(r.best_value==null){ place[r.registration_id]=''; return; } if(r.best_value!==last){ p=i+1; last=r.best_value; } place[r.registration_id]=p; });
+      const lines=[];
+      if(ev.hj){
+        const hs=[...new Set(ok.flatMap(r=>(r.attempts||[]).map(x=>+x.h)))].sort((a,b)=>a-b);
+        lines.push([evno,1,1,label,'English','SH',...hs.map(feetLabel),'EH'].join(','));
+        ok.forEach((r,i)=>{ const a=ath[r.registration_id], at={}; (r.attempts||[]).forEach(x=>at[+x.h]=String(x.r||'').toUpperCase());
+          lines.push([place[r.registration_id],a.comp_number,i+1,place[r.registration_id],c(a.last_name),c(a.first_name),c(teamName(a.team_code)),...hs.map(h=>at[h]||'')].join(',')); });
+      } else {
+        lines.push([evno,1,1,label,'English'].join(','));
+        ok.forEach((r,i)=>{ const a=ath[r.registration_id];
+          const marks=(r.attempts||[]).flatMap(m=>{ const v=String(m||'').toUpperCase(); return [v==='P'?'-':v==='F'?'F':v, '']; });
+          lines.push([place[r.registration_id],a.comp_number,i+1,place[r.registration_id],c(a.last_name),c(a.first_name),c(teamName(a.team_code)),...marks].join(',')); });
+      }
+      out.push({name:`${evno}-1-1.lff`, text:lines.join('\r\n')+'\r\n', event:evno, label, count:ok.length, skipped});
+    }
+  }
+  return out.sort((a,b)=>a.event-b.event);
+};
+
 // ---------- Meet Manager file (Hy-Tek semicolon entries; same format meets-admin.html already imports) ----------
 window.STAGE.hytekFile = function(rows){
   const c=(s,n)=>String(s??'').replace(/[;\r\n]/g,' ').trim().slice(0,n);
