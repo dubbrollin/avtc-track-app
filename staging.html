@@ -138,7 +138,7 @@ async function listMeets(){
   const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
   if(!rows.length){ $('meetList').innerHTML='<p class="text-sm text-gray-500">No meets on the schedule yet.</p>'; return; }
   const up=rows.filter(m=>m.meet_date>=today).sort((a,b)=>a.meet_date.localeCompare(b.meet_date)), past=rows.filter(m=>m.meet_date<today);
-  const li=m=>`<a class="block border rounded-lg p-2 hover:bg-blue-50 ${m.meet_date===today?'border-blue-600 border-2':''}" href="staging.html?meet=${m.id}"><b>${esc(m.name)}</b> <span class="text-sm text-gray-600">${esc(m.meet_date)}${m.venue?' · '+esc(m.venue):''} · ${esc(window.meetTeamsLabel(m))}</span>${m.meet_date===today?' <span class="pill bg-blue-600 text-white">Today</span>':''}</a>`;
+  const li=m=>`<a class="block border rounded-lg p-2 hover:bg-blue-50 ${m.meet_date===today?'border-blue-600 border-2':''}" href="staging.html?meet=${m.id}"><b>${esc(m.name)}</b> <span class="text-sm text-gray-600">${esc(m.meet_date)}${m.venue?' · '+esc(m.venue):''} · ${esc(window.meetTeamsLabel(m))}</span>${m.meet_date===today?' <span class="pill bg-blue-600 text-white">Today</span>':''}${m.is_practice?' <span class="pill bg-amber-400 text-amber-950">PRACTICE</span>':''}</a>`;
   $('meetList').innerHTML=(up.length?'<div class="text-xs font-bold text-gray-500 uppercase">Coming up</div>'+up.map(li).join(''):'')+(past.length?'<div class="text-xs font-bold text-gray-500 uppercase mt-3">Earlier</div>'+past.slice(0,20).map(li).join(''):'');
 }
 
@@ -161,7 +161,8 @@ async function openMeet(id){
   await loadAll();
   $('meetView').classList.remove('hidden');
   const m=board.meet; $('meetTitle').textContent=m.name;
-  $('meetSub').textContent=`${m.meet_date}${m.venue?' · '+m.venue:''} · ${window.meetTeamsLabel(m)} · ${board.athletes.length} certified athletes`;
+  $('meetSub').innerHTML=esc(`${m.meet_date}${m.venue?' · '+m.venue:''} · ${window.meetTeamsLabel(m)} · ${board.athletes.length} certified athletes`)
+    +(m.is_practice?`<div class="mt-1 rounded-lg border-2 border-amber-400 bg-amber-50 p-2 text-sm"><b>Practice meet</b> — not a real meet. It uses <b>${esc(m.athlete_season)}</b> athletes and their ${esc(m.athlete_season)} best marks so you can try everything. Parents and coaches don't see it.</div>`:'');
   document.title='Staging · '+m.name;
   paintLanes(); setMode(mode);
 }

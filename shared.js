@@ -332,7 +332,7 @@ window.mountTeamSchedule = async function(el, opts){
   if(!teams.length){ el.innerHTML='<p class="text-sm text-gray-500">Your team\'s meets will show here once you\'re on a team.</p>'; return; }
   el.innerHTML='<p class="text-sm text-gray-500">Loading…</p>';
   const season=+(await window.currentSeason());
-  const {data,error}=await sb.from('meets').select('id,name,meet_date,location,venue,week_no,host_team_code,team_codes,is_championship,is_invitational,season_year').eq('season_year',season).order('meet_date').order('name');
+  const {data,error}=await sb.from('meets').select('id,name,meet_date,location,venue,week_no,host_team_code,team_codes,is_championship,is_invitational,season_year').eq('season_year',season).eq('is_practice',false).order('meet_date').order('name');
   if(error){ el.innerHTML='<p class="text-sm text-red-700">Couldn\'t load the schedule: '+esc(error.message)+'</p>'; return; }
   // A team's meets: ones that list the team, plus league-wide meets with no team list (IEC, invitationals). A week's meet with no teams picked yet isn't anyone's.
   const unassigned=m=>m.week_no&&!m.host_team_code&&!(m.team_codes||[]).length&&!m.is_invitational&&!m.is_championship;

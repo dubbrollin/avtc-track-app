@@ -128,7 +128,7 @@ const T=window.MEET_DAY||{}; $('tField').textContent=T.field||''; $('tRace').tex
 (async()=>{
   const season=+(await window.currentSeason());
   const [m,k,n]=await Promise.all([
-    sb.from('meets').select(MEET_COLS).order('meet_date').order('week_no').order('name'),
+    sb.from('meets').select(MEET_COLS).eq('is_practice',false).order('meet_date').order('week_no').order('name'),
     sb.from('season_dates').select('season_year,event_date,label,note').order('event_date'),
     sb.from('app_settings').select('key,value').like('key','schedule_notice_%')]); // e.g. a "sample schedule" banner, set per season
   (n.data||[]).forEach(r=>{ if(r.value) notices[r.key.replace('schedule_notice_','')]=r.value; });

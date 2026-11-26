@@ -160,7 +160,7 @@ async function loadMine(){
   }catch(e){ console.warn(e); }
 }
 (async()=>{
-  const [{data:m,error}]=await Promise.all([sb.from('meets').select(MEET_COLS).order('meet_date',{ascending:false}), loadMine()]);
+  const [{data:m,error}]=await Promise.all([sb.from('meets').select(MEET_COLS).eq('is_practice',false).order('meet_date',{ascending:false}), loadMine()]);
   if(error) console.error(error);
   meets=m||[];
   if(MEET_ID) return openMeetPage(MEET_ID);
