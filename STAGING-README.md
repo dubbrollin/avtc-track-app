@@ -46,6 +46,11 @@ Meet Manager's import file carries entries and seed times but **not lanes**. Mee
    - The red list shows anyone taken out after Meet Manager already had them. Scratch them there, then click Done.
    - Field marks are listed in Meet Manager's format, ready to type on the Run screen.
 
+## Practice meets
+A meet marked **practice** (`meets.is_practice`) is for trying the page out. Its lists use **last season's** certified athletes and their last-season best marks. It's hidden from parents, coaches, the schedule and results; the fee check is skipped, but event limits still apply. The staging page shows a PRACTICE label.
+
+Nov 26, 2026: **"PRACTICE - Meet Day Staging test (not a real meet)"** was created for Riley with SCTC, WVE, LRR, SFR and FP. Those are the 5 teams with the most certified 2026 athletes who have results: 1,176 athletes in all. Delete it when you're done testing; its entries go with it.
+
 ## If something breaks on meet day
 Meet Manager still has every heat it has imported. Fall back to the paper heat sheets and field event sheets from valleyconference.org. With no connection, the page shows the last list it loaded on that device, but ticking and sending need a connection (use a phone hotspot).
 
