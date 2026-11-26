@@ -44,6 +44,8 @@
   .sticky-top{position:sticky;top:0;z-index:20}
   .warn{color:#b45309;font-size:.8rem}
   .err{color:#b91c1c;font-size:.8rem}
+  .seedbar{position:sticky;bottom:12px;z-index:15;margin-top:10px}
+  .seedbar .btn{width:100%;font-size:1.05rem;padding:.8rem 1rem;box-shadow:0 6px 18px rgba(15,23,42,.25)}
 </style>
 </head>
 <body class="text-gray-900"><header class="topnav"><div class="topnav-inner">
@@ -259,6 +261,7 @@ function indivBody(r){
   return `<div class="flex flex-wrap gap-2 mb-2"><button class="btn bg-blue-600 text-white" data-seed>Seed heats from ticked athletes</button>
       <button class="btn-sm border bg-white" data-allhere>Tick all</button><button class="btn-sm border bg-white" data-nonehere>Clear ticks</button></div>
     <div class="overflow-x-auto"><table class="st"><thead><tr><th>Here</th><th>Athlete</th><th>Comp #</th><th>Team</th><th>Season best</th><th>Events</th><th>Placed</th></tr></thead><tbody>${body||'<tr><td colspan="7" class="text-gray-500">No certified athletes on this meet\'s teams in this division.</td></tr>'}</tbody></table></div>
+    ${seedBarHtml(r)}
     <div data-heats>${heatsHtml(r)}</div>`;
 }
 function relayBody(r){
@@ -271,7 +274,7 @@ function relayBody(r){
   return `<p class="text-sm text-gray-600 mb-2">Add each relay that is in the staging area. All 4 runners are required (each counts as one of their events). Seed: the team's <b>A</b> relay gets its best relay time this season, <b>B</b> the second best; a <b>C</b> relay (or any relay without a time) can have a time typed in or run with no time.</p>
     <div class="grid gap-2 md:grid-cols-2">${teams.map(tc=>relayForm(r,tc)).join('')||'<p class="text-sm text-gray-500">No certified athletes on this meet\'s teams in this division.</p>'}</div>
     <table class="st mt-3"><thead><tr><th>Relay</th><th>Runners (legs 1-4)</th><th>Seed</th><th></th></tr></thead><tbody>${list||'<tr><td colspan="4" class="text-gray-500">No relays added yet.</td></tr>'}</tbody></table>
-    <div class="mt-2"><button class="btn bg-blue-600 text-white" data-seed>Seed heats from these relays</button></div>
+    ${seedBarHtml(r)}
     <div data-heats>${heatsHtml(r)}</div>`;
 }
 function relaySeeds(r,tc){
@@ -305,11 +308,21 @@ function heatsHtml(r){
       <table class="st"><thead><tr><th>${wat?'Pos':'Lane'}</th><th>${r.t.relay?'Relay':'Athlete'}</th><th>Team</th><th>Seed</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }).join('');
 }
+// How many ticked athletes (or added relays) are not in a heat yet -> the bottom "Seed heats" bar.
+function waitingToSeed(r){
+  const hs=raceHeats(r);
+  if(r.t.relay){ const placed=new Set(hs.flatMap(h=>h.lanes.map(l=>l.team_code+'|'+l.relay_letter))); return ((LS('relays')||{})[r.key]||[]).filter(x=>!placed.has(x.team_code+'|'+x.relay_letter)).length; }
+  const placed=new Set(hs.flatMap(h=>h.lanes.map(l=>l.registration_id))); return [...hereSet(r)].filter(id=>!placed.has(id)).length;
+}
+function seedBarLabel(r,n){ return `${n} ${r.t.relay?(n===1?'relay':'relays'):'ticked'} — Seed heats →`; }
+function seedBarHtml(r){ const n=waitingToSeed(r);
+  return `<div class="seedbar ${n?'':'hidden'}" data-seedbar><button class="btn bg-blue-600 text-white" data-seed>${seedBarLabel(r,n)}</button></div>`; }
 function wireBody(r,d){
+  const updBar=()=>{ const n=waitingToSeed(r), bar=d.querySelector('[data-seedbar]'); if(!bar) return; bar.classList.toggle('hidden',!n); bar.querySelector('button').textContent=seedBarLabel(r,n); };
   const repaint=()=>{ d.querySelector('[data-body]').innerHTML=r.t.relay?relayBody(r):indivBody(r); wireBody(r,d); refreshSummary(r,d); };
   d.querySelectorAll('[data-here]').forEach(cb=>cb.onchange=async()=>{
     const set=hereSet(r), id=cb.dataset.here;
-    if(cb.checked){ set.add(id); saveHere(r,set); cb.closest('tr').classList.add('here'); return; }
+    if(cb.checked){ set.add(id); saveHere(r,set); cb.closest('tr').classList.add('here'); updBar(); return; }
     const h=raceHeats(r).find(h=>h.lanes.some(l=>l.registration_id===id));
     if(h){ if(h.status==='run'){ cb.checked=true; return flash('That heat has been run.',true); }
       if(h.status==='sent'&&!confirm('Take this athlete out of heat '+h.heat_no+'? Meet Manager has the heat — the laptop will be told to scratch them.')){ cb.checked=true; return; }
@@ -319,7 +332,9 @@ function wireBody(r,d){
   const tick=on=>{ const set=hereSet(r); groupAthletes(r).forEach(a=>{ if(on&&!limitProblem(a,false)) set.add(a.id); if(!on) set.delete(a.id); }); saveHere(r,set); repaint(); };
   d.querySelector('[data-allhere]')?.addEventListener('click',()=>tick(true));
   d.querySelector('[data-nonehere]')?.addEventListener('click',()=>tick(false));
-  d.querySelector('[data-seed]')?.addEventListener('click',async()=>{ try{ await seedRace(r); repaint(); }catch(e){ flash(e.message,true); await loadAll(); repaint(); } });
+  d.querySelectorAll('[data-seed]').forEach(b=>b.addEventListener('click',async()=>{ b.disabled=true;
+    try{ await seedRace(r); repaint(); setTimeout(()=>{ const h=d.querySelector('[data-heats]'); if(h&&h.innerHTML.trim()) window.scrollTo(0, window.scrollY+h.getBoundingClientRect().top-90); },80); }
+    catch(e){ flash(e.message,true); await loadAll(); repaint(); } }));
   d.querySelectorAll('[data-raddrelay]').forEach(b=>b.onclick=()=>{
     const f=b.closest('[data-rform]'), runners=[1,2,3,4].map(l=>f.querySelector(`[data-leg="${l}"]`).value);
     if(runners.some(x=>!x)) return flash('Pick all 4 runners (legs 1-4).',true);
