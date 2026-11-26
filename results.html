@@ -397,6 +397,7 @@ let curMeet=null, meetRes=[], meetLive=false, mvSig=null, mvChecked=null, mvBusy
 async function openMeetPage(id){
   $('meetView').classList.remove('hidden');
   curMeet=meets.find(x=>x.id===id);
+  if(!curMeet){ try{ const {data}=await sb.from('meets').select(MEET_COLS).eq('id',id).maybeSingle(); if(data){ curMeet=data; meets.push(data); } }catch(e){} } // practice meets aren't in the list but open by link
   if(!curMeet){ $('mvHead').innerHTML='<p class="font-semibold">That meet wasn\'t found.</p><p class="text-sm text-gray-600 mt-1">It may have been removed. Go back to all meets and pick one from there.</p>'; $('mvBody').innerHTML=''; return; }
   document.title=`${curMeet.name} — Results`; $('subTitle').textContent='Meet results';
   $('mvMineWrap').classList.toggle('hidden',!myIds.size);
@@ -413,6 +414,18 @@ async function refreshMeet(){
   try{
     const fresh=await pageAll(()=>sb.from('results').select(RES_COLS).eq('meet_id',curMeet.id).order('id'));
     meetRes=attachConference(fresh.map(r=>({...r,meet_name:curMeet.name,meet_date:curMeet.meet_date,season_year:curMeet.season_year})),{});
+    // Field marks typed at the pit (Meet Day Staging) show right away, unofficial, until Meet Manager posts that event.
+    try{
+      const {data:pit}=await sb.rpc('live_field_marks',{p_meet:curMeet.id});
+      const official=new Set(meetRes.map(r=>[r.event_code,r.division,r.gender].join('|')));
+      const groups={}; (pit||[]).filter(p=>!official.has([p.event_code,p.division,p.gender].join('|'))).forEach(p=>(groups[[p.event_code,p.division,p.gender].join('|')]??=[]).push(p));
+      Object.values(groups).forEach(g=>{ g.sort((a,b)=>(b.mark_value??-1)-(a.mark_value??-1)); let last=null, place=0;
+        g.forEach((p,i)=>{ if(p.mark_value!=null&&p.mark_value!==last){ place=i+1; last=p.mark_value; }
+          meetRes.push(...attachConference([{id:'pit-'+p.registration_id+'-'+p.event_code, created_at:p.created_at, meet_id:curMeet.id, registration_id:p.registration_id,
+            athlete_name:p.athlete_name, gender:p.gender, division:p.division, event_code:p.event_code, event_name:p.event_name, is_relay:false, relay_runners:null,
+            round:'F', mark:p.mark||'NM', mark_value:p.mark_value, is_time:false, place:p.mark_value!=null?place:null, wind:null, team_code:p.team_code, heat:null,
+            live_pit:true, meet_name:curMeet.name, meet_date:curMeet.meet_date, season_year:curMeet.season_year}],{})); }); });
+    }catch(e){ console.warn('live field marks',e); }
     // Which events changed since the last check? Those get a "NEW" tag (nothing is tagged on the first look).
     const sig={}; meetRes.forEach(r=>{ const k=evKey(r); sig[k]=(sig[k]||'')+[r.athlete_name,r.mark,r.place,r.heat,r.round].join(',')+';'; });
     if(mvSig) Object.keys(sig).forEach(k=>{ if(sig[k]!==mvSig[k]) mvNew.add(k); });
@@ -456,7 +469,7 @@ function renderMeet(){
   if(!evs.length){ $('mvBody').innerHTML=`<p class="text-gray-500">${meetRes.length?'No events match these filters.':meetLive?'No results posted yet — they show up here as soon as the first events are uploaded. This page checks every 30 seconds.':'No results posted for this meet.'}</p>`; return; }
   const row=(e,showEv)=>{ const n=e.f.is_relay?new Set(e.g.map(r=>r.team_code||r.athlete_name)).size:new Set(e.g.map(r=>r.registration_id||r.athlete_name)).size;
     const mine=myIds.size&&e.g.some(isMine);
-    return `<a class="evrow" href="#e=${encodeURIComponent(e.k)}"><div><div class="font-semibold">${esc(e.f.division||'')} ${genLabel(e.f.gender)}${showEv?` <span class="font-normal text-gray-600">· ${esc(e.f.event_name)}</span>`:''}${mvNew.has(e.k)?' <span class="bdg bnew">NEW</span>':''}${mine?' <span class="bdg" style="background:#fef9c3;color:#854d0e">your athlete</span>':''}</div></div>
+    return `<a class="evrow" href="#e=${encodeURIComponent(e.k)}"><div><div class="font-semibold">${esc(e.f.division||'')} ${genLabel(e.f.gender)}${showEv?` <span class="font-normal text-gray-600">· ${esc(e.f.event_name)}</span>`:''}${mvNew.has(e.k)?' <span class="bdg bnew">NEW</span>':''}${e.g.every(r=>r.live_pit)?' <span class="bdg" style="background:#ffedd5;color:#9a3412">live from the field</span>':''}${mine?' <span class="bdg" style="background:#fef9c3;color:#854d0e">your athlete</span>':''}</div></div>
       <div class="flex items-center gap-2"><div class="meta">${n} ${e.f.is_relay?'team':'athlete'}${n===1?'':'s'}${meetLive&&e.t?`<br>posted ${clock(new Date(e.t))}`:''}</div><span class="arrow">›</span></div></a>`; };
   if(meetLive){ // newest first, like a live feed
     $('mvBody').innerHTML=`<div class="evlist">${[...evs].sort((a,b)=>b.t-a.t).map(e=>row(e,true)).join('')}</div>`;
@@ -480,7 +493,8 @@ function renderEvent(key){
     const hb=heatBlocks(e.g,curMeet); lastGroups=hb.pdfGroups; html=hb.html;
     $('mvHint').textContent='Results by heat — places are within each heat. "Q" = met the qualifying standard'+(curMeet.is_championship?'; "CR" = new conference record.':'.')+(myIds.size?' Your athletes are highlighted.':'');
   }
-  $('mvBody').innerHTML=nav+(meetLive&&e.t?`<div class="liveposted">Posted ${clock(new Date(e.t))}${mvNew.has(e.k)?' <span class="bdg bnew">NEW</span>':''}</div>`:'')+(html||'<p class="text-gray-500">No results.</p>');
+  const pitNote=e.g.every(r=>r.live_pit)?`<div class="text-xs rounded-lg p-2 mb-2" style="background:#fff7ed;border:1px solid #fed7aa;color:#9a3412"><b>Live from the field</b> — marks typed in at the event, unofficial. They're replaced by Meet Manager's official results for this event once they're posted.</div>`:'';
+  $('mvBody').innerHTML=nav+pitNote+(meetLive&&e.t?`<div class="liveposted">Posted ${clock(new Date(e.t))}${mvNew.has(e.k)?' <span class="bdg bnew">NEW</span>':''}</div>`:'')+(html||'<p class="text-gray-500">No results.</p>');
 }
 // "Find an athlete": every result for matching names in this meet, each linking to its event.
 function renderAthleteSearch(q){
