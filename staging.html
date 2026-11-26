@@ -89,7 +89,7 @@
           <button class="tab" data-mode="track">Track staging</button>
           <button class="tab" data-mode="field">Field events</button>
           <button class="tab" data-mode="mm">Meet Manager table</button>
-          <button class="tab hidden" data-mode="helpers" id="helpersTab">Staging helpers</button>
+          <button class="tab hidden" data-mode="helpers" id="helpersTab">Data entry</button>
         </div>
       </div>
       <div id="lanesNeeded" class="hidden card border-2 border-blue-500 text-center mb-2">
@@ -106,7 +106,7 @@ const CFG=window.APP_CONFIG, S=window.STAGE, $=id=>document.getElementById(id);
 let sb=supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (n,t,fn)=>fn() } });
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const MEET_ID=new URLSearchParams(location.search).get('meet');
-let user=null, isAdmin=false, board=null, heats=[], fieldRows=[], mode=localStorage.getItem('stg_mode')||'track', trackSel=null, fieldSel=null, mmTimer=null;
+let fieldOpen=null, user=null, isAdmin=false, board=null, heats=[], fieldRows=[], mode=localStorage.getItem('stg_mode')||'track', trackSel=null, fieldSel=null, mmTimer=null;
 let athById={}, bests={}, entryCount={};
 const teamName=c=>((window.VYC_TEAMS||[]).find(t=>t.code===c)||{}).name||c;
 const LS=(k,v)=>{ const key='stg_'+(board?.meet?.id||MEET_ID)+'_'+k; if(v===undefined){ try{ return JSON.parse(localStorage.getItem(key)||'null'); }catch(e){ return null; } } localStorage.setItem(key,JSON.stringify(v)); };
@@ -126,7 +126,7 @@ async function start(){
   if(window.leagueReady) await window.leagueReady;
   let allowed=false;
   try{ allowed=await rpc('can_stage'); }catch(e){ if(MEET_ID&&localStorage.getItem('stg_'+MEET_ID+'_board')) allowed=true; else throw e; }
-  if(!allowed){ $('msg').innerHTML='<div class="card max-w-lg mx-auto"><b>Not set up for staging yet.</b><p class="text-sm mt-1">Meet Day Staging is for VYC admins, timers and staging helpers. Ask a site admin to add <b>'+esc(user.email)+'</b> as a staging helper.</p></div>'; return; }
+  if(!allowed){ $('msg').innerHTML='<div class="card max-w-lg mx-auto"><b>Not set up for staging yet.</b><p class="text-sm mt-1">Meet Day Staging is for VYC admins, timers and data entry people. Ask a site admin to add <b>'+esc(user.email)+'</b> on the Data entry tab.</p></div>'; return; }
   try{ const {data:c}=await sb.from('coaches').select('is_admin,team_admin').eq('email',user.email).maybeSingle(); isAdmin=!!(c&&(c.is_admin||c.team_admin)); }catch(e){}
   $('helpersTab').classList.toggle('hidden',!isAdmin);
   if(MEET_ID) await openMeet(MEET_ID); else await listMeets();
@@ -439,35 +439,29 @@ function renderField(){
      <p class="text-xs text-gray-500 mt-2">Flights in the order set by Playing Rules IV.C.1.a. ${ev.hj?'High jump: 3 tries at each height, out after 3 misses in a row; bar goes up 2" (V.B). Type O = made, X = miss, P = pass, e.g. XO.':`Attempts: ${ev.code==='LJ'?'4 (Gremlin and Sub-Gremlin 3)':ev.code==='SP'?'4':'3'} (rule ${ev.code==='LJ'?'V.C':ev.code==='SP'?'V.D':'V Javelin'}). Type feet-inches like 12-04.25, F = foul, P = pass.`}</p>
      ${cur?`<div class="mt-2 text-sm"><b>Now:</b> ${esc(cur.label)}${flights[cur.i+1]?` · <b>Next up:</b> ${esc(flights[cur.i+1].label)}`:' · last flight'}</div>`:'<div class="mt-2 text-sm font-semibold text-green-700">All flights done.</div>'}</div>
    ${flights.map(f=>flightHtml(ev,f,fmap,done,cur)).join('')}`;
-  document.querySelectorAll('[data-field]').forEach(b=>b.onclick=()=>{ fieldSel=b.dataset.field; localStorage.setItem('stg_field',fieldSel); renderField(); });
+  document.querySelectorAll('[data-field]').forEach(b=>b.onclick=()=>{ fieldOpen=null; fieldSel=b.dataset.field; localStorage.setItem('stg_field',fieldSel); renderField(); });
   wireField(ev,flights,fmap);
+}
+function marksSummary(ev,m){
+  if(!m||!(m.attempts||[]).length) return '<span class="text-gray-400">—</span>';
+  return esc(ev.hj?(m.attempts||[]).map(x=>S.feetLabel(+x.h)+' '+x.r).join(' · '):(m.attempts||[]).map(x=>x||'–').join(', '));
 }
 function flightHtml(ev,f,fmap,done,cur){
   const key=ev.code+'|'+f.i, isDone=!!done[key];
   const rows=f.ath.map(a=>({a,m:fmap[a.id],s:seedOf(a,ev.code)})).sort((x,y)=>(!!y.m?.checked_in)-(!!x.m?.checked_in)||((y.s.value??-1)-(x.s.value??-1))||x.a.sortName.localeCompare(y.a.sortName));
   const inCount=rows.filter(x=>x.m?.checked_in).length;
-  let table;
-  if(ev.hj){
-    const hs=hjHeights(ev,f,fmap);
-    table=`<div class="flex gap-2 items-center mb-2 text-sm"><span>Heights:</span>${hs.map(h=>`<span class="pill bg-blue-50 text-blue-900">${S.feetLabel(h)}</span>`).join('')}
-      <input class="att" data-newh placeholder="${S.feetLabel(hs.length?hs[hs.length-1]+2:S.HJ_START[f.groups[0].division+'|'+f.groups[0].gender]||36)}"><button class="btn-sm border bg-white" data-addh>Add height</button></div>
-      <div class="overflow-x-auto"><table class="st"><thead><tr><th>In</th><th>Athlete</th><th>Season best</th>${hs.map(h=>`<th>${S.feetLabel(h)}</th>`).join('')}<th>Best</th><th>Place</th></tr></thead><tbody>
-      ${rows.map(({a,m,s})=>{ const at={}; (m?.attempts||[]).forEach(x=>at[x.h]=x.r); const prob=m?.checked_in?null:limitProblem(a,false), out=hjOut(m);
-        return `<tr class="${m?.checked_in?'here':''} ${prob?'blocked':''}" data-frow="${a.id}"><td><input type="checkbox" class="big" data-fin ${m?.checked_in?'checked':''} ${prob?'disabled':''}></td>
-          <td><b>${esc(a.last_name)}, ${esc(a.first_name)}</b> <span class="text-xs text-gray-500">#${esc(a.comp_number??'')} ${esc(a.team_code)}${f.groups.length>1?' · '+esc(S.gName(a.division,a.gender)):''}</span>${prob?`<div class="err">Can't compete: ${esc(prob)}</div>`:''}${out?'<div class="warn">Out (3 misses in a row)</div>':''}</td>
-          <td>${s.mark?esc(s.mark):'<span class="text-gray-400">—</span>'}</td>
-          ${hs.map(h=>`<td><input class="att hjc" data-hj="${h}" value="${esc(at[h]||'')}" ${m?.checked_in?'':'disabled'}></td>`).join('')}
-          <td class="font-semibold">${m?.best_mark?esc(m.best_mark):''}</td><td data-place></td></tr>`; }).join('')}</tbody></table></div>`;
-  } else {
-    table=`<div class="overflow-x-auto"><table class="st"><thead><tr><th>In</th><th>Athlete</th><th>Season best</th><th>Attempts</th><th>Best</th><th>Place</th></tr></thead><tbody>
-      ${rows.map(({a,m,s})=>{ const n=S.attemptsFor(ev.code,a.division), at=m?.attempts||[], prob=m?.checked_in?null:limitProblem(a,false);
-        return `<tr class="${m?.checked_in?'here':''} ${prob?'blocked':''}" data-frow="${a.id}"><td><input type="checkbox" class="big" data-fin ${m?.checked_in?'checked':''} ${prob?'disabled':''}></td>
-          <td><b>${esc(a.last_name)}, ${esc(a.first_name)}</b> <span class="text-xs text-gray-500">#${esc(a.comp_number??'')} ${esc(a.team_code)}${f.groups.length>1?' · '+esc(S.gName(a.division,a.gender)):''}</span>${prob?`<div class="err">Can't compete: ${esc(prob)}</div>`:''}</td>
-          <td>${s.mark?esc(s.mark):'<span class="text-gray-400">—</span>'}</td>
-          <td class="whitespace-nowrap">${Array.from({length:n},(_,i)=>`<input class="att" data-att="${i}" value="${esc(at[i]||'')}" placeholder="${i+1}" ${m?.checked_in?'':'disabled'}>`).join(' ')}</td>
-          <td class="font-semibold">${m?.best_mark?esc(m.best_mark):''}</td><td data-place></td></tr>`; }).join('')}</tbody></table></div>`;
-  }
-  return `<details class="race" data-flight="${f.i}" ${cur&&cur.i===f.i?'open':''}><summary>${f.evnos.map(n=>`<span class="evno">Ev ${n}</span>`).join('')}<b>${f.i+1}. ${esc(f.label)}</b><span class="text-gray-600">${esc(ev.name)}</span>
+  const hs=ev.hj?hjHeights(ev,f,fmap):[];
+  const heights=ev.hj?`<div class="flex gap-2 items-center flex-wrap mb-2 text-sm"><span>Bar heights:</span>${hs.map(h=>`<span class="pill bg-blue-50 text-blue-900">${S.feetLabel(h)}</span>`).join('')}
+      <input class="att" data-newh placeholder="${S.feetLabel(hs.length?hs[hs.length-1]+2:S.HJ_START[f.groups[0].division+'|'+f.groups[0].gender]||36)}"><button class="btn-sm border bg-white" data-addh>Add height</button></div>`:'';
+  const table=`${heights}<p class="text-xs text-gray-500 mb-1">Tick an athlete when they check in — a box opens to enter their marks. Tap a checked-in athlete to open their box again.</p>
+    <div class="overflow-x-auto"><table class="st"><thead><tr><th>In</th><th>Athlete</th><th>Season best</th><th>${ev.hj?'Heights':'Attempts'}</th><th>Best</th><th>Place</th></tr></thead><tbody>
+    ${rows.map(({a,m,s})=>{ const prob=m?.checked_in?null:limitProblem(a,false), out=ev.hj&&hjOut(m);
+      return `<tr class="${m?.checked_in?'here':''} ${prob?'blocked':''}" data-frow="${a.id}"><td><input type="checkbox" class="big" data-fin ${m?.checked_in?'checked':''} ${prob?'disabled':''}></td>
+        <td>${m?.checked_in?`<button class="text-left underline decoration-dotted" data-openm><b>${esc(a.last_name)}, ${esc(a.first_name)}</b></button>`:`<b>${esc(a.last_name)}, ${esc(a.first_name)}</b>`} <span class="text-xs text-gray-500">#${esc(a.comp_number??'')} ${esc(a.team_code)}${f.groups.length>1?' · '+esc(S.gName(a.division,a.gender)):''}</span>${prob?`<div class="err">Can't compete: ${esc(prob)}</div>`:''}${out?'<div class="warn">Out (3 misses in a row)</div>':''}</td>
+        <td>${s.mark?esc(s.mark):'<span class="text-gray-400">—</span>'}</td>
+        <td class="text-sm">${m?.checked_in?`<button class="btn-sm border bg-white" data-openm>${(m.attempts||[]).length?marksSummary(ev,m):'Enter marks'}</button>`:''}</td>
+        <td class="font-semibold">${m?.best_mark?esc(m.best_mark):''}</td><td data-place></td></tr>`; }).join('')}</tbody></table></div>`;
+  return `<details class="race" data-flight="${f.i}" ${(fieldOpen!=null?fieldOpen===f.i:cur&&cur.i===f.i)?'open':''}><summary>${f.evnos.map(n=>`<span class="evno">Ev ${n}</span>`).join('')}<b>${f.i+1}. ${esc(f.label)}</b><span class="text-gray-600">${esc(ev.name)}</span>
       ${isDone?'<span class="pill bg-gray-200 text-gray-700">Done</span>':cur&&cur.i===f.i?'<span class="pill bg-blue-600 text-white">Now</span>':''}<span class="text-xs text-gray-500 ml-auto">${inCount} checked in · ${f.ath.length} on the teams</span></summary>
     <div class="p-3">${f.ath.length?table:'<p class="text-sm text-gray-500">No certified athletes on this meet\'s teams in this flight.</p>'}
       <div class="mt-2 flex gap-2 flex-wrap">${isDone?`<button class="btn-sm border bg-white" data-fundone="${f.i}">Reopen</button>`:`<button class="btn bg-green-700 text-white" data-fdone="${f.i}">Flight done — call the next division</button>`}<button class="btn-sm border bg-white" data-fprint="${f.i}">Print sheet</button></div></div></details>`;
@@ -485,48 +479,99 @@ function placeRows(ev,tbody){
   tbody.querySelectorAll('[data-place]').forEach(td=>td.textContent='');
   let last=null, place=0; rows.forEach((x,i)=>{ if(x.m.best_value!==last){ place=i+1; last=x.m.best_value; } x.tr.querySelector('[data-place]').textContent=place; });
 }
+async function saveField(ev,id,patch){
+  const cur=fieldRows.find(x=>x.event_code===ev.code&&x.registration_id===id)||{checked_in:false,attempts:[]};
+  const next={...cur,...patch};
+  await rpc('staging_save_field',{p:{meet_id:MEET_ID,event_code:ev.code,event_name:ev.name,registration_id:id,checked_in:next.checked_in,attempts:next.attempts,best_mark:next.best_mark||'',best_value:next.best_value??''}});
+  const i=fieldRows.findIndex(x=>x.event_code===ev.code&&x.registration_id===id); const row={...next,event_code:ev.code,registration_id:id};
+  if(i>=0) fieldRows[i]=row; else fieldRows.push(row);
+}
 function wireField(ev,flights,fmap){
   document.querySelectorAll('[data-flight] tbody').forEach(tb=>placeRows(ev,tb));
-  const save=async(tr,patch)=>{
-    const id=tr.dataset.frow, cur=fieldRows.find(x=>x.event_code===ev.code&&x.registration_id===id)||{checked_in:false,attempts:[]};
-    const next={...cur,...patch};
-    try{ await rpc('staging_save_field',{p:{meet_id:MEET_ID,event_code:ev.code,event_name:ev.name,registration_id:id,checked_in:next.checked_in,attempts:next.attempts,best_mark:next.best_mark||'',best_value:next.best_value??''}});
-      const i=fieldRows.findIndex(x=>x.event_code===ev.code&&x.registration_id===id); const row={...next,event_code:ev.code,registration_id:id};
-      if(i>=0) fieldRows[i]=row; else fieldRows.push(row);
-      if(patch.checked_in!==undefined){ await loadAll(); renderField(); } else { tr.querySelector('td:nth-last-child(2)').textContent=next.best_mark||''; placeRows(ev,tr.closest('tbody')); }
-      return true;
-    }catch(e){ flash(e.message,true); return false; }
-  };
-  document.querySelectorAll('[data-fin]').forEach(cb=>cb.onchange=async()=>{ const tr=cb.closest('tr');
-    if(!cb.checked){ const cur=fieldRows.find(x=>x.event_code===ev.code&&x.registration_id===tr.dataset.frow); if(cur&&(cur.attempts||[]).length&&!confirm('Un-check this athlete? Their marks stay saved but they are taken out of the event.')){ cb.checked=true; return; } }
-    if(!(await save(tr,{checked_in:cb.checked}))) cb.checked=!cb.checked; });
-  document.querySelectorAll('[data-att]').forEach(inp=>inp.onchange=async()=>{
-    const tr=inp.closest('tr'), vals=[...tr.querySelectorAll('[data-att]')].map(x=>x.value.trim().toUpperCase());
-    let best=null, bad=false;
-    vals.forEach((v,i)=>{ const el=tr.querySelectorAll('[data-att]')[i]; let ok=true;
-      if(v==='F'||v==='P') el.value=v;
-      if(v&&v!=='F'&&v!=='P'){ const p=S.parseFeet(v); if(!p) ok=false; else { el.value=p.mm; vals[i]=p.mm; if(!best||p.inches>best.inches) best=p; } }
-      el.classList.toggle('bad',!ok); if(!ok) bad=true; });
-    if(bad) return flash('Type a mark as feet-inches like 12-04.25 (or F for foul, P for pass).',true);
-    while(vals.length&&!vals[vals.length-1]) vals.pop();
-    await save(tr,{attempts:vals, best_mark:best?best.mm:'', best_value:best?S.inchToM(best.inches):null});
+  document.querySelectorAll('details[data-flight]').forEach(d=>d.addEventListener('toggle',()=>{ if(d.open) fieldOpen=+d.dataset.flight; }));
+  const flightOf=tr=>flights[+tr.closest('[data-flight]').dataset.flight];
+  document.querySelectorAll('[data-fin]').forEach(cb=>cb.onchange=async()=>{ const tr=cb.closest('tr'), id=tr.dataset.frow, f=flightOf(tr);
+    if(!cb.checked){ const cur=fieldRows.find(x=>x.event_code===ev.code&&x.registration_id===id); if(cur&&(cur.attempts||[]).length&&!confirm('Un-check this athlete? Their marks stay saved but they are taken out of the event.')){ cb.checked=true; return; } }
+    try{ await saveField(ev,id,{checked_in:cb.checked}); }catch(e){ cb.checked=!cb.checked; return flash(e.message,true); }
+    fieldOpen=f.i; await loadAll(); renderField();
+    if(cb.checked) openMarks(ev,f,id);
   });
-  document.querySelectorAll('[data-hj]').forEach(inp=>inp.onchange=async()=>{
-    const tr=inp.closest('tr'), v=inp.value.trim().toUpperCase();
-    if(v&&!/^(O|XO|XXO|X|XX|XXX|P|XP|XXP)$/.test(v)){ inp.classList.add('bad'); return flash('High jump: O, XO, XXO (made), X / XX / XXX (misses), P / XP / XXP (pass).',true); }
-    inp.classList.remove('bad'); inp.value=v;
-    const at=[...tr.querySelectorAll('[data-hj]')].map(x=>({h:+x.dataset.hj, r:x.value.trim().toUpperCase()})).filter(x=>x.r);
-    const made=at.filter(x=>x.r.includes('O')).map(x=>x.h), best=made.length?Math.max(...made):null;
-    await save(tr,{attempts:at, best_mark:best?S.feetLabel(best):'', best_value:best?S.inchToM(best):null});
-    if(hjOut({attempts:at})) flash(`${tr.querySelector('b').textContent} is out (3 misses in a row).`);
-  });
+  document.querySelectorAll('[data-openm]').forEach(b=>b.onclick=()=>{ const tr=b.closest('tr'); openMarks(ev,flightOf(tr),tr.dataset.frow); });
   document.querySelectorAll('[data-addh]').forEach(b=>b.onclick=()=>{ const d=b.closest('[data-flight]'), f=flights[+d.dataset.flight], inp=d.querySelector('[data-newh]');
     const p=S.parseFeet(inp.value.trim()||inp.placeholder); if(!p) return flash('Type the bar height like 3-06.',true);
-    const all=LS('hj')||{}; (all[ev.code+'|'+f.i]??=[]).push(p.inches); LS('hj',all); renderField(); document.querySelector(`[data-flight="${f.i}"]`).open=true; });
-  document.querySelectorAll('[data-fdone]').forEach(b=>b.onclick=()=>{ const all=LS('fdone')||{}; all[ev.code+'|'+b.dataset.fdone]=true; LS('fdone',all); renderField();
+    const all=LS('hj')||{}; (all[ev.code+'|'+f.i]??=[]).push(p.inches); LS('hj',all); fieldOpen=f.i; renderField(); });
+  document.querySelectorAll('[data-fdone]').forEach(b=>b.onclick=()=>{ const all=LS('fdone')||{}; all[ev.code+'|'+b.dataset.fdone]=true; LS('fdone',all); fieldOpen=null; renderField();
     const nxt=document.querySelector('details[data-flight][open]'); if(nxt) nxt.scrollIntoView({behavior:'smooth'}); });
-  document.querySelectorAll('[data-fundone]').forEach(b=>b.onclick=()=>{ const all=LS('fdone')||{}; delete all[ev.code+'|'+b.dataset.fundone]; LS('fdone',all); renderField(); });
+  document.querySelectorAll('[data-fundone]').forEach(b=>b.onclick=()=>{ const all=LS('fdone')||{}; delete all[ev.code+'|'+b.dataset.fundone]; LS('fdone',all); fieldOpen=+b.dataset.fundone; renderField(); });
   document.querySelectorAll('[data-fprint]').forEach(b=>b.onclick=()=>printFlight(ev,flights[+b.dataset.fprint],fmap));
+}
+// The marks box: opens when an athlete is checked in (or tapped). Big inputs for a phone at the pit / circle / bar.
+function openMarks(ev,f,id){
+  const a=athById[id]; if(!a) return;
+  const m=fieldRows.find(x=>x.event_code===ev.code&&x.registration_id===id)||{attempts:[]};
+  const fmap={}; fieldRows.filter(x=>x.event_code===ev.code).forEach(x=>fmap[x.registration_id]=x);
+  const order=f.ath.filter(x=>fmap[x.id]?.checked_in).map(x=>x.id);
+  const nextId=order[order.indexOf(id)+1];
+  let body;
+  if(ev.hj){
+    const at={}; (m.attempts||[]).forEach(x=>at[x.h]=x.r);
+    const hs=hjHeights(ev,f,fmap);
+    body=hs.map(h=>`<div class="flex items-center gap-2 py-1 border-t"><span class="w-16 font-bold">${S.feetLabel(h)}</span>
+      <input class="att text-lg" style="width:5.5rem" data-mh="${h}" value="${esc(at[h]||'')}" autocapitalize="characters">
+      ${['O','X','P'].map(c=>`<button type="button" class="btn-sm border bg-white" style="min-width:2.6rem" data-tap="${h}|${c}">${c}</button>`).join('')}
+      <button type="button" class="btn-sm text-gray-500" data-tap="${h}|clear">clear</button></div>`).join('')
+      +`<div class="flex items-center gap-2 pt-2 border-t"><input class="att" data-mnewh placeholder="${S.feetLabel((hs.slice(-1)[0]||36)+2)}"><button type="button" class="btn-sm border bg-white" data-maddh>Add bar height</button></div>
+      <p class="text-xs text-gray-500 mt-1">O = made, X = miss, P = pass. Up to 3 tries at a height; out after 3 misses in a row (rule V.B).</p>`;
+  } else {
+    const n=S.attemptsFor(ev.code,a.division);
+    body=Array.from({length:n},(_,i)=>`<div class="flex items-center gap-2 py-1 border-t"><span class="w-24 font-semibold">Attempt ${i+1}</span>
+      <input class="att text-lg" style="width:7rem" data-ma="${i}" value="${esc((m.attempts||[])[i]||'')}" placeholder="12-04.25" inputmode="decimal">
+      <button type="button" class="btn-sm border bg-white" data-mset="${i}|F">Foul</button><button type="button" class="btn-sm border bg-white" data-mset="${i}|P">Pass</button></div>`).join('')
+      +`<p class="text-xs text-gray-500 mt-1">${n} attempts (rule ${ev.code==='LJ'?'V.C':ev.code==='SP'?'V.D':'V Javelin'}). Feet-inches to the nearest 1/4 inch: 12-04.25 or 12 4.25. Best mark counts.</p>`;
+  }
+  let box=$('markBox'); if(!box){ box=document.createElement('div'); box.id='markBox'; document.body.appendChild(box); }
+  box.innerHTML=`<div style="position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:70;display:flex;align-items:flex-end;justify-content:center" data-mbg>
+    <div class="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl p-4 sm:mb-10" style="max-height:92vh;overflow:auto">
+      <div class="flex items-start gap-2"><div><div class="text-xs text-gray-500">${esc(ev.name)} · ${esc(f.label)}</div>
+        <div class="text-xl font-bold">${esc(a.first_name)} ${esc(a.last_name)}</div><div class="text-sm text-gray-600">#${esc(a.comp_number??'')} · ${esc(teamName(a.team_code))}</div></div>
+        <button class="ml-auto text-2xl leading-none px-2" data-mclose aria-label="Close">×</button></div>
+      <div class="mt-3">${body}</div>
+      <div class="mt-2 text-sm">Best: <b data-mbest>${esc(m.best_mark||'—')}</b></div>
+      <div class="mt-3 flex gap-2 flex-wrap"><button class="btn bg-blue-600 text-white" data-msave>Save</button>${nextId?`<button class="btn bg-green-700 text-white" data-msavenext>Save &amp; next: ${esc(athById[nextId]?.first_name||'')}</button>`:''}<button class="btn border bg-white" data-mclose>Close</button></div>
+    </div></div>`;
+  const close=()=>{ box.innerHTML=''; };
+  const collect=()=>{
+    if(ev.hj){
+      let bad=false; const at=[...box.querySelectorAll('[data-mh]')].map(x=>{ const v=x.value.trim().toUpperCase(); const ok=!v||/^(O|XO|XXO|X|XX|XXX|P|XP|XXP)$/.test(v); x.classList.toggle('bad',!ok); if(!ok) bad=true; x.value=v; return {h:+x.dataset.mh, r:v}; }).filter(x=>x.r);
+      if(bad){ flash('High jump: O, XO, XXO (made), X / XX / XXX (misses), P / XP / XXP (pass).',true); return null; }
+      const made=at.filter(x=>x.r.includes('O')).map(x=>x.h), best=made.length?Math.max(...made):null;
+      return {attempts:at, best_mark:best?S.feetLabel(best):'', best_value:best?S.inchToM(best):null};
+    }
+    let best=null, bad=false; const vals=[...box.querySelectorAll('[data-ma]')].map(el=>{ let v=el.value.trim().toUpperCase(); let ok=true;
+      if(v&&v!=='F'&&v!=='P'){ const p=S.parseFeet(v); if(!p) ok=false; else { v=p.mm; if(!best||p.inches>best.inches) best=p; } }
+      el.value=v; el.classList.toggle('bad',!ok); if(!ok) bad=true; return v; });
+    if(bad){ flash('Type a mark as feet-inches like 12-04.25 (or Foul / Pass).',true); return null; }
+    while(vals.length&&!vals[vals.length-1]) vals.pop();
+    return {attempts:vals, best_mark:best?best.mm:'', best_value:best?S.inchToM(best.inches):null};
+  };
+  const showBest=()=>{ const c=collect(); if(c) box.querySelector('[data-mbest]').textContent=c.best_mark||'—'; };
+  box.querySelectorAll('[data-ma],[data-mh]').forEach(x=>x.onchange=showBest);
+  box.querySelectorAll('[data-mset]').forEach(b=>b.onclick=()=>{ const [i,v]=b.dataset.mset.split('|'); box.querySelector(`[data-ma="${i}"]`).value=v; showBest(); });
+  box.querySelectorAll('[data-tap]').forEach(b=>b.onclick=()=>{ const [h,c]=b.dataset.tap.split('|'), inp=box.querySelector(`[data-mh="${h}"]`);
+    if(c==='clear') inp.value=''; else if(!/[OP]$/.test(inp.value)&&inp.value.length<3) inp.value+=c; showBest(); });
+  const save=async(goNext)=>{ const c=collect(); if(!c) return;
+    try{ await saveField(ev,id,c); }catch(e){ return flash(e.message,true); }
+    flash(`Saved ${a.first_name} ${a.last_name}${c.best_mark?' — best '+c.best_mark:''}.`);
+    if(ev.hj&&hjOut({attempts:c.attempts})) flash(`${a.first_name} ${a.last_name} is out (3 misses in a row).`);
+    close(); fieldOpen=f.i; renderField(); if(goNext&&nextId) openMarks(ev,f,nextId); };
+  box.querySelector('[data-msave]').onclick=()=>save(false);
+  box.querySelector('[data-msavenext]')?.addEventListener('click',()=>save(true));
+  box.querySelector('[data-maddh]')?.addEventListener('click',async()=>{ const inp=box.querySelector('[data-mnewh]'); const p=S.parseFeet(inp.value.trim()||inp.placeholder); if(!p) return flash('Type the bar height like 3-06.',true);
+    const c=collect(); if(c&&c.attempts.length){ try{ await saveField(ev,id,c); }catch(e){ return flash(e.message,true); } }
+    const all=LS('hj')||{}; (all[ev.code+'|'+f.i]??=[]).push(p.inches); LS('hj',all); fieldOpen=f.i; renderField(); openMarks(ev,f,id); });
+  box.querySelectorAll('[data-mclose]').forEach(b=>b.onclick=close);
+  box.querySelector('[data-mbg]').addEventListener('click',e=>{ if(e.target.matches('[data-mbg]')) close(); });
+  setTimeout(()=>box.querySelector('[data-ma],[data-mh]')?.focus(),50);
 }
 function printFlight(ev,f,fmap){
   const w=window.open('','_blank'); if(!w) return flash('Allow pop-ups to print.',true);
@@ -596,13 +641,13 @@ function mmField(){
   })); return out.join('')||'<p class="text-sm text-gray-500 mt-1">No marks yet.</p>';
 }
 
-// ---------- STAGING HELPERS (admins) ----------
+// ---------- DATA ENTRY PEOPLE (admins add them) ----------
 async function renderHelpers(){
   const {data,error}=await sb.from('staging_helpers').select('*').order('added_at',{ascending:false});
   if(error){ $('pane').innerHTML=`<div class="card text-red-700">${esc(error.message)}</div>`; return; }
-  $('pane').innerHTML=`<div class="card"><b>Staging helpers</b><p class="text-sm text-gray-600 mb-2">People who run the staging area or a field event and aren't admins or timers. They can use this page only — no rosters, no athlete records, no coach tools. They sign in with this email (password or Google).</p>
-    <div class="flex flex-wrap gap-2 mb-3"><input id="hName" class="border rounded p-2" placeholder="Name"><input id="hEmail" type="email" class="border rounded p-2 flex-1" placeholder="email@example.com"><button class="btn bg-blue-600 text-white" id="hAdd">Add helper</button></div>
-    ${(data||[]).map(h=>`<div class="flex items-center gap-2 border-t py-2 text-sm"><span class="${h.active?'':'line-through text-gray-400'}"><b>${esc(h.name||'')}</b> ${esc(h.email)}</span><button class="btn-sm border bg-white ml-auto" data-hact="${esc(h.email)}|${h.active?'0':'1'}">${h.active?'Turn off':'Turn on'}</button></div>`).join('')||'<p class="text-sm text-gray-500">No helpers yet.</p>'}</div>`;
+  $('pane').innerHTML=`<div class="card"><b>Data entry</b><p class="text-sm text-gray-600 mb-2">The data entry people at staging and at each field event (if they aren't already admins or timers). They can use this page only — no rosters, no athlete records, no coach tools. They sign in with this email (password or Google).</p>
+    <div class="flex flex-wrap gap-2 mb-3"><input id="hName" class="border rounded p-2" placeholder="Name"><input id="hEmail" type="email" class="border rounded p-2 flex-1" placeholder="email@example.com"><button class="btn bg-blue-600 text-white" id="hAdd">Add data entry person</button></div>
+    ${(data||[]).map(h=>`<div class="flex items-center gap-2 border-t py-2 text-sm"><span class="${h.active?'':'line-through text-gray-400'}"><b>${esc(h.name||'')}</b> ${esc(h.email)}</span><button class="btn-sm border bg-white ml-auto" data-hact="${esc(h.email)}|${h.active?'0':'1'}">${h.active?'Turn off':'Turn on'}</button></div>`).join('')||'<p class="text-sm text-gray-500">No data entry people yet.</p>'}</div>`;
   $('hAdd').onclick=async()=>{ const email=$('hEmail').value.trim().toLowerCase(); if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return flash('Type a valid email.',true);
     const {error}=await sb.from('staging_helpers').upsert({email,name:$('hName').value.trim()||null,active:true,added_by:user.email}); if(error) return flash(error.message,true); flash('Added '+email+'.'); renderHelpers(); };
   document.querySelectorAll('[data-hact]').forEach(b=>b.onclick=async()=>{ const [email,on]=b.dataset.hact.split('|'); const {error}=await sb.from('staging_helpers').update({active:on==='1'}).eq('email',email); if(error) return flash(error.message,true); renderHelpers(); });

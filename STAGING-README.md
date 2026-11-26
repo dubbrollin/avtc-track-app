@@ -6,7 +6,7 @@ Open it at **vycregistration.avyouthathletics.org/staging.html** (also linked fr
 
 ## Who can use it
 - Site admins, team admins and approved timers.
-- **Staging helpers**: anyone a site admin adds on the page's *Staging helpers* tab, using their email. They sign in with that email (password or Google). A helper can use this page and nothing else. They get no rosters, athlete records or coach tools.
+- **Data entry people**: the data entry person at staging and at each field event. A site admin adds them on the page's *Data entry* tab, using their email. They sign in with that email (password or Google). They can use this page and nothing else. They get no rosters, athlete records or coach tools.
 
 ## Before the first meet: Meet Manager setup (once per meet database)
 Meet Manager's import file carries entries and seed times but **not lanes**. Meet Manager assigns lanes when you seed. Set it up once so its lanes match the VYC chart the app shows (Playing Rules XI):
@@ -33,12 +33,13 @@ Meet Manager's import file carries entries and seed times but **not lanes**. Mee
    - **Mixed races** (800s and up, relays): *Combine divisions into one race*. Each athlete is still entered in their own division's event.
    - **Relays:** add each team's relay with all 4 runners (required). The A relay gets the team's best relay time this season and B the second best. A C relay, or any relay without a time, can have a time typed in or run as NT.
    - **Event limits (rule IV.C.1) are enforced and can't be overridden.** Sub-Gremlin and Gremlin get any 3 events. Bantam through Youth get 3 individual events + 1 relay, or 2 + 2. 15-18 get any 4. An athlete at the limit can't be ticked into another event, and the database refuses it too.
-3. **Field events.** Each judge opens their event. Flights are listed in the rulebook order (IV.C.1.a), with the one that's up now and the one that's next. Check athletes in, then type marks:
+3. **Field events.** The data entry person at each field event opens their event. Flights are listed in the rulebook order (IV.C.1.a), with the one that's up now and the one that's next. **Ticking an athlete in opens a box to enter that athlete's marks.** Tap a checked-in athlete to open it again, and use **Save & next** to go straight to the next athlete:
    - Long jump: 4 attempts (Gremlin and Sub-Gremlin 3).
    - Shot put: 4 attempts.
    - Javelin: 3 attempts.
    - Type feet-inches like `12-04.25`, `F` for a foul, `P` for a pass.
-   - High jump: one column per bar height (starting heights per rule V.B.1, up 2"). Type `O`, `XO`, `XXO`, `XXX` or `P` at each height. The app flags an athlete out after 3 misses in a row.
+   - **Foul** and **Pass** are buttons in the box.
+   - High jump: the box lists each bar height (starting heights per rule V.B.1, up 2"). Tap `O`, `X` or `P` at each height, or type `XO`, `XXO`, `XXX`. Add a new height from the box. The app flags an athlete out after 3 misses in a row.
    - **Flight done** moves to the next division. **Print sheet** prints the flight.
 4. **Meet Manager table** (on the laptop): shows how many athletes and relays are waiting, and checks every 15 seconds.
    - **Download new heats** gives a file of only what Meet Manager doesn't have yet.
