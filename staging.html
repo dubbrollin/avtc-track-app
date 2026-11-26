@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#001C3B"><link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<title>Meet Day Staging</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css?v=b3">
+<script src="theme.js?v=b3"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script><script src="shared.js"></script><script src="staging.js?v=1"></script>
+<style>
+  .btn{padding:.5rem .9rem;border-radius:.5rem;font-weight:600}
+  .btn-sm{padding:.3rem .6rem;border-radius:.4rem;font-weight:600;font-size:.85rem}
+  .tabbar{display:flex;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;flex-wrap:wrap;background:#fff}
+  .tab{padding:.55rem 1rem;font-size:.95rem;font-weight:600;background:#fff;cursor:pointer;border:0}
+  .tab.active{background:var(--brand,#1e3a8a);color:#fff}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{border:1px solid #cbd5e1;border-radius:999px;padding:.35rem .8rem;font-size:.9rem;font-weight:600;background:#fff;cursor:pointer}
+  .chip.active{background:#1e3a8a;color:#fff;border-color:#1e3a8a}
+  .chip .n{font-weight:500;opacity:.75;margin-left:4px}
+  .race{border:1px solid #e5e7eb;border-radius:10px;background:#fff;margin-bottom:10px}
+  .race>summary{list-style:none;cursor:pointer;padding:10px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .race>summary::-webkit-details-marker{display:none}
+  .race[open]>summary{border-bottom:1px solid #e5e7eb}
+  .evno{font-size:.75rem;font-weight:800;background:#e0e7ff;color:#1e3a8a;border-radius:6px;padding:1px 6px}
+  .pill{font-size:.75rem;border-radius:999px;padding:1px 8px;font-weight:600}
+  table.st{width:100%;border-collapse:collapse;font-size:.92rem}
+  table.st th{text-align:left;font-size:.72rem;text-transform:uppercase;color:#64748b;padding:4px 6px;border-bottom:1px solid #e5e7eb}
+  table.st td{padding:6px;border-top:1px solid #f1f5f9;vertical-align:middle}
+  table.st tr.here td{background:#ecfdf5}
+  table.st tr.blocked td{color:#9ca3af}
+  .heat{border:2px solid #1e3a8a;border-radius:10px;margin:8px 0;overflow:hidden}
+  .heat .hh{background:#1e3a8a;color:#fff;padding:6px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .heat.sent{border-color:#15803d} .heat.sent .hh{background:#15803d}
+  .heat.run{border-color:#6b7280} .heat.run .hh{background:#6b7280}
+  .lane{font-weight:800;font-size:1.05rem;width:2.5rem;text-align:center}
+  .att{width:4.6rem;border:1px solid #d1d5db;border-radius:6px;padding:4px 5px;font-size:.9rem;text-align:center}
+  .att.bad{border-color:#dc2626;background:#fef2f2}
+  .hjc{width:3.4rem}
+  input[type=checkbox].big{width:1.35rem;height:1.35rem}
+  .sticky-top{position:sticky;top:0;z-index:20}
+  .warn{color:#b45309;font-size:.8rem}
+  .err{color:#b91c1c;font-size:.8rem}
+</style>
+</head>
+<body class="text-gray-900"><header class="topnav"><div class="topnav-inner">
+  <a class="brand" href="home.html">VYC <b>Track &amp; Field</b></a>
+  <nav>
+    <a href="home.html">Home</a>
+    <a href="meets-admin.html?view=timer">Timer</a>
+    <a href="staging.html" class="active">Meet Day Staging</a>
+    <a href="results.html">Results</a>
+  </nav>
+</div></header>
+<div class="max-w-5xl mx-auto p-3">
+  <div id="login" class="card max-w-lg mx-auto">
+    <h1 class="text-xl font-bold">Meet Day Staging</h1>
+    <p class="text-sm text-gray-600 mb-2">For the staging area, field event judges and the Meet Manager table. Sign in with the account a VYC admin added you with.</p>
+    <div id="loginWidget"></div>
+  </div>
+
+  <div id="app" class="hidden">
+    <div id="msg" style="position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:60;width:min(640px,94vw)"></div>
+    <div id="offline" class="hidden card border-2 border-amber-400 bg-amber-50 text-sm mb-2"><b>No connection.</b> Showing the list saved on this device. Ticking and sending heats needs a connection — keep the tablet on a hotspot.</div>
+
+    <div id="pick" class="card hidden">
+      <h1 class="text-xl font-bold mb-1">Meet Day Staging</h1>
+      <p class="text-sm text-gray-600 mb-2">Pick today's meet.</p>
+      <div id="meetList" class="space-y-1"></div>
+    </div>
+
+    <div id="meetView" class="hidden">
+      <div class="card mb-2">
+        <div class="flex flex-wrap items-center gap-2 justify-between">
+          <div><div class="text-xs text-gray-500"><a class="underline" href="staging.html">All meets</a></div>
+            <h1 class="text-xl font-bold" id="meetTitle"></h1><div class="text-sm text-gray-600" id="meetSub"></div></div>
+          <div class="flex items-center gap-2 text-sm">
+            <span>Lanes on this track:</span>
+            <div class="tabbar" id="laneBar" style="flex-wrap:nowrap">
+              <button class="tab" data-lanes="6">6</button><button class="tab" data-lanes="8">8</button><button class="tab" data-lanes="9">9</button>
+            </div>
+            <button class="btn-sm border bg-white" id="refreshBtn" title="Get the latest from the database">↻ Refresh</button>
+          </div>
+        </div>
+        <div class="tabbar mt-3" id="modeBar">
+          <button class="tab" data-mode="track">Track staging</button>
+          <button class="tab" data-mode="field">Field events</button>
+          <button class="tab" data-mode="mm">Meet Manager table</button>
+          <button class="tab hidden" data-mode="helpers" id="helpersTab">Staging helpers</button>
+        </div>
+      </div>
+      <div id="lanesNeeded" class="hidden card border-2 border-blue-500 text-center mb-2">
+        <div class="font-bold text-lg mb-1">How many lanes does this track have?</div>
+        <p class="text-sm text-gray-600 mb-2">Lanes are assigned by the VYC lane seeding chart (Playing Rules XI) for 6-, 8- and 9-lane tracks.</p>
+        <div class="flex justify-center gap-2"><button class="btn bg-blue-600 text-white" data-lanes="6">6 lanes</button><button class="btn bg-blue-600 text-white" data-lanes="8">8 lanes</button><button class="btn bg-blue-600 text-white" data-lanes="9">9 lanes</button></div>
+      </div>
+      <div id="pane"></div>
+    </div>
+  </div>
+</div>
+<script>
+const CFG=window.APP_CONFIG, S=window.STAGE, $=id=>document.getElementById(id);
+let sb=supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (n,t,fn)=>fn() } });
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const MEET_ID=new URLSearchParams(location.search).get('meet');
+let user=null, isAdmin=false, board=null, heats=[], fieldRows=[], mode=localStorage.getItem('stg_mode')||'track', trackSel=null, fieldSel=null, mmTimer=null;
+let athById={}, bests={}, entryCount={};
+const teamName=c=>((window.VYC_TEAMS||[]).find(t=>t.code===c)||{}).name||c;
+const LS=(k,v)=>{ const key='stg_'+(board?.meet?.id||MEET_ID)+'_'+k; if(v===undefined){ try{ return JSON.parse(localStorage.getItem(key)||'null'); }catch(e){ return null; } } localStorage.setItem(key,JSON.stringify(v)); };
+const flash=(t,bad)=>{ $('msg').innerHTML=`<div class="card ${bad?'border-2 border-red-400 bg-red-50 text-red-800':'border-2 border-green-400 bg-green-50 text-green-800'} text-sm mb-2">${esc(t)}</div>`; clearTimeout(window.__fl); window.__fl=setTimeout(()=>$('msg').innerHTML='',bad?12000:3500); };
+const rpc=async(fn,args)=>{ const {data,error}=await sb.rpc(fn,args); if(error) throw new Error(error.message); return data; };
+
+window.mountLoginWidget(sb,$('loginWidget'),{});
+sb.auth.onAuthStateChange(async(_e,session)=>{
+  user=session?.user||null; if(!user) return;
+  if(window.__authDone===user.id) return; window.__authDone=user.id;
+  sb=supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { auth: { lock: (n,t,fn)=>fn() } });
+  $('login').classList.add('hidden'); $('app').classList.remove('hidden');
+  start().catch(e=>{ $('msg').innerHTML=`<div class="card text-red-700">Something went wrong: ${esc(e.message||e)}</div>`; });
+});
+
+async function start(){
+  if(window.leagueReady) await window.leagueReady;
+  let allowed=false;
+  try{ allowed=await rpc('can_stage'); }catch(e){ if(MEET_ID&&localStorage.getItem('stg_'+MEET_ID+'_board')) allowed=true; else throw e; }
+  if(!allowed){ $('msg').innerHTML='<div class="card max-w-lg mx-auto"><b>Not set up for staging yet.</b><p class="text-sm mt-1">Meet Day Staging is for VYC admins, timers and staging helpers. Ask a site admin to add <b>'+esc(user.email)+'</b> as a staging helper.</p></div>'; return; }
+  try{ const {data:c}=await sb.from('coaches').select('is_admin,team_admin').eq('email',user.email).maybeSingle(); isAdmin=!!(c&&(c.is_admin||c.team_admin)); }catch(e){}
+  $('helpersTab').classList.toggle('hidden',!isAdmin);
+  if(MEET_ID) await openMeet(MEET_ID); else await listMeets();
+}
+
+async function listMeets(){
+  $('pick').classList.remove('hidden');
+  const rows=await rpc('staging_meets');
+  const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Los_Angeles'});
+  if(!rows.length){ $('meetList').innerHTML='<p class="text-sm text-gray-500">No meets on the schedule yet.</p>'; return; }
+  const up=rows.filter(m=>m.meet_date>=today).sort((a,b)=>a.meet_date.localeCompare(b.meet_date)), past=rows.filter(m=>m.meet_date<today);
+  const li=m=>`<a class="block border rounded-lg p-2 hover:bg-blue-50 ${m.meet_date===today?'border-blue-600 border-2':''}" href="staging.html?meet=${m.id}"><b>${esc(m.name)}</b> <span class="text-sm text-gray-600">${esc(m.meet_date)}${m.venue?' · '+esc(m.venue):''} · ${esc(window.meetTeamsLabel(m))}</span>${m.meet_date===today?' <span class="pill bg-blue-600 text-white">Today</span>':''}</a>`;
+  $('meetList').innerHTML=(up.length?'<div class="text-xs font-bold text-gray-500 uppercase">Coming up</div>'+up.map(li).join(''):'')+(past.length?'<div class="text-xs font-bold text-gray-500 uppercase mt-3">Earlier</div>'+past.slice(0,20).map(li).join(''):'');
+}
+
+// ---------- load ----------
+async function loadAll(){
+  try{
+    const [b,h,f]=await Promise.all([rpc('staging_board',{p_meet:MEET_ID}),rpc('staging_heats',{p_meet:MEET_ID}),rpc('staging_field',{p_meet:MEET_ID})]);
+    board=b; heats=h||[]; fieldRows=f||[];
+    try{ localStorage.setItem('stg_'+MEET_ID+'_board',JSON.stringify({b,h,f,at:Date.now()})); }catch(e){}
+    $('offline').classList.add('hidden');
+  }catch(e){
+    const c=JSON.parse(localStorage.getItem('stg_'+MEET_ID+'_board')||'null');
+    if(!c) throw e; board=c.b; heats=c.h||[]; fieldRows=c.f||[]; $('offline').classList.remove('hidden');
+  }
+  athById={}; board.athletes.forEach(a=>{ a.sortName=(a.last_name+' '+a.first_name).toLowerCase(); athById[a.id]=a; });
+  bests={}; board.bests.forEach(x=>{ (bests[x.reg]??={})[x.event_code]=x; });
+  entryCount={}; board.entries.forEach(e=>{ const c=entryCount[e.reg]??={n:0,relay:0,list:[]}; c.n++; if(e.is_relay) c.relay++; c.list.push(e.event_code+(e.is_relay?'R':'')); });
+}
+async function openMeet(id){
+  await loadAll();
+  $('meetView').classList.remove('hidden');
+  const m=board.meet; $('meetTitle').textContent=m.name;
+  $('meetSub').textContent=`${m.meet_date}${m.venue?' · '+m.venue:''} · ${window.meetTeamsLabel(m)} · ${board.athletes.length} certified athletes`;
+  document.title='Staging · '+m.name;
+  paintLanes(); setMode(mode);
+}
+function paintLanes(){
+  const L=board.meet.lanes;
+  document.querySelectorAll('#laneBar [data-lanes]').forEach(b=>b.classList.toggle('active',+b.dataset.lanes===L));
+  $('lanesNeeded').classList.toggle('hidden',!!L||mode!=='track');
+}
+document.addEventListener('click',async e=>{
+  const b=e.target.closest('[data-lanes]'); if(!b||!board) return;
+  const n=+b.dataset.lanes; if(board.meet.lanes&&board.meet.lanes!==n&&heats.some(h=>h.status!=='draft')&&!confirm(`Change to ${n} lanes? Heats already sent keep their lanes; new heats use the ${n}-lane chart.`)) return;
+  try{ await rpc('staging_set_lanes',{p_meet:MEET_ID,p_lanes:n}); board.meet.lanes=n; paintLanes(); render(); }catch(err){ flash(err.message,true); }
+});
+$('refreshBtn').onclick=async()=>{ await loadAll(); render(); flash('Up to date.'); };
+document.querySelectorAll('#modeBar [data-mode]').forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
+function setMode(m){ if(m==='helpers'&&!isAdmin) m='track'; mode=m; localStorage.setItem('stg_mode',m);
+  document.querySelectorAll('#modeBar [data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===m)); paintLanes(); render(); }
+function render(){ clearInterval(mmTimer);
+  if(mode==='track') renderTrack(); else if(mode==='field') renderField(); else if(mode==='mm') renderMM(); else renderHelpers(); }
+
+// ---------- event limits (rule IV.C.1; the database checks again and refuses) ----------
+function limitFor(div){ return ['Sub-Gremlin','Gremlin'].includes(div)?{max:3,relay:false}:div==='Intermediates'?{max:4,relay:false}:{max:4,relay:true}; }
+function limitProblem(a, isRelay){
+  const c=entryCount[a.id]||{n:0,relay:0}, L=limitFor(a.division), n=c.n+1, r=c.relay+(isRelay?1:0);
+  if(n>L.max) return `already has ${c.n} events (max ${L.max})`;
+  if(L.relay&&n===L.max&&r===0) return `4th event must be a relay (rule IV.C.1)`;
+  return null;
+}
+const countBadge=a=>{ const c=entryCount[a.id]||{n:0}, L=limitFor(a.division); return `<span class="pill ${c.n>=L.max?'bg-red-100 text-red-800':c.n?'bg-gray-100 text-gray-700':'bg-gray-50 text-gray-400'}" title="${esc((c.list||[]).join(', '))}">${c.n}/${L.max}</span>`; };
+
+// ---------- TRACK ----------
+function racesFor(t){
+  // a race = one division+gender, unless the stager combined groups (stored per meet; also rebuilt from saved heats)
+  const combos=(LS('combos')||{})[t.key]||[];
+  heats.filter(h=>h.race_key.startsWith(t.key+'|')&&h.groups.length>1).forEach(h=>{ const k=h.groups.map(g=>g.division+'|'+g.gender); if(!combos.some(c=>c.join()===k.join())) combos.push(k); });
+  const used=new Set(combos.flat()); const out=[];
+  t.groups.forEach(g=>{
+    const k=g.division+'|'+g.gender;
+    const combo=combos.find(c=>c[0]===k);
+    if(combo) out.push({t, groups:combo.map(x=>{ const [division,gender]=x.split('|'); return {division,gender}; })});
+    else if(!used.has(k)) out.push({t, groups:[g]});
+  });
+  out.forEach(r=>{ r.key=t.key+'|'+r.groups.map(g=>g.division+'|'+g.gender).join('+'); r.code=S.codeOf(t,r.groups[0]); r.name=S.nameOf(t,r.groups[0]);
+    r.label=r.groups.map(g=>S.gName(g.division,g.gender)).join(' + '); r.evnos=r.groups.map(g=>S.evNum(t,g)); });
+  return out;
+}
+const raceHeats=r=>heats.filter(h=>h.race_key===r.key).sort((a,b)=>a.heat_no-b.heat_no);
+const groupAthletes=r=>board.athletes.filter(a=>r.groups.some(g=>g.division===a.division&&g.gender===a.gender));
+function seedOf(a,code){ const b=(bests[a.id]||{})[code]; return b?{mark:b.mark,value:+b.mark_value}:{mark:'',value:null}; }
+
+function renderTrack(){
+  if(!board.meet.lanes){ $('pane').innerHTML=''; return; }
+  trackSel=trackSel||localStorage.getItem('stg_track')||S.TRACK[0].key;
+  const chips=S.TRACK.map(t=>{ const n=heats.filter(h=>h.race_key.startsWith(t.key+'|')).length;
+    return `<button class="chip ${t.key===trackSel?'active':''}" data-track="${t.key}">${esc(t.name)}${n?`<span class="n">${n} heat${n>1?'s':''}</span>`:''}</button>`; }).join('');
+  const t=S.TRACK.find(x=>x.key===trackSel);
+  const races=racesFor(t);
+  $('pane').innerHTML=`<div class="card mb-2 sticky-top"><div class="chips">${chips}</div>
+      <p class="text-xs text-gray-500 mt-2">Run in this order (Playing Rules IV.C.1.b). Open a division, tick each athlete who is in the staging area at final call, then <b>Seed heats</b>. Fastest heat runs first; lanes follow the ${board.meet.lanes}-lane chart${t.chart==='water'?' — this race uses a waterfall start, so positions are 1, 2, 3… (800m: 18 max per heat, rule VI.A)':''}.</p>
+      ${t.groups.length>1?`<div class="mt-2 text-sm"><button class="btn-sm border bg-white" id="comboBtn">Combine divisions into one race…</button> <span class="text-xs text-gray-500">Mixed races (800 and longer, relays) — run several divisions or boys and girls together.</span></div>`:''}
+    </div><div id="races">${races.map(raceHtml).join('')}</div>`;
+  document.querySelectorAll('[data-track]').forEach(b=>b.onclick=()=>{ trackSel=b.dataset.track; localStorage.setItem('stg_track',trackSel); renderTrack(); });
+  if($('comboBtn')) $('comboBtn').onclick=()=>comboEditor(t);
+  races.forEach(r=>wireRace(r));
+  const openKey=LS('open'); if(openKey){ const d=document.querySelector(`details[data-race="${CSS.escape(openKey)}"]`); if(d) d.open=true; }
+}
+function raceHtml(r){
+  const hs=raceHeats(r), inHeats=new Set(hs.flatMap(h=>h.lanes.map(l=>l.registration_id||l.team_code+l.relay_letter)));
+  const sent=hs.filter(h=>h.status!=='draft').length, run=hs.filter(h=>h.status==='run').length;
+  const st=!hs.length?'<span class="pill bg-gray-100 text-gray-600">Not seeded</span>':run===hs.length?'<span class="pill bg-gray-200 text-gray-700">Done</span>':sent?`<span class="pill bg-green-100 text-green-800">${sent}/${hs.length} sent</span>`:`<span class="pill bg-yellow-100 text-yellow-800">${hs.length} heat${hs.length>1?'s':''} — not sent</span>`;
+  return `<details class="race" data-race="${esc(r.key)}"><summary>${r.evnos.map(n=>`<span class="evno">Ev ${n}</span>`).join('')}<b>${esc(r.label)}</b><span class="text-gray-600">${esc(r.name)}</span>${st}<span class="text-xs text-gray-500 ml-auto">${inHeats.size} in heats</span></summary><div class="p-3" data-body></div></details>`;
+}
+function wireRace(r){
+  const d=document.querySelector(`details[data-race="${CSS.escape(r.key)}"]`);
+  const paint=()=>{ d.querySelector('[data-body]').innerHTML=r.t.relay?relayBody(r):indivBody(r); wireBody(r,d); };
+  d.addEventListener('toggle',()=>{ if(d.open){ LS('open',r.key); paint(); } });
+  if(d.open) paint();
+}
+function hereSet(r){ return new Set((LS('here')||{})[r.key]||[]); }
+function saveHere(r,set){ const all=LS('here')||{}; all[r.key]=[...set]; LS('here',all); }
+
+function indivBody(r){
+  const hs=raceHeats(r), placed={}; hs.forEach(h=>h.lanes.forEach(l=>{ if(l.registration_id) placed[l.registration_id]={heat:h.heat_no,lane:l.lane,status:h.status}; }));
+  const here=hereSet(r); Object.keys(placed).forEach(id=>here.add(id));
+  const rows=groupAthletes(r).map(a=>({a,s:seedOf(a,r.code)})).sort((x,y)=>(x.s.value==null)-(y.s.value==null)||(x.s.value-y.s.value)||x.a.sortName.localeCompare(y.a.sortName));
+  const body=rows.map(({a,s})=>{
+    const p=placed[a.id], prob=p?null:limitProblem(a,false), on=here.has(a.id);
+    return `<tr class="${on?'here':''} ${prob&&!on?'blocked':''}"><td><input type="checkbox" class="big" data-here="${a.id}" ${on?'checked':''} ${prob&&!on?'disabled':''}></td>
+      <td><b>${esc(a.last_name)}, ${esc(a.first_name)}</b>${r.groups.length>1?` <span class="text-xs text-gray-500">${esc(S.gName(a.division,a.gender))}</span>`:''}${prob&&!on?`<div class="err">Can't run: ${esc(prob)}</div>`:''}</td>
+      <td class="text-gray-600">#${esc(a.comp_number??'—')}</td><td class="text-gray-600">${esc(a.team_code)}</td>
+      <td class="font-semibold">${s.mark?esc(s.mark):'<span class="text-gray-400">NT</span>'}</td><td>${countBadge(a)}</td>
+      <td class="text-sm">${p?`Heat ${p.heat} · ${r.t.chart==='water'?'Pos':'Lane'} ${p.lane}`:''}</td></tr>`;
+  }).join('');
+  return `<div class="flex flex-wrap gap-2 mb-2"><button class="btn bg-blue-600 text-white" data-seed>Seed heats from ticked athletes</button>
+      <button class="btn-sm border bg-white" data-allhere>Tick all</button><button class="btn-sm border bg-white" data-nonehere>Clear ticks</button></div>
+    <div class="overflow-x-auto"><table class="st"><thead><tr><th>Here</th><th>Athlete</th><th>Comp #</th><th>Team</th><th>Season best</th><th>Events</th><th>Placed</th></tr></thead><tbody>${body||'<tr><td colspan="7" class="text-gray-500">No certified athletes on this meet\'s teams in this division.</td></tr>'}</tbody></table></div>
+    <div data-heats>${heatsHtml(r)}</div>`;
+}
+function relayBody(r){
+  const hs=raceHeats(r), pend=(LS('relays')||{})[r.key]||[];
+  const teams=[...new Set(groupAthletes(r).map(a=>a.team_code))].sort();
+  const placedKeys=new Set(hs.flatMap(h=>h.lanes.map(l=>l.team_code+'|'+l.relay_letter)));
+  const list=pend.map((x,i)=>{ const names=x.runners.map(id=>athById[id]?`${athById[id].first_name} ${athById[id].last_name}`:'?').join(', ');
+    return `<tr class="here"><td><b>${esc(teamName(x.team_code))} ${esc(x.relay_letter)}</b></td><td class="text-sm">${esc(names)}</td><td class="font-semibold">${x.seed_mark?esc(x.seed_mark):'<span class="text-gray-400">NT</span>'}</td>
+      <td>${placedKeys.has(x.team_code+'|'+x.relay_letter)?'<span class="pill bg-green-100 text-green-800">in a heat</span>':''} <button class="btn-sm border bg-white" data-relaydel="${i}">Remove</button></td></tr>`; }).join('');
+  return `<p class="text-sm text-gray-600 mb-2">Add each relay that is in the staging area. All 4 runners are required (each counts as one of their events). Seed: the team's <b>A</b> relay gets its best relay time this season, <b>B</b> the second best; a <b>C</b> relay (or any relay without a time) can have a time typed in or run with no time.</p>
+    <div class="grid gap-2 md:grid-cols-2">${teams.map(tc=>relayForm(r,tc)).join('')||'<p class="text-sm text-gray-500">No certified athletes on this meet\'s teams in this division.</p>'}</div>
+    <table class="st mt-3"><thead><tr><th>Relay</th><th>Runners (legs 1-4)</th><th>Seed</th><th></th></tr></thead><tbody>${list||'<tr><td colspan="4" class="text-gray-500">No relays added yet.</td></tr>'}</tbody></table>
+    <div class="mt-2"><button class="btn bg-blue-600 text-white" data-seed>Seed heats from these relays</button></div>
+    <div data-heats>${heatsHtml(r)}</div>`;
+}
+function relaySeeds(r,tc){
+  return board.relays.filter(x=>x.team_code===tc&&x.event_code===r.code&&r.groups.some(g=>g.division===x.division&&g.gender===x.gender)).sort((a,b)=>a.mark_value-b.mark_value);
+}
+function relayForm(r,tc){
+  const pend=((LS('relays')||{})[r.key]||[]).filter(x=>x.team_code===tc), used=new Set(pend.flatMap(x=>x.runners));
+  const letter=String.fromCharCode(65+pend.length), seeds=relaySeeds(r,tc), auto=seeds[pend.length];
+  const ath=groupAthletes(r).filter(a=>a.team_code===tc).sort((a,b)=>a.sortName.localeCompare(b.sortName));
+  const opts=ath.map(a=>{ const prob=limitProblem(a,true); return `<option value="${a.id}" ${used.has(a.id)||prob?'disabled':''}>${esc(a.last_name)}, ${esc(a.first_name)} #${esc(a.comp_number??'')}${prob?' — '+esc(prob):used.has(a.id)?' — on another relay':''}</option>`; }).join('');
+  return `<div class="border rounded-lg p-2" data-rform="${esc(tc)}"><div class="font-semibold">${esc(teamName(tc))} — relay ${letter}</div>
+    ${[1,2,3,4].map(l=>`<label class="flex items-center gap-2 text-sm mt-1"><span class="w-12">Leg ${l}</span><select class="border rounded p-1 flex-1" data-leg="${l}"><option value="">— pick runner —</option>${opts}</select></label>`).join('')}
+    <label class="flex items-center gap-2 text-sm mt-1"><span class="w-12">Seed</span><input class="border rounded p-1 w-28" data-rseed value="${auto?esc(auto.mark):''}" placeholder="NT"><span class="text-xs text-gray-500">${auto?`team's ${pend.length?'2nd ':''}best this season`:'no relay time this season — type one or leave NT'}</span></label>
+    <button class="btn-sm bg-blue-600 text-white mt-2" data-raddrelay="${esc(tc)}" data-letter="${letter}">Add relay ${letter}</button></div>`;
+}
+function heatsHtml(r){
+  const hs=raceHeats(r); if(!hs.length) return '';
+  const wat=r.t.chart==='water';
+  return `<div class="mt-3 text-sm font-bold">Heats — ${hs.length}</div>`+hs.map(h=>{
+    const lanes=[...h.lanes].sort((a,b)=>a.lane-b.lane);
+    const rows=lanes.map(l=>{ const a=athById[l.registration_id];
+      const who=l.registration_id?(a?`<b>${esc(a.last_name)}, ${esc(a.first_name)}</b> <span class="text-gray-500">#${esc(a.comp_number??'')}</span>`:'(athlete)'):`<b>${esc(teamName(l.team_code))} ${esc(l.relay_letter)}</b> <span class="text-xs text-gray-500">${esc((l.runners||[]).map(id=>athById[id]?athById[id].first_name+' '+athById[id].last_name:'?').join(', '))}</span>`;
+      return `<tr><td class="lane">${l.lane}</td><td>${who}</td><td class="text-gray-600">${esc(l.team_code)}</td><td class="font-semibold">${l.seed_mark?esc(l.seed_mark):'NT'}</td>${h.status!=='run'?`<td><button class="btn-sm border bg-white" data-pull="${h.id}|${l.lane}" title="Take out of this heat">✕</button></td>`:'<td></td>'}</tr>`; }).join('');
+    const st=h.status==='draft'?'Not sent':h.status==='sent'?'Sent to Meet Manager':'Run';
+    return `<div class="heat ${h.status}"><div class="hh"><b>Heat ${h.heat_no} of ${hs.length}</b><span class="text-sm opacity-90">${st}${h.status!=='draft'&&h.lanes.some(l=>!l.exported_at)?' · waiting for the laptop':''}</span><span class="ml-auto flex gap-1 flex-wrap">
+        ${h.status==='draft'?`<button class="btn-sm bg-white text-green-800" data-status="${h.id}|sent">Send to Meet Manager</button>`:''}
+        ${h.status==='sent'?`<button class="btn-sm bg-white text-gray-800" data-status="${h.id}|run">Mark run</button><button class="btn-sm bg-white/20 text-white border border-white/40" data-status="${h.id}|draft">Un-send</button>`:''}
+        ${h.status==='run'?`<button class="btn-sm bg-white/20 text-white border border-white/40" data-status="${h.id}|sent">Not run yet</button>`:''}
+        <button class="btn-sm bg-white/20 text-white border border-white/40" data-print="${h.id}">Print</button>
+        ${h.status!=='run'?`<button class="btn-sm bg-white/20 text-white border border-white/40" data-delheat="${h.id}">Delete</button>`:''}</span></div>
+      <table class="st"><thead><tr><th>${wat?'Pos':'Lane'}</th><th>${r.t.relay?'Relay':'Athlete'}</th><th>Team</th><th>Seed</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }).join('');
+}
+function wireBody(r,d){
+  const repaint=()=>{ d.querySelector('[data-body]').innerHTML=r.t.relay?relayBody(r):indivBody(r); wireBody(r,d); refreshSummary(r,d); };
+  d.querySelectorAll('[data-here]').forEach(cb=>cb.onchange=async()=>{
+    const set=hereSet(r), id=cb.dataset.here;
+    if(cb.checked){ set.add(id); saveHere(r,set); cb.closest('tr').classList.add('here'); return; }
+    const h=raceHeats(r).find(h=>h.lanes.some(l=>l.registration_id===id));
+    if(h){ if(h.status==='run'){ cb.checked=true; return flash('That heat has been run.',true); }
+      if(h.status==='sent'&&!confirm('Take this athlete out of heat '+h.heat_no+'? Meet Manager has the heat — the laptop will be told to scratch them.')){ cb.checked=true; return; }
+      await saveHeat(r,h,h.lanes.filter(l=>l.registration_id!==id),h.status); }
+    set.delete(id); saveHere(r,set); repaint();
+  });
+  const tick=on=>{ const set=hereSet(r); groupAthletes(r).forEach(a=>{ if(on&&!limitProblem(a,false)) set.add(a.id); if(!on) set.delete(a.id); }); saveHere(r,set); repaint(); };
+  d.querySelector('[data-allhere]')?.addEventListener('click',()=>tick(true));
+  d.querySelector('[data-nonehere]')?.addEventListener('click',()=>tick(false));
+  d.querySelector('[data-seed]')?.addEventListener('click',async()=>{ try{ await seedRace(r); repaint(); }catch(e){ flash(e.message,true); await loadAll(); repaint(); } });
+  d.querySelectorAll('[data-raddrelay]').forEach(b=>b.onclick=()=>{
+    const f=b.closest('[data-rform]'), runners=[1,2,3,4].map(l=>f.querySelector(`[data-leg="${l}"]`).value);
+    if(runners.some(x=>!x)) return flash('Pick all 4 runners (legs 1-4).',true);
+    if(new Set(runners).size<4) return flash('The same runner is picked twice.',true);
+    const seed=f.querySelector('[data-rseed]').value.trim(); if(seed&&S.timeVal(seed)==null) return flash('Relay seed: type a time like 58.42 or 1:05.30, or leave it blank for NT.',true);
+    const all=LS('relays')||{}; (all[r.key]??=[]).push({team_code:b.dataset.raddrelay, relay_letter:b.dataset.letter, runners, seed_mark:seed, seed_value:seed?S.timeVal(seed):null}); LS('relays',all); repaint();
+  });
+  d.querySelectorAll('[data-relaydel]').forEach(b=>b.onclick=async()=>{
+    const all=LS('relays')||{}, x=all[r.key][+b.dataset.relaydel];
+    const h=raceHeats(r).find(h=>h.lanes.some(l=>l.team_code===x.team_code&&l.relay_letter===x.relay_letter));
+    if(h){ if(h.status==='run') return flash('That heat has been run.',true);
+      if(!confirm(`Take ${teamName(x.team_code)} ${x.relay_letter} out of heat ${h.heat_no}?`)) return;
+      try{ await saveHeat(r,h,h.lanes.filter(l=>!(l.team_code===x.team_code&&l.relay_letter===x.relay_letter)),h.status); }catch(e){ return flash(e.message,true); } }
+    all[r.key].splice(+b.dataset.relaydel,1); LS('relays',all); repaint();
+  });
+  d.querySelectorAll('[data-status]').forEach(b=>b.onclick=async()=>{ const [id,st]=b.dataset.status.split('|');
+    try{ await rpc('staging_set_status',{p_heat:id,p_status:st}); const h=heats.find(x=>x.id===id); h.status=st; if(st==='sent') flash(`Heat ${h.heat_no} sent — the Meet Manager table will see it.`); repaint(); }catch(e){ flash(e.message,true); } });
+  d.querySelectorAll('[data-delheat]').forEach(b=>b.onclick=async()=>{ const h=heats.find(x=>x.id===b.dataset.delheat);
+    if(!confirm(`Delete heat ${h.heat_no}? Its athletes stay ticked so you can seed again.${h.status==='sent'?' Meet Manager already has it — the laptop will be told to scratch them.':''}`)) return;
+    try{ await rpc('staging_delete_heat',{p_heat:h.id}); await loadAll(); repaint(); }catch(e){ flash(e.message,true); } });
+  d.querySelectorAll('[data-pull]').forEach(b=>b.onclick=async()=>{ const [id,lane]=b.dataset.pull.split('|'); const h=heats.find(x=>x.id===id);
+    if(h.status==='sent'&&!confirm('Take them out of heat '+h.heat_no+'? Meet Manager already has the heat — the laptop will be told to scratch them.')) return;
+    const gone=h.lanes.find(l=>l.lane===+lane);
+    try{ await saveHeat(r,h,h.lanes.filter(l=>l.lane!==+lane),h.status);
+      if(gone.registration_id){ const set=hereSet(r); set.delete(gone.registration_id); saveHere(r,set); } repaint(); }catch(e){ flash(e.message,true); } });
+  d.querySelectorAll('[data-print]').forEach(b=>b.onclick=()=>printHeats(r,[heats.find(x=>x.id===b.dataset.print)]));
+}
+function refreshSummary(r,d){ const tmp=document.createElement('div'); tmp.innerHTML=raceHtml(r); d.querySelector('summary').innerHTML=tmp.querySelector('summary').innerHTML; }
+
+function laneRow(r,x){ return x.relay_letter
+  ? {lane:x.lane, team_code:x.team_code, relay_letter:x.relay_letter, runners:x.runners, seed_mark:x.seed_mark||'', seed_value:x.seed_value}
+  : {lane:x.lane, registration_id:x.registration_id||x.id, team_code:x.team_code, seed_mark:x.seed_mark||'', seed_value:x.seed_value}; }
+async function saveHeat(r,h,lanes,status){
+  const p={meet_id:MEET_ID, race_key:r.key, event_code:r.code, event_name:r.name, is_relay:!!r.t.relay, groups:r.groups,
+           heat_no:h.heat_no, lanes_total:h.lanes_total||board.meet.lanes, status:status||'draft', lanes:lanes.map(x=>laneRow(r,x))};
+  if(!p.lanes.length&&h.id){ await rpc('staging_delete_heat',{p_heat:h.id}); }
+  else await rpc('staging_save_heat',{p});
+  await loadAll();
+}
+// Seed: the first time, every ticked athlete is seeded into heats. Once heats are sent, new arrivals are late: they take an empty lane
+// in a heat that hasn't run (chart order), otherwise they go into the next heat(s).
+async function seedRace(r){
+  const hs=raceHeats(r), locked=hs.filter(h=>h.status!=='draft'), drafts=hs.filter(h=>h.status==='draft');
+  const lockedIds=new Set(locked.flatMap(h=>h.lanes.map(l=>l.registration_id||l.team_code+'|'+l.relay_letter)));
+  let pool;
+  if(r.t.relay){
+    pool=((LS('relays')||{})[r.key]||[]).filter(x=>!lockedIds.has(x.team_code+'|'+x.relay_letter))
+      .map(x=>({...x, sortName:x.team_code+x.relay_letter}));
+  } else {
+    const here=hereSet(r);
+    pool=groupAthletes(r).filter(a=>here.has(a.id)&&!lockedIds.has(a.id)).map(a=>{ const s=seedOf(a,r.code); return {id:a.id, registration_id:a.id, team_code:a.team_code, seed_mark:s.mark, seed_value:s.value, sortName:a.sortName}; });
+  }
+  if(!pool.length&&!drafts.length) return flash(r.t.relay?'Add the relays that are here first.':'Tick the athletes who are in the staging area first.',true);
+  pool.sort((a,b)=>(a.seed_value==null)-(b.seed_value==null)||(a.seed_value-b.seed_value)||a.sortName.localeCompare(b.sortName));
+  const lanesN=board.meet.lanes;
+  // late arrivals into empty lanes of sent (not run) heats, slowest heat first is NOT allowed: earliest heat with room
+  const late=[];
+  for(const x of pool){
+    let placed=false;
+    for(const h of locked.filter(h=>h.status==='sent')){
+      const lane=S.emptyLane(h,r.t); if(lane==null) continue;
+      h.lanes.push({...x, lane}); placed=true; h._dirty=true; break;
+    }
+    if(!placed) late.push(x);
+  }
+  for(const h of locked.filter(h=>h._dirty)){ await rpc('staging_save_heat',{p:{meet_id:MEET_ID, race_key:r.key, event_code:r.code, event_name:r.name, is_relay:!!r.t.relay, groups:r.groups,
+      heat_no:h.heat_no, lanes_total:h.lanes_total, status:h.status, lanes:h.lanes.map(x=>laneRow(r,x))}}); }
+  // the rest become (new) draft heats after the locked ones; old drafts are replaced
+  const groupsNew=S.seedHeats(late, r.t, lanesN), start=locked.length?Math.max(...locked.map(h=>h.heat_no)):0;
+  for(const d of drafts) await rpc('staging_delete_heat',{p_heat:d.id});
+  for(let i=0;i<groupsNew.length;i++){
+    await rpc('staging_save_heat',{p:{meet_id:MEET_ID, race_key:r.key, event_code:r.code, event_name:r.name, is_relay:!!r.t.relay, groups:r.groups,
+      heat_no:start+i+1, lanes_total:lanesN, status:'draft', lanes:groupsNew[i].map(x=>laneRow(r,x))}});
+  }
+  await loadAll();
+  const moved=pool.length-late.length;
+  flash(`${groupsNew.length?groupsNew.length+' heat'+(groupsNew.length>1?'s':'')+' ready — check the lanes, then Send to Meet Manager.':''}${moved?` ${moved} late arrival${moved>1?'s':''} put in an empty lane of a sent heat (re-sent to the laptop).`:''}`);
+}
+function comboEditor(t){
+  const all=LS('combos')||{}, cur=all[t.key]||[];
+  const box=document.createElement('div'); box.className='card mb-2 border-2 border-blue-500';
+  box.innerHTML=`<b>Combine divisions — ${esc(t.name)}</b><p class="text-xs text-gray-600 mb-2">Tick the divisions that run together as one race (mixed race), then Combine. Each athlete is still entered in their own division's event.</p>
+    <div class="chips">${t.groups.map(g=>{ const k=g.division+'|'+g.gender, inC=cur.some(c=>c.includes(k)); return `<label class="chip"><input type="checkbox" value="${k}" ${inC?'disabled':''}> ${esc(S.gName(g.division,g.gender))}${inC?' (combined)':''}</label>`; }).join('')}</div>
+    <div class="mt-2 flex gap-2 flex-wrap"><button class="btn-sm bg-blue-600 text-white" data-c>Combine ticked</button>${cur.map((c,i)=>`<button class="btn-sm border bg-white" data-u="${i}">Split ${esc(c.map(k=>S.gName(...k.split('|'))).join(' + '))}</button>`).join('')}<button class="btn-sm border bg-white" data-x>Close</button></div>`;
+  $('races').prepend(box);
+  box.querySelector('[data-x]').onclick=()=>box.remove();
+  box.querySelector('[data-c]').onclick=()=>{ const ks=[...box.querySelectorAll('input:checked')].map(x=>x.value);
+    if(ks.length<2) return flash('Tick at least two divisions.',true);
+    if(t.codeFor&&new Set(ks.map(k=>t.codeFor({division:k.split('|')[0],gender:k.split('|')[1]}))).size>1) return flash('Those are different hurdle races and can\'t be combined.',true);
+    if(ks.some(k=>heats.some(h=>h.race_key===t.key+'|'+k))) return flash('One of those divisions already has heats. Delete its heats first, then combine.',true);
+    ks.sort((a,b)=>t.groups.findIndex(g=>g.division+'|'+g.gender===a)-t.groups.findIndex(g=>g.division+'|'+g.gender===b));
+    (all[t.key]??=[]).push(ks); LS('combos',all); renderTrack(); };
+  box.querySelectorAll('[data-u]').forEach(b=>b.onclick=()=>{ const c=cur[+b.dataset.u]; const key=t.key+'|'+c.join('+');
+    if(heats.some(h=>h.race_key===key)) return flash('That combined race already has heats. Delete them first.',true);
+    cur.splice(+b.dataset.u,1); all[t.key]=cur; LS('combos',all); renderTrack(); });
+}
+function printHeats(r,hs){
+  const w=window.open('','_blank'); if(!w) return flash('Allow pop-ups to print.',true);
+  const wat=r.t.chart==='water';
+  w.document.write(`<html><head><title>${esc(r.label+' '+r.name)}</title><style>body{font-family:Arial,sans-serif;margin:18px}h1{font-size:18px;margin:0}h2{font-size:15px;margin:14px 0 4px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #333;padding:6px;text-align:left;font-size:14px}th{background:#eee}.l{width:50px;text-align:center;font-weight:bold;font-size:18px}</style></head><body>
+    <h1>${esc(board.meet.name)} — ${esc(board.meet.meet_date)}</h1><div>${r.evnos.map(n=>'Event '+n).join(', ')} · ${esc(r.label)} · ${esc(r.name)}</div>
+    ${hs.map(h=>`<h2>Heat ${h.heat_no} of ${raceHeats(r).length}</h2><table><tr><th>${wat?'Pos':'Lane'}</th><th>Comp #</th><th>${r.t.relay?'Relay / runners':'Name'}</th><th>Team</th><th>Seed</th><th>Time</th></tr>
+      ${[...h.lanes].sort((a,b)=>a.lane-b.lane).map(l=>{ const a=athById[l.registration_id];
+        return `<tr><td class="l">${l.lane}</td><td>${a?esc(a.comp_number??''):''}</td><td>${a?esc(a.first_name+' '+a.last_name):esc(teamName(l.team_code)+' '+l.relay_letter)+'<br><small>'+esc((l.runners||[]).map(id=>athById[id]?athById[id].first_name+' '+athById[id].last_name:'').join(', '))+'</small>'}</td><td>${esc(teamName(l.team_code))}</td><td>${esc(l.seed_mark||'NT')}</td><td style="width:90px"></td></tr>`; }).join('')}</table>`).join('')}
+    <script>window.onload=()=>window.print()<\/script></body></html>`);
+  w.document.close();
+}
+
+// ---------- FIELD ----------
+function renderField(){
+  fieldSel=fieldSel||localStorage.getItem('stg_field')||'LJ';
+  const ev=S.FIELD.find(f=>f.code===fieldSel);
+  const fmap={}; fieldRows.filter(x=>x.event_code===ev.code).forEach(x=>fmap[x.registration_id]=x);
+  const flights=ev.flights.map((groups,i)=>({i, groups, label:groups.map(g=>S.gName(g.division,g.gender)).join(' and '), evnos:groups.map(g=>ev.base+2*S.DIVS.indexOf(g.division)+(g.gender==='Boy'?1:0)),
+    ath:board.athletes.filter(a=>groups.some(g=>g.division===a.division&&g.gender===a.gender))}));
+  const done=LS('fdone')||{}; const cur=flights.find(f=>!done[ev.code+'|'+f.i]);
+  $('pane').innerHTML=`<div class="card mb-2 sticky-top"><div class="chips">${S.FIELD.map(f=>`<button class="chip ${f.code===fieldSel?'active':''}" data-field="${f.code}">${esc(f.name)}</button>`).join('')}</div>
+     <p class="text-xs text-gray-500 mt-2">Flights in the order set by Playing Rules IV.C.1.a. ${ev.hj?'High jump: 3 tries at each height, out after 3 misses in a row; bar goes up 2" (V.B). Type O = made, X = miss, P = pass, e.g. XO.':`Attempts: ${ev.code==='LJ'?'4 (Gremlin and Sub-Gremlin 3)':ev.code==='SP'?'4':'3'} (rule ${ev.code==='LJ'?'V.C':ev.code==='SP'?'V.D':'V Javelin'}). Type feet-inches like 12-04.25, F = foul, P = pass.`}</p>
+     ${cur?`<div class="mt-2 text-sm"><b>Now:</b> ${esc(cur.label)}${flights[cur.i+1]?` · <b>Next up:</b> ${esc(flights[cur.i+1].label)}`:' · last flight'}</div>`:'<div class="mt-2 text-sm font-semibold text-green-700">All flights done.</div>'}</div>
+   ${flights.map(f=>flightHtml(ev,f,fmap,done,cur)).join('')}`;
+  document.querySelectorAll('[data-field]').forEach(b=>b.onclick=()=>{ fieldSel=b.dataset.field; localStorage.setItem('stg_field',fieldSel); renderField(); });
+  wireField(ev,flights,fmap);
+}
+function flightHtml(ev,f,fmap,done,cur){
+  const key=ev.code+'|'+f.i, isDone=!!done[key];
+  const rows=f.ath.map(a=>({a,m:fmap[a.id],s:seedOf(a,ev.code)})).sort((x,y)=>(!!y.m?.checked_in)-(!!x.m?.checked_in)||((y.s.value??-1)-(x.s.value??-1))||x.a.sortName.localeCompare(y.a.sortName));
+  const inCount=rows.filter(x=>x.m?.checked_in).length;
+  let table;
+  if(ev.hj){
+    const hs=hjHeights(ev,f,fmap);
+    table=`<div class="flex gap-2 items-center mb-2 text-sm"><span>Heights:</span>${hs.map(h=>`<span class="pill bg-blue-50 text-blue-900">${S.feetLabel(h)}</span>`).join('')}
+      <input class="att" data-newh placeholder="${S.feetLabel(hs.length?hs[hs.length-1]+2:S.HJ_START[f.groups[0].division+'|'+f.groups[0].gender]||36)}"><button class="btn-sm border bg-white" data-addh>Add height</button></div>
+      <div class="overflow-x-auto"><table class="st"><thead><tr><th>In</th><th>Athlete</th><th>Season best</th>${hs.map(h=>`<th>${S.feetLabel(h)}</th>`).join('')}<th>Best</th><th>Place</th></tr></thead><tbody>
+      ${rows.map(({a,m,s})=>{ const at={}; (m?.attempts||[]).forEach(x=>at[x.h]=x.r); const prob=m?.checked_in?null:limitProblem(a,false), out=hjOut(m);
+        return `<tr class="${m?.checked_in?'here':''} ${prob?'blocked':''}" data-frow="${a.id}"><td><input type="checkbox" class="big" data-fin ${m?.checked_in?'checked':''} ${prob?'disabled':''}></td>
+          <td><b>${esc(a.last_name)}, ${esc(a.first_name)}</b> <span class="text-xs text-gray-500">#${esc(a.comp_number??'')} ${esc(a.team_code)}${f.groups.length>1?' · '+esc(S.gName(a.division,a.gender)):''}</span>${prob?`<div class="err">Can't compete: ${esc(prob)}</div>`:''}${out?'<div class="warn">Out (3 misses in a row)</div>':''}</td>
+          <td>${s.mark?esc(s.mark):'<span class="text-gray-400">—</span>'}</td>
+          ${hs.map(h=>`<td><input class="att hjc" data-hj="${h}" value="${esc(at[h]||'')}" ${m?.checked_in?'':'disabled'}></td>`).join('')}
+          <td class="font-semibold">${m?.best_mark?esc(m.best_mark):''}</td><td data-place></td></tr>`; }).join('')}</tbody></table></div>`;
+  } else {
+    table=`<div class="overflow-x-auto"><table class="st"><thead><tr><th>In</th><th>Athlete</th><th>Season best</th><th>Attempts</th><th>Best</th><th>Place</th></tr></thead><tbody>
+      ${rows.map(({a,m,s})=>{ const n=S.attemptsFor(ev.code,a.division), at=m?.attempts||[], prob=m?.checked_in?null:limitProblem(a,false);
+        return `<tr class="${m?.checked_in?'here':''} ${prob?'blocked':''}" data-frow="${a.id}"><td><input type="checkbox" class="big" data-fin ${m?.checked_in?'checked':''} ${prob?'disabled':''}></td>
+          <td><b>${esc(a.last_name)}, ${esc(a.first_name)}</b> <span class="text-xs text-gray-500">#${esc(a.comp_number??'')} ${esc(a.team_code)}${f.groups.length>1?' · '+esc(S.gName(a.division,a.gender)):''}</span>${prob?`<div class="err">Can't compete: ${esc(prob)}</div>`:''}</td>
+          <td>${s.mark?esc(s.mark):'<span class="text-gray-400">—</span>'}</td>
+          <td class="whitespace-nowrap">${Array.from({length:n},(_,i)=>`<input class="att" data-att="${i}" value="${esc(at[i]||'')}" placeholder="${i+1}" ${m?.checked_in?'':'disabled'}>`).join(' ')}</td>
+          <td class="font-semibold">${m?.best_mark?esc(m.best_mark):''}</td><td data-place></td></tr>`; }).join('')}</tbody></table></div>`;
+  }
+  return `<details class="race" data-flight="${f.i}" ${cur&&cur.i===f.i?'open':''}><summary>${f.evnos.map(n=>`<span class="evno">Ev ${n}</span>`).join('')}<b>${f.i+1}. ${esc(f.label)}</b><span class="text-gray-600">${esc(ev.name)}</span>
+      ${isDone?'<span class="pill bg-gray-200 text-gray-700">Done</span>':cur&&cur.i===f.i?'<span class="pill bg-blue-600 text-white">Now</span>':''}<span class="text-xs text-gray-500 ml-auto">${inCount} checked in · ${f.ath.length} on the teams</span></summary>
+    <div class="p-3">${f.ath.length?table:'<p class="text-sm text-gray-500">No certified athletes on this meet\'s teams in this flight.</p>'}
+      <div class="mt-2 flex gap-2 flex-wrap">${isDone?`<button class="btn-sm border bg-white" data-fundone="${f.i}">Reopen</button>`:`<button class="btn bg-green-700 text-white" data-fdone="${f.i}">Flight done — call the next division</button>`}<button class="btn-sm border bg-white" data-fprint="${f.i}">Print sheet</button></div></div></details>`;
+}
+function hjHeights(ev,f,fmap){
+  const extra=(LS('hj')||{})[ev.code+'|'+f.i]||[];
+  const hs=new Set(extra); f.ath.forEach(a=>(fmap[a.id]?.attempts||[]).forEach(x=>hs.add(+x.h)));
+  const s=S.HJ_START[f.groups[0].division+'|'+f.groups[0].gender]; if(s&&![...hs].some(h=>h<s)) hs.add(s);   // opening height (V.B.1) unless the judge lowered the bar
+  return [...hs].sort((a,b)=>a-b);
+}
+function hjOut(m){ if(!m) return false; let run=0; for(const x of [...(m.attempts||[])].sort((a,b)=>a.h-b.h)){ for(const ch of String(x.r||'')){ if(ch==='X') run++; else if(ch==='O') run=0; } } return run>=3; }
+function placeRows(ev,tbody){
+  const rows=[...tbody.querySelectorAll('[data-frow]')].map(tr=>({tr, m:fieldRows.find(x=>x.event_code===ev.code&&x.registration_id===tr.dataset.frow)})).filter(x=>x.m&&x.m.checked_in&&x.m.best_value!=null);
+  rows.sort((a,b)=>b.m.best_value-a.m.best_value);
+  tbody.querySelectorAll('[data-place]').forEach(td=>td.textContent='');
+  let last=null, place=0; rows.forEach((x,i)=>{ if(x.m.best_value!==last){ place=i+1; last=x.m.best_value; } x.tr.querySelector('[data-place]').textContent=place; });
+}
+function wireField(ev,flights,fmap){
+  document.querySelectorAll('[data-flight] tbody').forEach(tb=>placeRows(ev,tb));
+  const save=async(tr,patch)=>{
+    const id=tr.dataset.frow, cur=fieldRows.find(x=>x.event_code===ev.code&&x.registration_id===id)||{checked_in:false,attempts:[]};
+    const next={...cur,...patch};
+    try{ await rpc('staging_save_field',{p:{meet_id:MEET_ID,event_code:ev.code,event_name:ev.name,registration_id:id,checked_in:next.checked_in,attempts:next.attempts,best_mark:next.best_mark||'',best_value:next.best_value??''}});
+      const i=fieldRows.findIndex(x=>x.event_code===ev.code&&x.registration_id===id); const row={...next,event_code:ev.code,registration_id:id};
+      if(i>=0) fieldRows[i]=row; else fieldRows.push(row);
+      if(patch.checked_in!==undefined){ await loadAll(); renderField(); } else { tr.querySelector('td:nth-last-child(2)').textContent=next.best_mark||''; placeRows(ev,tr.closest('tbody')); }
+      return true;
+    }catch(e){ flash(e.message,true); return false; }
+  };
+  document.querySelectorAll('[data-fin]').forEach(cb=>cb.onchange=async()=>{ const tr=cb.closest('tr');
+    if(!cb.checked){ const cur=fieldRows.find(x=>x.event_code===ev.code&&x.registration_id===tr.dataset.frow); if(cur&&(cur.attempts||[]).length&&!confirm('Un-check this athlete? Their marks stay saved but they are taken out of the event.')){ cb.checked=true; return; } }
+    if(!(await save(tr,{checked_in:cb.checked}))) cb.checked=!cb.checked; });
+  document.querySelectorAll('[data-att]').forEach(inp=>inp.onchange=async()=>{
+    const tr=inp.closest('tr'), vals=[...tr.querySelectorAll('[data-att]')].map(x=>x.value.trim().toUpperCase());
+    let best=null, bad=false;
+    vals.forEach((v,i)=>{ const el=tr.querySelectorAll('[data-att]')[i]; let ok=true;
+      if(v==='F'||v==='P') el.value=v;
+      if(v&&v!=='F'&&v!=='P'){ const p=S.parseFeet(v); if(!p) ok=false; else { el.value=p.mm; vals[i]=p.mm; if(!best||p.inches>best.inches) best=p; } }
+      el.classList.toggle('bad',!ok); if(!ok) bad=true; });
+    if(bad) return flash('Type a mark as feet-inches like 12-04.25 (or F for foul, P for pass).',true);
+    while(vals.length&&!vals[vals.length-1]) vals.pop();
+    await save(tr,{attempts:vals, best_mark:best?best.mm:'', best_value:best?S.inchToM(best.inches):null});
+  });
+  document.querySelectorAll('[data-hj]').forEach(inp=>inp.onchange=async()=>{
+    const tr=inp.closest('tr'), v=inp.value.trim().toUpperCase();
+    if(v&&!/^(O|XO|XXO|X|XX|XXX|P|XP|XXP)$/.test(v)){ inp.classList.add('bad'); return flash('High jump: O, XO, XXO (made), X / XX / XXX (misses), P / XP / XXP (pass).',true); }
+    inp.classList.remove('bad'); inp.value=v;
+    const at=[...tr.querySelectorAll('[data-hj]')].map(x=>({h:+x.dataset.hj, r:x.value.trim().toUpperCase()})).filter(x=>x.r);
+    const made=at.filter(x=>x.r.includes('O')).map(x=>x.h), best=made.length?Math.max(...made):null;
+    await save(tr,{attempts:at, best_mark:best?S.feetLabel(best):'', best_value:best?S.inchToM(best):null});
+    if(hjOut({attempts:at})) flash(`${tr.querySelector('b').textContent} is out (3 misses in a row).`);
+  });
+  document.querySelectorAll('[data-addh]').forEach(b=>b.onclick=()=>{ const d=b.closest('[data-flight]'), f=flights[+d.dataset.flight], inp=d.querySelector('[data-newh]');
+    const p=S.parseFeet(inp.value.trim()||inp.placeholder); if(!p) return flash('Type the bar height like 3-06.',true);
+    const all=LS('hj')||{}; (all[ev.code+'|'+f.i]??=[]).push(p.inches); LS('hj',all); renderField(); document.querySelector(`[data-flight="${f.i}"]`).open=true; });
+  document.querySelectorAll('[data-fdone]').forEach(b=>b.onclick=()=>{ const all=LS('fdone')||{}; all[ev.code+'|'+b.dataset.fdone]=true; LS('fdone',all); renderField();
+    const nxt=document.querySelector('details[data-flight][open]'); if(nxt) nxt.scrollIntoView({behavior:'smooth'}); });
+  document.querySelectorAll('[data-fundone]').forEach(b=>b.onclick=()=>{ const all=LS('fdone')||{}; delete all[ev.code+'|'+b.dataset.fundone]; LS('fdone',all); renderField(); });
+  document.querySelectorAll('[data-fprint]').forEach(b=>b.onclick=()=>printFlight(ev,flights[+b.dataset.fprint],fmap));
+}
+function printFlight(ev,f,fmap){
+  const w=window.open('','_blank'); if(!w) return flash('Allow pop-ups to print.',true);
+  const rows=f.ath.filter(a=>fmap[a.id]?.checked_in).map(a=>({a,m:fmap[a.id]})).sort((x,y)=>(y.m.best_value??-1)-(x.m.best_value??-1));
+  const n=ev.hj?0:Math.max(...f.groups.map(g=>S.attemptsFor(ev.code,g.division)));
+  w.document.write(`<html><head><title>${esc(f.label+' '+ev.name)}</title><style>body{font-family:Arial,sans-serif;margin:18px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #333;padding:6px;font-size:13px}th{background:#eee}</style></head><body>
+    <h2 style="margin:0">${esc(board.meet.name)} — ${esc(board.meet.meet_date)}</h2><div>${f.evnos.map(x=>'Event '+x).join(', ')} · ${esc(f.label)} · ${esc(ev.name)}</div><br>
+    <table><tr><th>Comp #</th><th>Name</th><th>Team</th>${ev.hj?'<th>Heights (O/X/P)</th>':Array.from({length:n},(_,i)=>`<th>${i+1}</th>`).join('')}<th>Best</th><th>Place</th></tr>
+    ${rows.map(({a,m},i)=>`<tr><td>${esc(a.comp_number??'')}</td><td>${esc(a.first_name+' '+a.last_name)}</td><td>${esc(teamName(a.team_code))}</td>${ev.hj?`<td>${esc((m.attempts||[]).map(x=>S.feetLabel(+x.h)+' '+x.r).join(' · '))}</td>`:Array.from({length:n},(_,k)=>`<td>${esc((m.attempts||[])[k]||'')}</td>`).join('')}<td><b>${esc(m.best_mark||'')}</b></td><td>${m.best_value!=null?i+1:''}</td></tr>`).join('')}
+    </table><script>window.onload=()=>window.print()<\/script></body></html>`); w.document.close();
+}
+
+// ---------- MEET MANAGER TABLE ----------
+async function renderMM(){
+  let pending=[], scr=[];
+  try{ pending=await rpc('staging_export',{p_meet:MEET_ID,p_mark:false}); const {data}=await sb.from('stage_scratches').select('*').eq('meet_id',MEET_ID).eq('done',false).order('scratched_at'); scr=data||[]; }catch(e){ $('pane').innerHTML=`<div class="card text-red-700">${esc(e.message)}</div>`; return; }
+  const byEv={}; pending.forEach(x=>(byEv[x.event_name+' — heat '+x.heat_no]??=[]).push(x));
+  const sent=heats.filter(h=>h.status!=='draft');
+  const fieldDone=fieldRows.filter(x=>x.checked_in&&x.best_mark);
+  $('pane').innerHTML=`<div class="card mb-2 border-2 ${pending.length?'border-green-600':'border-gray-200'}">
+      <div class="flex flex-wrap items-center gap-3"><div class="text-3xl font-extrabold ${pending.length?'text-green-700':'text-gray-400'}">${pending.length}</div>
+        <div><b>${pending.length?'new athletes/relays waiting for Meet Manager':'Nothing new — Meet Manager is up to date'}</b><div class="text-xs text-gray-500">Checks again every 15 seconds.</div></div>
+        <button class="btn bg-green-700 text-white ml-auto ${pending.length?'':'opacity-50'}" id="dlNew" ${pending.length?'':'disabled'}>Download new heats for Meet Manager</button></div>
+      ${pending.length?`<div class="text-sm mt-2">${Object.entries(byEv).map(([k,v])=>`<div><b>${esc(k)}</b>: ${esc(v.map(x=>x.athlete?x.athlete.first_name+' '+x.athlete.last_name:teamName(x.team_code)+' '+x.relay_letter).join(', '))}</div>`).join('')}</div>`:''}
+      <details class="mt-3 text-sm"><summary class="cursor-pointer font-semibold">How to load it into Meet Manager</summary><ol class="list-decimal ml-5 mt-1 space-y-1">
+        <li>Click <b>Download new heats</b> — it holds only athletes Meet Manager hasn't had yet.</li>
+        <li>In Meet Manager: <b>File › Import › Semi-Colon Delimited Rosters/Entries</b>, pick the file, answer <b>No</b> to "Only update seed times?".</li>
+        <li>Seed that event in Meet Manager (Seeding, or the Run screen). With the seeding preferences set to the VYC lane chart and fastest heat first, the lanes match the heat sheet below. A late arrival added to a heat already seeded: put them in the lane shown below with <b>Adjust</b> (F8).</li>
+        <li>Anyone in the red list below was taken out after Meet Manager got them — scratch them there, then tick Done.</li></ol></details>
+    </div>
+    ${scr.length?`<div class="card mb-2 border-2 border-red-400"><b class="text-red-700">Scratch in Meet Manager (${scr.length})</b>${scr.map(s=>`<div class="flex items-center gap-2 border-t py-1 text-sm"><span>${esc(s.event_name)} — <b>${esc(s.who)}</b> (${esc(s.team_code||'')})</span><button class="btn-sm border bg-white ml-auto" data-scr="${s.id}">Done</button></div>`).join('')}</div>`:''}
+    <div class="card mb-2"><div class="flex items-center gap-2 flex-wrap"><b>Heat sheet — sent heats (${sent.length})</b><button class="btn-sm border bg-white ml-auto" id="dlAll">Download every sent heat again</button></div>
+      ${sent.length?mmSheet(sent):'<p class="text-sm text-gray-500 mt-1">No heats sent yet.</p>'}</div>
+    <div class="card"><b>Field event marks (${fieldDone.length})</b><p class="text-xs text-gray-500">Marks in Meet Manager's English format (feet-inches; high jump height + O/X/P per height) — enter them on the Run screen for each flight. The official results still come from Meet Manager after the meet.</p>${mmField()}</div>`;
+  $('dlNew')?.addEventListener('click',async()=>{ try{ const rows=await rpc('staging_export',{p_meet:MEET_ID,p_mark:true}); if(!rows.length) return flash('Nothing new.'); download(rows,'new'); await loadAll(); renderMM(); }catch(e){ flash(e.message,true); } });
+  $('dlAll').onclick=()=>{ const rows=[]; sent.forEach(h=>h.lanes.forEach(l=>rows.push(fullRow(h,l)))); if(!rows.length) return flash('No heats sent yet.'); download(rows,'all-sent'); };
+  document.querySelectorAll('[data-scr]').forEach(b=>b.onclick=async()=>{ try{ await rpc('staging_scratch_done',{p_id:b.dataset.scr}); renderMM(); }catch(e){ flash(e.message,true); } });
+  mmTimer=setInterval(async()=>{ if(mode!=='mm'||document.hidden) return; try{ const p=await rpc('staging_export',{p_meet:MEET_ID,p_mark:false}); if(p.length!==pending.length){ await loadAll(); renderMM(); } }catch(e){} },15000);
+}
+function fullRow(h,l){ const a=athById[l.registration_id];
+  return {is_relay:h.is_relay, event_code:h.event_code, seed_mark:l.seed_mark, team_code:l.team_code, relay_letter:l.relay_letter,
+    athlete:a?{...a}:null, runners:(l.runners||[]).map(id=>athById[id]).filter(Boolean)}; }
+function download(rows,tag){
+  const txt=S.hytekFile(rows), when=new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}).replace(/\D/g,'');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));
+  a.download=`${board.meet.name.replace(/[^\w]+/g,'_')}_staging_${tag}_${when}.txt`; a.click();
+  flash(`Downloaded ${rows.length} entr${rows.length>1?'ies':'y'} for Meet Manager.`);
+}
+function mmSheet(sent){
+  const order=new Map(); S.TRACK.forEach((t,i)=>order.set(t.key,i));
+  const byRace={}; sent.forEach(h=>(byRace[h.race_key]??=[]).push(h));
+  return Object.entries(byRace).sort((a,b)=>(order.get(a[0].split('|')[0])??99)-(order.get(b[0].split('|')[0])??99)).map(([k,hs])=>{
+    const t=S.TRACK.find(x=>x.key===k.split('|')[0]), h0=hs[0];
+    const evn=h0.groups.map(g=>t?S.evNum(t,g):'').join(', ');
+    return `<div class="mt-2"><div class="text-sm font-bold">Ev ${esc(evn)} · ${esc(h0.groups.map(g=>S.gName(g.division,g.gender)).join(' + '))} · ${esc(h0.event_name)}</div>
+      ${hs.sort((a,b)=>a.heat_no-b.heat_no).map(h=>`<div class="text-sm ml-2"><b>Heat ${h.heat_no}</b>${h.status==='run'?' (run)':''}: ${[...h.lanes].sort((a,b)=>a.lane-b.lane).map(l=>{ const a=athById[l.registration_id];
+        return `<span class="${l.exported_at?'':'text-green-700 font-semibold'}">${t&&t.chart==='water'?'P':'L'}${l.lane} ${esc(a?a.first_name+' '+a.last_name:teamName(l.team_code)+' '+l.relay_letter)}${l.exported_at?'':' (new)'}</span>`; }).join(' · ')}</div>`).join('')}</div>`;
+  }).join('');
+}
+function mmField(){
+  const out=[]; S.FIELD.forEach(ev=>ev.flights.forEach(groups=>{
+    const rows=fieldRows.filter(x=>x.event_code===ev.code&&x.checked_in&&groups.some(g=>g.division===x.division&&g.gender===x.gender)&&x.attempts&&x.attempts.length).sort((a,b)=>(b.best_value??-1)-(a.best_value??-1));
+    if(!rows.length) return;
+    out.push(`<div class="mt-2 text-sm"><b>${esc(ev.name)} — ${esc(groups.map(g=>S.gName(g.division,g.gender)).join(' and '))}</b>${rows.map(x=>{ const a=athById[x.registration_id];
+      const s=ev.hj?(x.attempts||[]).map(y=>`${S.feetLabel(+y.h)} ${y.r}`).join(', '):(x.attempts||[]).join(', ');
+      return `<div class="ml-2">${a?esc(a.first_name+' '+a.last_name)+' #'+esc(a.comp_number??''):''} — <b>${esc(x.best_mark||'NM')}</b> <span class="text-gray-500">(${esc(s)})</span></div>`; }).join('')}</div>`);
+  })); return out.join('')||'<p class="text-sm text-gray-500 mt-1">No marks yet.</p>';
+}
+
+// ---------- STAGING HELPERS (admins) ----------
+async function renderHelpers(){
+  const {data,error}=await sb.from('staging_helpers').select('*').order('added_at',{ascending:false});
+  if(error){ $('pane').innerHTML=`<div class="card text-red-700">${esc(error.message)}</div>`; return; }
+  $('pane').innerHTML=`<div class="card"><b>Staging helpers</b><p class="text-sm text-gray-600 mb-2">People who run the staging area or a field event and aren't admins or timers. They can use this page only — no rosters, no athlete records, no coach tools. They sign in with this email (password or Google).</p>
+    <div class="flex flex-wrap gap-2 mb-3"><input id="hName" class="border rounded p-2" placeholder="Name"><input id="hEmail" type="email" class="border rounded p-2 flex-1" placeholder="email@example.com"><button class="btn bg-blue-600 text-white" id="hAdd">Add helper</button></div>
+    ${(data||[]).map(h=>`<div class="flex items-center gap-2 border-t py-2 text-sm"><span class="${h.active?'':'line-through text-gray-400'}"><b>${esc(h.name||'')}</b> ${esc(h.email)}</span><button class="btn-sm border bg-white ml-auto" data-hact="${esc(h.email)}|${h.active?'0':'1'}">${h.active?'Turn off':'Turn on'}</button></div>`).join('')||'<p class="text-sm text-gray-500">No helpers yet.</p>'}</div>`;
+  $('hAdd').onclick=async()=>{ const email=$('hEmail').value.trim().toLowerCase(); if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return flash('Type a valid email.',true);
+    const {error}=await sb.from('staging_helpers').upsert({email,name:$('hName').value.trim()||null,active:true,added_by:user.email}); if(error) return flash(error.message,true); flash('Added '+email+'.'); renderHelpers(); };
+  document.querySelectorAll('[data-hact]').forEach(b=>b.onclick=async()=>{ const [email,on]=b.dataset.hact.split('|'); const {error}=await sb.from('staging_helpers').update({active:on==='1'}).eq('email',email); if(error) return flash(error.message,true); renderHelpers(); });
+}
+</script>
+</body></html>
