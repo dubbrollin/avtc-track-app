@@ -357,7 +357,7 @@ async function loadMyResults(){
   const rows=data||[];
   let stds=[]; try{ const {data:sd}=await sb.from('qualifying_standards').select('*'); stds=sd||[]; }catch(e){}
   renderBests(rows, stds);
-  if(!rows.length){ $('myResults').innerHTML='<p class="text-sm text-gray-500">No results posted yet for your athlete(s). A coach adds these after a meet on the Meet Admin page.</p>'; return; }
+  if(!rows.length){ $('myResults').innerHTML='<p class="text-sm text-gray-500">No results posted yet for your athlete(s). Results show up here after each meet, once the meet's results are uploaded from Meet Manager.</p>'; return; }
   const byMeet={};
   rows.forEach(r=>{ const key=r.meets?.name||'Meet'; (byMeet[key] ??= {date:r.meets?.meet_date, rows:[]}).rows.push(r); });
   const sorted=Object.entries(byMeet).sort((a,b)=>new Date(b[1].date||0)-new Date(a[1].date||0));

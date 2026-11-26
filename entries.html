@@ -93,7 +93,15 @@ sb.auth.onAuthStateChange(async(_e,session)=>{
   $('login').classList.add('hidden'); $('app').classList.remove('hidden');
   const {data:c}=await sb.from('coaches').select('*').eq('email',me).eq('approved',true).maybeSingle();
   myCoachRow=c||null; isCoach=!!c;
-  view = isCoach ? 'race' : 'athlete'; // coaches manage a whole roster -> race-first is faster; parents have 1-2 kids -> athlete view is simpler
+  if(!isCoach){ // the database lets only approved coaches enter athletes, so parents get a pointer instead of an entry screen they can't save from
+    $('app').innerHTML=`<div class="bg-white rounded-xl shadow p-4"><h2 class="font-bold mb-1">Coaches enter athletes into meets</h2>
+      <p class="text-sm text-gray-700 mb-3">You're signed in as <b>${esc(me)}</b>. Your team's coaches pick the meets and events for each athlete. To ask for a meet or event, talk to your coach. You can see your athlete's meets and results on the Parent Dashboard.</p>
+      <div class="flex gap-2 flex-wrap"><a class="btn bg-blue-600 text-white text-sm" href="parent.html">Go to the Parent Dashboard</a>
+      <button id="logout2" class="btn bg-gray-200 text-sm">Sign out</button></div></div>`;
+    $('logout2').onclick=()=>sb.auth.signOut().then(()=>location.reload());
+    return;
+  }
+  view = 'race'; // coaches manage a whole roster -> race-first is faster; "By athlete" stays available
   await loadMeets();
 });
 
